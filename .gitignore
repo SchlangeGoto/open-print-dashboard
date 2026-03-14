@@ -1,71 +1,45 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# Dependencies
+node_modules/
+.pnp
 .pnp.js
 .yarn/install-state.gz
 
-# testing
-/coverage
+# Testing
+coverage/
+.jest/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
-# next.js
-/.next/
-/out/
+# Build & Production
 .next/
-
-# production
-/build
+out/
+build/
 dist/
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# local env files
-.env*.local
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# vercel
-.vercel
-
-# typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# turbo
 .turbo
-
-# package managers
-pnpm-lock.yaml
-yarn.lock
-package-lock.json
-
-# Sentry
-.sentryclirc
-
-# Storybook
 storybook-static/
 
-# IDE
+# IDE & OS
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+.DS_Store
+Thumbs.db
 
-# Testing
-.jest/
+# Environments & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+.vercel
+.sentryclirc
 
 # Python
 __pycache__/
@@ -73,9 +47,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -92,32 +64,22 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
+# Virtual Environments
 venv/
 env/
 ENV/
 env.bak/
 venv.bak/
-.venv
-
-# PyCharm
-.idea/
+.venv/
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
+# Tools
 .python-version
-
-# pytest
-.pytest_cache/
-.coverage
-htmlcov/
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
 
 # Database
 *.db
@@ -126,6 +88,7 @@ dmypy.json
 
 # Logs
 *.log
-
-# OS files
-Thumbs.db
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

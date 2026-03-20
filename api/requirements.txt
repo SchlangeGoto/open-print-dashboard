@@ -4,3 +4,4 @@ paho-mqtt
 requests
 sqlmodel
 psycopg2-binary
+cloudscraper

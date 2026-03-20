@@ -68,6 +68,16 @@ export default function Home() {
         return;
       }
 
+      if (data.codeExpired) {
+        await fetch(`${API_BASE}/auth/login/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        setMessage("Code expired — a new one has been sent to your email");
+        setCode("");
+        return;
+      }
       setMessage(data.detail ?? data.message ?? "Verification failed");
     } catch {
       setMessage("Could not reach the API");

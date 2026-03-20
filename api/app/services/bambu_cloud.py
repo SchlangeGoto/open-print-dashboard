@@ -1,4 +1,11 @@
 import requests
+import cloudscraper
+import logging
+
+from app.core.bambu_exceptions import *
+
+logger = logging.getLogger("uvicorn.error")
+
 
 from app.db.db_helper import get_credentials, get_cloud_token_db
 
@@ -36,7 +43,7 @@ class BambuCloudClient:
         if not self.token:
             self.token = get_cloud_token_db()
 
-    def login(self, code: str | None = None) -> dict:
+    def login(self, code: str | None = None):
         """Authenticate and store the access token.
 
         If the API requests email-based verification, the user is prompted
@@ -50,14 +57,28 @@ class BambuCloudClient:
             json=payload,
             timeout=30,
         )
+
+        if resp.status_code == 403 and 'cloudflare' in resp.text.lower():
+            logger.debug("Cloudflare detected, using cloudscraper")
+            scraper = cloudscraper.create_scraper()
+            resp = scraper.post(f"{BASE_URL}/v1/user-service/user/login", json=payload)
+            if resp.status_code == 403 and 'cloudflare' in resp.text.lower():
+                raise CloudflareError()
+
+        if code and resp.status_code == 400:
+            error_code = resp.json().get("code")
+            if error_code == 1:
+                raise CodeExpiredError()
+            elif error_code == 2:
+                raise CodeIncorrectError()
+
         resp.raise_for_status()
         data = resp.json()
 
         # Bambu returns loginType="verifyCode" if 2FA email was sent
         if data.get("loginType") == "verifyCode" and not code:
-            return {"require_code": True}
+            raise CodeRequiredError()
         self.token = data["accessToken"]
-        return {"require_code": False}
 
     def _headers(self) -> dict:
         """Return authorization headers for authenticated requests."""

@@ -62,12 +62,6 @@ export default function Home() {
 
       const data = await response.json();
 
-      if (response.ok) {
-        setStage("done");
-        setMessage(data.message ?? "Login successful");
-        return;
-      }
-
       if (data.codeExpired) {
         await fetch(`${API_BASE}/auth/login/start`, {
           method: "POST",
@@ -78,6 +72,14 @@ export default function Home() {
         setCode("");
         return;
       }
+
+      if (response.ok) {
+        setStage("done");
+        setMessage(data.message ?? "Login successful");
+        return;
+      }
+
+
       setMessage(data.detail ?? data.message ?? "Verification failed");
     } catch {
       setMessage("Could not reach the API");

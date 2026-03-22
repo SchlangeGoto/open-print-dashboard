@@ -15,7 +15,7 @@ def get_credentials() -> dict:
 
 def get_cloud_token_db():
     with Session(engine) as session:
-        return session.get(Settings, "bambu_cloud_token")
+        return session.get(Settings, "bambu_cloud_token").value
 
 def save_token(token: str) -> bool:
     with Session(engine) as session:

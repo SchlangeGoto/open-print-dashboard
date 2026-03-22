@@ -14,14 +14,6 @@ class PrinterService:
         self.client = client
         self.cloud_client = cloud_client
 
-    def get_current_status(self) -> dict[str, object]:
-        return self.client.get_status()
-
-    def get_devices(self) -> list[dict]:
-        if not self.cloud_client.token:
-            self.cloud_client.login()
-        return self.cloud_client.get_devices()
-
     def get_token(self) -> str:
         return self.cloud_client.token
 

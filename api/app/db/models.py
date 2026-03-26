@@ -45,3 +45,9 @@ class PrintJob(SQLModel, table=True):
 class Settings(SQLModel, table=True):
     key: str = Field(primary_key=True)
     value: str
+    
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True)
+    password_hash: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

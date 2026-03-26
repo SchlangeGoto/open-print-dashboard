@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from app.db.database import get_session
 from app.db.models import Settings
@@ -18,3 +18,10 @@ def create_setting(setting: Settings, session: Session = Depends(get_session)):
 @router.get("/")
 def get_settings(session: Session = Depends(get_session)):
     return session.exec(select(Settings)).all()
+
+@router.get("/{key}")
+def get_setting(key: str, session: Session = Depends(get_session)):
+    setting = session.get(Settings, key)
+    if not setting:
+        raise HTTPException(status_code=404, detail="Setting not found")
+    return setting

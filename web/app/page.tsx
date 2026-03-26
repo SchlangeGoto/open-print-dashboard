@@ -1,177 +1,119 @@
 "use client";
 
-import { useState } from "react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-type LoginStage = "credentials" | "code" | "done";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { Disc3, AlertCircle } from "lucide-react";
 
 export default function Home() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [stage, setStage] = useState<LoginStage>("credentials");
-  const [message, setMessage] = useState("");
+  const router = useRouter();
+  const { username, isLoading, login } = useAuth();
+  const [checking, setChecking] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
+
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function handleStartLogin(e: React.FormEvent) {
+  useEffect(() => {
+    if (isLoading) return;
+
+    // If already logged in, go straight to dashboard
+    if (username) {
+      router.push("/dashboard");
+      return;
+    }
+
+    // Check if setup is needed
+    api.userExists()
+      .then((data) => {
+        if (!data.exists) {
+          setNeedsSetup(true);
+          router.push("/setup");
+        }
+        setChecking(false);
+      })
+      .catch(() => {
+        setChecking(false);
+      });
+  }, [isLoading, username, router]);
+
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setMessage("");
+    setError("");
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-       if (data.requireCode) {
-        setStage("code");
-        setMessage(data.message ?? "Verification code required");
-        return;
+      const result = await api.loginUser(loginUsername, loginPassword);
+      if (result.ok) {
+        login(result.username);
+        router.push("/dashboard");
       }
-
-      if (response.ok) {
-        setStage("done");
-        setMessage(data.message ?? "Login successful");
-        return;
-      }
-
-      setMessage(data.detail ?? data.message ?? "Login failed");
-    } catch {
-      setMessage("Could not reach the API");
+    } catch (err: any) {
+      setError(err.message || "Invalid credentials");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleVerifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setMessage("");
-
-    try {
-      const response = await fetch(`${API_BASE}/auth/login/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-
-      const data = await response.json();
-
-      if (data.codeExpired) {
-        await fetch(`${API_BASE}/auth/login/start`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        setMessage("Code expired — a new one has been sent to your email");
-        setCode("");
-        return;
-      }
-
-      if (response.ok) {
-        setStage("done");
-        setMessage(data.message ?? "Login successful");
-        return;
-      }
-
-
-      setMessage(data.detail ?? data.message ?? "Verification failed");
-    } catch {
-      setMessage("Could not reach the API");
-    } finally {
-      setBusy(false);
-    }
+  if (isLoading || checking || needsSetup) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse flex items-center gap-3">
+          <Disc3 className="animate-spin text-accent" size={24} />
+          <span className="text-zinc-400">Loading...</span>
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-        <h1 className="text-2xl font-semibold">Bambu Lab Login</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Sign in with your Bambu Lab account to continue.
-        </p>
-
-        {stage === "credentials" && (
-          <form onSubmit={handleStartLogin} className="mt-6 space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium">Email</label>
-              <input
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium">Password</label>
-              <input
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-500 disabled:opacity-60"
-            >
-              {busy ? "Signing in..." : "Continue"}
-            </button>
-          </form>
-        )}
-
-        {stage === "code" && (
-          <form onSubmit={handleVerifyCode} className="mt-6 space-y-4">
-            <div className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
-              We sent a verification code to your email. Enter it below.
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium">Verification code</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="123456"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full rounded-lg bg-green-600 px-4 py-3 font-medium text-white hover:bg-green-500 disabled:opacity-60"
-            >
-              {busy ? "Verifying..." : "Verify code"}
-            </button>
-          </form>
-        )}
-
-        {stage === "done" && (
-          <div className="mt-6 rounded-lg border border-emerald-700 bg-emerald-950/40 p-4 text-emerald-200">
-            {message}
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex rounded-2xl bg-accent/10 p-4 mb-4">
+            <Disc3 size={32} className="text-accent" />
           </div>
-        )}
+          <h1 className="text-2xl font-bold">Welcome back</h1>
+          <p className="text-sm text-muted mt-1">Sign in to your dashboard</p>
+        </div>
 
-        {message && stage !== "done" && (
-          <p className="mt-4 text-sm text-slate-300">{message}</p>
-        )}
+        {/* Form */}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <Input
+            label="Username"
+            placeholder="Enter your username"
+            value={loginUsername}
+            onChange={(e) => setLoginUsername(e.target.value)}
+            required
+            autoComplete="username"
+          />
+          <Input
+            label="Password"
+            type="password"
+            placeholder="••••••••"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-800 bg-red-900/30 p-3 text-sm text-red-400">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+
+          <Button type="submit" loading={busy} className="w-full" size="lg">
+            Sign in
+          </Button>
+        </form>
       </div>
     </main>
   );

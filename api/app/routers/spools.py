@@ -55,7 +55,7 @@ def update_spool(spool_id: int, spool: Spool, session: Session = Depends(get_ses
     existing.active = spool.active
     existing.purchased_at = spool.purchased_at
     existing.last_used_at = spool.last_used_at
-    existing.price_per_kg = spool.price
+    existing.price_per_kg = spool.price_per_kg
     existing.notes = spool.notes
     session.commit()
     session.refresh(existing)

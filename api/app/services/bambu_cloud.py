@@ -84,7 +84,7 @@ class BambuCloudClient:
         self._load_token()
         logger.debug(f"Token loaded: {self.token[:10] if self.token else 'None'}")
         if not self.token:
-            raise RuntimeError("No token available — login first")
+            raise NotLoggedInError()
         return {"Authorization": f"Bearer {self.token}"}
 
     def get_user_id(self) -> str:
@@ -249,6 +249,17 @@ class BambuCloudClient:
         )
         resp.raise_for_status()
         return resp.json()
+
+    def get_messages(self, limit: int = 20) -> list[dict]:
+        """Notification messages — includes print completion notifications."""
+        self._load_token()
+        resp = requests.get(
+            f"{BASE_URL}/v1/user-service/my/messages",
+            headers=self._headers(),
+            params={"limit": limit},
+        )
+        resp.raise_for_status()
+        return resp.json().get("hits", [])
 
     def rename_device(self, device_id: str, name: str) -> bool:
         """Rename a printer on your account."""

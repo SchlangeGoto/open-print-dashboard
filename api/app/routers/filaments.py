@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select, func, desc
 from app.db.database import get_session
-from app.db.models import Filament, Spool
+from app.db.models import Filament, Spool, PrintJob
 
 router = APIRouter()
 
@@ -17,8 +17,8 @@ def get_filaments(session: Session = Depends(get_session)):
         recent_prices = session.exec(
             select(Spool.price_per_kg)
             .where(Spool.filament_id == f.id)
-            .where(Spool.price_per_kg is not None)
-            .order_by(Spool.created_at.desc())
+            .where(Spool.price_per_kg != None)
+            .order_by(desc(Spool.created_at))
             .limit(5)
         ).all()
 
@@ -68,3 +68,53 @@ def delete_filament(filament_id: int, session: Session = Depends(get_session)):
     session.delete(existing)
     session.commit()
     return {"ok": True}
+
+@router.get("/{filament_id}/spools")
+def get_filament_spools(filament_id: int, session: Session = Depends(get_session)):
+    return session.exec(select(Spool).where(Spool.filament_id == filament_id)).all()
+
+@router.get("/stats/{filament_id}")
+def get_filament_stats(filament_id: int, session: Session = Depends(get_session)):
+    remaining_g = session.exec(
+        select(func.sum(Spool.remaining_g)).where(Spool.filament_id == filament_id)
+        ).first() or 0
+    total_g = session.exec(
+        select(func.sum(Spool.total_weight_g)).where(Spool.filament_id == filament_id)
+    ).first() or 0
+    spool_count = session.exec(
+        select(func.count(Spool.id)).where(Spool.filament_id == filament_id)
+        ).one()
+    print_count = session.exec(
+        select(func.count(PrintJob.id))
+        .join(Spool, PrintJob.spool_id == Spool.id)
+        .where(Spool.filament_id == filament_id)
+        ).one()
+    total_used_g = session.exec(
+        select(func.sum(PrintJob.weight))
+        .join(Spool, PrintJob.spool_id == Spool.id)
+        .where(Spool.filament_id == filament_id)
+        .where(PrintJob.weight != None)
+    ).first() or 0
+
+    total_cost = session.exec(
+        select(func.sum(PrintJob.estimated_cost))
+        .join(Spool, PrintJob.spool_id == Spool.id)
+        .where(Spool.filament_id == filament_id)
+        .where(PrintJob.estimated_cost != None)
+    ).first() or 0
+
+    avg_price = session.exec(
+        select(func.avg(Spool.price_per_kg))
+        .where(Spool.filament_id == filament_id)
+        .where(Spool.price_per_kg != None)
+    ).first()
+    return {
+        "remaining_g": remaining_g,
+        "total_g": total_g,
+        "used_percent": round((1 - remaining_g / total_g) * 100, 1) if total_g > 0 else 0,
+        "spool_count": spool_count,
+        "print_count": print_count,
+        "total_used_g": total_used_g,
+        "total_cost": round(total_cost, 2),
+        "avg_price_per_kg": round(avg_price, 2) if avg_price else None,
+    }

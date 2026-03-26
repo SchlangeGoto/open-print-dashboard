@@ -13,3 +13,7 @@ class CodeExpiredError(Exception):
 class CodeIncorrectError(Exception):
     def __init__(self):
         super().__init__("Verification code incorrect")
+
+class NotLoggedInError(Exception):
+    def __init__(self):
+        super().__init__("No token available — login first")

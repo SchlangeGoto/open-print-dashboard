@@ -13,12 +13,12 @@ def get_printer():
     return printer_service.cloud_client.get_devices()
 
 @router.get("/tasks")
-def get_tasks():
-    return printer_service.cloud_client.get_print_tasks()
+def get_tasks(limit: int = 20):
+    return printer_service.cloud_client.get_print_tasks(limit)
 
 @router.get("/{printer_id}/tasks")
-def print_file(printer_id: str):
-    printer_service.cloud_client.get_print_tasks_for_printer(printer_id)
+def print_file(printer_id: str, limit: int = 20):
+    return printer_service.cloud_client.get_print_tasks_for_printer(printer_id, limit)
 
 @router.get("/cover/{cover_url:path}")
 def get_cover(cover_url: str):
@@ -32,6 +32,14 @@ def get_printer_firmware(printer_id: str):
 def get_cloud_status():
     return printer_service.cloud_client.get_cloud_print_status()
 
-@router.get("/project/{project_id}")
+@router.get("/projects/{project_id}")
 def get_project(project_id: str):
     return printer_service.cloud_client.get_project(project_id)
+
+@router.get("/projects")
+def get_projects():
+    return printer_service.cloud_client.get_projects()
+
+@router.get("/messages")
+def get_messages():
+    return printer_service.cloud_client.get_messages()

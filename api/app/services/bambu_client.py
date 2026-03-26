@@ -7,9 +7,17 @@ import uuid
 import logging
 
 from datetime import datetime, timezone
+
+from sqlmodel import desc
+
 from app.core.commands import *
 from app.core.config import config
 import paho.mqtt.client as mqtt
+from sqlmodel import Session, select
+
+from app.db.database import engine
+from app.db.models import PrintJob, Spool, Filament
+
 logger = logging.getLogger("uvicorn.error")
 
 WATCHDOG_TIMER = 60
@@ -222,6 +230,10 @@ class BambuClient:
                 self._handle_info_update(data["info"])
             elif data.get("event"):
                 self._handle_event(data["event"])
+            else:
+                # unknown top-level key — log and merge anyway
+                logger.debug(f"Unknown message keys: {list(data.keys())}")
+                self._current_status.update(data)
 
         except Exception as e:
             logger.error(f"Error processing message: {e}")
@@ -232,31 +244,80 @@ class BambuClient:
         logger.debug(f"Print update: command={command}")
 
         old_state = self._current_status.get("gcode_state")
+        logger.debug(f"Old state: {old_state}")
         self._current_status.update(print_data)
         new_state = self._current_status.get("gcode_state")
+        logger.debug(f"New state: {new_state}")
+
+        if old_state in ("IDLE", "FINISH", "FAILED", "PREPARE") and new_state == "RUNNING":
+            logger.info(f"Print started")
+            self._on_print_started()
 
         if old_state == "RUNNING" and new_state in ("FINISH", "FAILED"):
             logger.info(f"Print finished with state: {new_state}")
             self._on_print_finished(new_state)
-        # Merge — printer only sends changed fields on P1/A1 series
-        self._current_status.update(print_data)
 
     def _on_print_finished(self, state: str):
         """Called when a print completes or fails."""
-        import threading
-        t = threading.Thread(target=self._save_print_job, args=(state,), daemon=True)
+        t = threading.Thread(target=self._save_print_job, daemon=True)
         t.start()
 
-    def _save_print_job(self, state: str):
+    def _on_print_started(self):
+        t = threading.Thread(target=self._save_print_job_init, daemon=True)
+        t.start()
+
+    def _save_print_job_init(self):
+        from app.services.printer_service import printer_service
         """Fetch cloud data and save PrintJob + deduct from spool."""
-        import time
-        from sqlmodel import Session, select
-        from app.db.database import engine
-        from app.db.models import PrintJob, Spool
+        try:
+            task = printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+            if not task:
+                logger.warning("No cloud task found on print start")
+                return
+
+            trys = 0
+            maxTrys = 30
+            while task.get("status") != 4 and trys < maxTrys:
+                time.sleep(1)
+                trys += 1
+                task = printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+                if not task:
+                    break
+
+            if trys >= maxTrys:
+                logger.error(f"Failed to fetch cloud task after {maxTrys} tries")
+                return
+
+            with Session(engine) as session:
+                active_spool = session.exec(
+                    select(Spool).where(Spool.active == True)
+                ).first()
+
+                # save print job
+                job = PrintJob(
+                    spool_id=active_spool.id if active_spool else None,
+                    title=task.get("title", self._current_status.get("subtask_name", "Unknown")),
+                    cover=task.get("cover"),
+                    weight=task.get("weight"), # Grams
+                    duration_seconds=task.get("costTime"), # Seconds
+                    start_time=task.get("startTime"), # weird ISO 8601 notation
+                    status=task.get("status"), # even weirder, its an int: 4 == "RUNNING", 3 == "CANCElED (maybe also "FAILED"??), 2 == "FINISHED", 1 == ??? (maybe FAILED)"
+                    bambu_task_id=str(task.get("id")),
+                    device_id=self.serial,
+                    ams_detail_mapping=str(task.get("amsDetailMapping", [])),
+                )
+                session.add(job)
+
+                session.commit()
+                logger.info(f"PrintJob saved: {job.title} — {task.get('weight')}g used")
+
+        except Exception as e:
+            logger.error(f"Failed to save print job: {e}")
+
+    def _save_print_job(self):
         from app.services.printer_service import printer_service
 
-        logger.info("Print finished — waiting 30s for cloud to catch up...")
-        time.sleep(30)  # give Bambu cloud time to register the completed task
+        """Fetch cloud data and save PrintJob + deduct from spool."""
 
         try:
             # fetch latest task from cloud
@@ -266,41 +327,119 @@ class BambuClient:
                 logger.warning("No cloud task found after print finished")
                 return
 
+            logger.info("Print finished — waiting for cloud to catch up...")
+
+            trys = 0
+            maxTrys = 30
+            while task.get("status") == 4 and trys < maxTrys:
+                time.sleep(1)
+                trys += 1
+                task = printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+                if not task:
+                    break
+
+            if trys >= maxTrys:
+                logger.error(f"Failed to fetch cloud task after {maxTrys} tries")
+                return
+
+
             with Session(engine) as session:
                 # find active spool
                 active_spool = session.exec(
                     select(Spool).where(Spool.active == True)
                 ).first()
 
+                estimated_cost = None
+                if active_spool and task.get("weight"):
+                    # get average price from last 5 spools of same filament
+                    recent_spools = session.exec(
+                        select(Spool)
+                        .where(Spool.filament_id == active_spool.filament_id)
+                        .where(Spool.price_per_kg != None)
+                        .order_by(desc(Spool.created_at))
+                        .limit(5)
+                    ).all()
+
+                    if recent_spools:
+                        avg_price = sum(s.price_per_kg for s in recent_spools) / len(recent_spools)
+                        estimated_cost = round((task["weight"] / 1000) * avg_price, 2)
+                        logger.info(f"Estimated cost: €{estimated_cost} (avg €{avg_price}/kg)")
 
                 # save print job
-                job = PrintJob(
-                    spool_id=active_spool.id if active_spool else None,
-                    title=task.get("title"),
-                    cover=task.get("cover"),
-                    weight=task.get("weight"),
-                    duration_seconds=task.get("costTime"),
-                    start_time=task.get("startTime"),
-                    finished_at=task.get("endTime"),
-                    status=task.get("status"),
-                    bambu_task_id=str(task.get("id")),
-                    device_id=self.serial,
-                    ams_detail_mapping=str(task.get("amsDetailMapping", [])),
-                )
+                job = session.exec(select(PrintJob).where(PrintJob.bambu_task_id == str(task.get("id")))).first()
+
+                if not job:
+                    # init was missed — create fresh
+                    job = PrintJob(
+                        bambu_task_id=str(task.get("id")),
+                        device_id=self.serial,
+                    )
+                    session.add(job)
+
+                job.spool_id=active_spool.id if active_spool else None
+                job.title=task.get("title")
+                job.cover=task.get("cover")
+                job.weight=task.get("weight")
+                job.estimated_cost=estimated_cost
+                job.duration_seconds=task.get("costTime")
+                job.start_time=task.get("startTime")
+                job.finished_at=task.get("endTime")
+                job.status=task.get("status")
+                job.bambu_task_id=str(task.get("id"))
+                job.device_id=self.serial
+                job.ams_detail_mapping=str(task.get("amsDetailMapping", []))
+
                 session.add(job)
 
-                # deduct from active spool
-                if active_spool and task.get("weight"):
-                    active_spool.remaining_g = max(0, active_spool.remaining_g - task["weight"])
-                    active_spool.last_used_at = datetime.now(timezone.utc)
-                    logger.info(
-                        f"Deducted {task['weight']}g from spool {active_spool.id} — {active_spool.remaining_g}g remaining")
+                self._deduct_filament_from_spools(session, task)
 
                 session.commit()
                 logger.info(f"PrintJob saved: {job.title} — {task.get('weight')}g used")
 
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
+
+    def _deduct_filament_from_spools(self, session, task: dict):
+        """
+        Deduct filament usage per color slot from the correct spools.
+        Falls back to deducting from active spool if mapping unavailable.
+        """
+        ams_mapping = task.get("amsDetailMapping", [])
+
+        if not ams_mapping:
+            active_spool = session.exec(
+                select(Spool).where(Spool.active == True)
+            ).first()
+            if active_spool and task.get("weight"):
+                active_spool.remaining_g = max(0, active_spool.remaining_g - task["weight"])
+                active_spool.last_used_at = datetime.now(timezone.utc)
+                logger.info(f"Deducted {task['weight']}g from active spool {active_spool.id}")
+            return
+
+        for slot in ams_mapping:
+            used_g = slot.get("weight", 0)
+            if not used_g:
+                continue
+
+            filament_id = slot.get("filamentId")  # e.g. "GFL99"
+            filament_type = slot.get("filamentType")  # e.g. "PLA"
+
+            spool = session.exec(
+                select(Spool)
+                .join(Filament, Spool.filament_id == Filament.id)
+                .where(Filament.bambu_info_idx == filament_id)
+                .where(Spool.active == True)
+            ).first()
+
+            if not spool:
+                spool = session.exec(
+                    select(Spool).where(Spool.active == True)
+                ).first()
+
+            if spool:
+                spool.remaining_g = max(0, spool.remaining_g - used_g)
+                spool.last_used_at = datetime.now(timezone.utc)
+                logger.info(f"Deducted {used_g}g ({filament_type}) from spool {spool.id}")
 
     def _handle_info_update(self, info_data: dict):
         """Handle firmware version info."""
@@ -338,198 +477,5 @@ class BambuClient:
         if not self._current_status:
             return {"connected": self._connected, "status": "no_data"}
 
-        s = self._current_status
-
-        # ── AMS ───────────────────────────────────────────────────────────────
-        ams_raw = s.get("ams", {})
-        ams_units = ams_raw.get("ams", [])
-
-        trays = []
-        for ams_unit in ams_units:
-            for tray in ams_unit.get("tray", []):
-                if "tray_type" not in tray:
-                    continue
-                color_hex = tray.get("tray_color", "")
-                trays.append({
-                    "ams_id": ams_unit.get("id"),
-                    "tray_id": tray.get("id"),
-                    "type": tray.get("tray_type"),
-                    "color": f"#{color_hex[:6]}" if len(color_hex) >= 6 else None,
-                    "color_full": color_hex,
-                    "brand": tray.get("tray_sub_brands"),
-                    "name": tray.get("tray_id_name"),
-                    "info_idx": tray.get("tray_info_idx"),
-                    "uuid": tray.get("tray_uuid"),
-                    "tag_uid": tray.get("tag_uid"),
-                    "remain": tray.get("remain"),
-                    "weight": tray.get("tray_weight"),
-                    "diameter": tray.get("tray_diameter"),
-                    "temp_min": tray.get("nozzle_temp_min"),
-                    "temp_max": tray.get("nozzle_temp_max"),
-                    "bed_temp": tray.get("bed_temp"),
-                    "drying_temp": tray.get("drying_temp"),
-                    "drying_time": tray.get("drying_time"),
-                })
-
-        vt = s.get("vt_tray", {})
-        if vt.get("tray_type"):
-            color_hex = vt.get("tray_color", "")
-            trays.append({
-                "ams_id": "external",
-                "tray_id": "254",
-                "type": vt.get("tray_type"),
-                "color": f"#{color_hex[:6]}" if len(color_hex) >= 6 else None,
-                "color_full": color_hex,
-                "brand": vt.get("tray_sub_brands"),
-                "name": vt.get("tray_id_name"),
-                "info_idx": vt.get("tray_info_idx"),
-                "uuid": vt.get("tray_uuid"),
-                "tag_uid": vt.get("tag_uid"),
-                "remain": vt.get("remain"),
-                "weight": vt.get("tray_weight"),
-                "diameter": vt.get("tray_diameter"),
-                "temp_min": vt.get("nozzle_temp_min"),
-                "temp_max": vt.get("nozzle_temp_max"),
-            })
-
-        ams = {
-            "trays": trays,
-            "active_tray": ams_raw.get("tray_now"),
-            "previous_tray": ams_raw.get("tray_pre"),
-            "target_tray": ams_raw.get("tray_tar"),
-            "tray_exist_bits": ams_raw.get("tray_exist_bits"),
-            "tray_is_bbl_bits": ams_raw.get("tray_is_bbl_bits"),
-            "insert_flag": ams_raw.get("insert_flag"),
-            "rfid_status": s.get("ams_rfid_status"),
-            "ams_status": s.get("ams_status"),
-            "units": [
-                {
-                    "id": unit.get("id"),
-                    "humidity": unit.get("humidity"),
-                    "temp": unit.get("temp"),
-                }
-                for unit in ams_units
-            ],
-        }
-
-        # ── Lights ────────────────────────────────────────────────────────────
-        lights = {}
-        for light in s.get("lights_report", []):
-            lights[light.get("node")] = light.get("mode")
-
-        # ── Fans ──────────────────────────────────────────────────────────────
-        fans = {
-            "part_cooling": s.get("cooling_fan_speed"),
-            "auxiliary": s.get("big_fan1_speed"),
-            "chamber": s.get("big_fan2_speed"),
-            "heatbreak": s.get("heatbreak_fan_speed"),
-            "aux_installed": s.get("aux_part_fan"),
-            "gear": s.get("fan_gear"),
-        }
-
-        # ── XCam ──────────────────────────────────────────────────────────────
-        xcam_raw = s.get("xcam", {})
-        xcam = {
-            "first_layer_inspector": xcam_raw.get("first_layer_inspector"),
-            "spaghetti_detector": xcam_raw.get("spaghetti_detector"),
-            "printing_monitor": xcam_raw.get("printing_monitor"),
-            "buildplate_marker": xcam_raw.get("buildplate_marker_detector"),
-            "print_halt": xcam_raw.get("print_halt"),
-            "halt_sensitivity": xcam_raw.get("halt_print_sensitivity"),
-            "allow_skip_parts": xcam_raw.get("allow_skip_parts"),
-        }
-
-        # ── Camera ────────────────────────────────────────────────────────────
-        ipcam_raw = s.get("ipcam", {})
-        camera = {
-            "present": ipcam_raw.get("ipcam_dev") == "1",
-            "recording": ipcam_raw.get("ipcam_record"),
-            "timelapse": ipcam_raw.get("timelapse"),
-            "resolution": ipcam_raw.get("resolution"),
-        }
-
-        # ── Upgrade state ─────────────────────────────────────────────────────
-        upgrade_raw = s.get("upgrade_state", {})
-        upgrade = {
-            "status": upgrade_raw.get("status"),
-            "progress": upgrade_raw.get("progress"),
-            "ota_version": upgrade_raw.get("ota_new_version_number"),
-            "ams_version": upgrade_raw.get("ams_new_version_number"),
-            "force_upgrade": upgrade_raw.get("force_upgrade"),
-            "message": upgrade_raw.get("message"),
-        }
-
-        # ── Upload state ──────────────────────────────────────────────────────
-        upload_raw = s.get("upload", {})
-        upload = {
-            "status": upload_raw.get("status"),
-            "progress": upload_raw.get("progress"),
-            "message": upload_raw.get("message"),
-            "speed": upload_raw.get("speed"),
-        }
-
-        return {
-            # ── Connection ────────────────────────────────────────────────────
-            "connected": self._connected,
-
-            # ── Print state ───────────────────────────────────────────────────
-            "state": s.get("gcode_state", "UNKNOWN"),
-            "file": s.get("subtask_name", ""),
-            "gcode_file": s.get("gcode_file", ""),
-            "progress": s.get("mc_percent", 0),
-            "remaining_minutes": s.get("mc_remaining_time", 0),
-            "layer": s.get("layer_num", 0),
-            "total_layers": s.get("total_layer_num", 0),
-            "print_type": s.get("print_type"),
-            "gcode_start_time": s.get("gcode_start_time"),
-            "prepare_percent": s.get("gcode_file_prepare_percent"),
-            "print_stage": s.get("mc_print_stage"),
-            "print_sub_stage": s.get("mc_print_sub_stage"),
-            "queue_number": s.get("queue_number"),
-            "task_id": s.get("task_id"),
-            "subtask_id": s.get("subtask_id"),
-            "profile_id": s.get("profile_id"),
-            "project_id": s.get("project_id"),
-
-            # ── Errors ────────────────────────────────────────────────────────
-            "print_error": s.get("print_error", 0),
-            "print_error_code": s.get("mc_print_error_code"),
-            "fail_reason": s.get("fail_reason"),
-            "hms": s.get("hms", []),
-
-            # ── Temperatures ──────────────────────────────────────────────────
-            "nozzle_temp": s.get("nozzle_temper"),
-            "nozzle_target": s.get("nozzle_target_temper"),
-            "bed_temp": s.get("bed_temper"),
-            "bed_target": s.get("bed_target_temper"),
-            "chamber_temp": s.get("chamber_temper"),
-
-            # ── Nozzle ────────────────────────────────────────────────────────
-            "nozzle_diameter": s.get("nozzle_diameter"),
-
-            # ── Speed ─────────────────────────────────────────────────────────
-            "speed_level": s.get("spd_lvl"),
-            "speed_percent": s.get("spd_mag"),
-
-            # ── Network ───────────────────────────────────────────────────────
-            "wifi_signal": s.get("wifi_signal"),
-            "online": s.get("online", {}),
-
-            # ── Hardware ──────────────────────────────────────────────────────
-            "sdcard": s.get("sdcard"),
-            "home_flag": s.get("home_flag"),
-            "hw_switch_state": s.get("hw_switch_state"),
-            "lifecycle": s.get("lifecycle"),
-            "force_upgrade": s.get("force_upgrade"),
-
-            # ── Subsystems ────────────────────────────────────────────────────
-            "ams": ams,
-            "fans": fans,
-            "lights": lights,
-            "xcam": xcam,
-            "camera": camera,
-            "upgrade": upgrade,
-            "upload": upload,
-        }
-
+        return self._current_status
 

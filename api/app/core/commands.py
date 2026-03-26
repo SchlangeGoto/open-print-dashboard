@@ -159,4 +159,7 @@ BUZZER_SET_ALARM   = {"print" : {"sequence_id": "0", "command": "buzzer_ctrl", "
 BUZZER_SET_BEEPING = {"print" : {"sequence_id": "0", "command": "buzzer_ctrl", "mode": 2, "reason": ""}}
 
 AIRDUCT_SET_MODE_TEMPLATE = {"print": {"sequence_id": "0", "command": "set_airduct", "modeId": 0, "submode": -1}}
+SET_NOZZLE_TEMP = {"print": {"command": "set_nozzle_temp", "param": "220"}}
+SET_BED_TEMP = {"print": {"command": "set_bed_temp", "param": "60"}}
+SET_FAN_SPEED = {"print": {"command": "set_fan_speed", "param": "100"}}
 

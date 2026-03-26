@@ -33,6 +33,7 @@ class PrintJob(SQLModel, table=True):
     title: str
     cover: Optional[str] = None
     weight: Optional[float] = None
+    estimated_cost: Optional[float] = None
     duration_seconds: Optional[int] = None
     start_time: Optional[datetime] = None
     finished_at: Optional[datetime] = None

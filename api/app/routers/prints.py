@@ -16,6 +16,10 @@ def get_prints(session: Session = Depends(get_session)):
 def get_active_prints(session: Session = Depends(get_session)):
     return session.exec(select(PrintJob).where(PrintJob.status == 1)).all()
 
+@router.get("/stats")
+def get_stats(session: Session = Depends(get_session)):
+    return session.exec(select(PrintJob).order_by(desc(PrintJob.finished_at))).first()
+
 @router.get("/{print_id}")
 def get_print(print_id: int, session: Session = Depends(get_session)):
     return session.get(PrintJob, print_id)
@@ -29,6 +33,4 @@ def delete_print(print_id: int, session: Session = Depends(get_session)):
     session.commit()
     return {"ok": True}
 
-@router.get("/stats")
-def get_stats(session: Session = Depends(get_session)):
-    return session.exec(select(PrintJob).order_by(desc(PrintJob.finished_at))).first()
+

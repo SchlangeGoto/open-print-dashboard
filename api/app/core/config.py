@@ -1,8 +1,6 @@
 import os
 from dataclasses import dataclass
 
-print("DEBUG ENV:", os.getenv("PRINTER_IP"), os.getenv("PRINTER_SERIAL"))
-
 
 @dataclass
 class Config:

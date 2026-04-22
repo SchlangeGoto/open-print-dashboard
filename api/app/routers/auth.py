@@ -26,7 +26,7 @@ def login_start(payload: LoginStartRequest):
     printer_service.cloud_client.email = payload.email
     printer_service.cloud_client.password = payload.password
     try:
-        result = printer_service.login()
+        printer_service.login()
         return {"message": "Login successful"}
     except CodeRequiredError:
         _pending_login = True

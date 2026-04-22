@@ -6,10 +6,11 @@ from app.db.models import Settings
 
 def get_credentials() -> dict:
     with Session(engine) as session:
-        print(session.get(Settings, "bambu_cloud_email"))
+        email_setting = session.get(Settings, "bambu_cloud_email")
+        password_setting = session.get(Settings, "bambu_cloud_password")
         return {
-            "email": session.get(Settings, "bambu_cloud_email").value,
-            "password": session.get(Settings, "bambu_cloud_password").value,
+            "email": email_setting.value if email_setting else None,
+            "password": password_setting.value if password_setting else None,
         }
 
 
@@ -20,14 +21,26 @@ def get_cloud_token_db() -> str | None:
 
 def save_token(token: str) -> bool:
     with Session(engine) as session:
-        session.add(Settings(key="bambu_cloud_token", value=token))
+        setting = session.get(Settings, "bambu_cloud_token")
+        if setting:
+            setting.value = token
+        else:
+            session.add(Settings(key="bambu_cloud_token", value=token))
         session.commit()
     return True
 
 def save_credentials(email: str, password: str) -> bool:
     with Session(engine) as session:
-        session.add(Settings(key="bambu_cloud_email", value=email))
-        session.add(Settings(key="bambu_cloud_password", value=password))
+        email_setting = session.get(Settings, "bambu_cloud_email")
+        if email_setting:
+            email_setting.value = email
+        else:
+            session.add(Settings(key="bambu_cloud_email", value=email))
+
+        password_setting = session.get(Settings, "bambu_cloud_password")
+        if password_setting:
+            password_setting.value = password
+        else:
+            session.add(Settings(key="bambu_cloud_password", value=password))
         session.commit()
     return True
-

@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
 from app.services.printer_service import printer_service
 
@@ -22,7 +23,10 @@ def print_file(printer_id: str, limit: int = 20):
 
 @router.get("/cover/{cover_url:path}")
 def get_cover(cover_url: str):
-    return printer_service.cloud_client.download_cover_image(cover_url)
+    image = printer_service.cloud_client.download_cover_image(cover_url)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Cover image not found")
+    return Response(content=image, media_type="image/jpeg")
 
 @router.get("/{printer_id}/firmware")
 def get_printer_firmware(printer_id: str):

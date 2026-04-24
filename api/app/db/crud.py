@@ -14,12 +14,13 @@ def get_credentials() -> dict:
         }
 
 
-def get_cloud_token_db() -> str | None:
+def get_cloud_token() -> str | None:
     with Session(engine) as session:
         setting = session.get(Settings, "bambu_cloud_token")
         return setting.value if setting else None
 
-def save_token(token: str) -> bool:
+
+def save_token(token: str) -> None:
     with Session(engine) as session:
         setting = session.get(Settings, "bambu_cloud_token")
         if setting:
@@ -27,9 +28,9 @@ def save_token(token: str) -> bool:
         else:
             session.add(Settings(key="bambu_cloud_token", value=token))
         session.commit()
-    return True
 
-def save_credentials(email: str, password: str) -> bool:
+
+def save_credentials(email: str, password: str) -> None:
     with Session(engine) as session:
         email_setting = session.get(Settings, "bambu_cloud_email")
         if email_setting:
@@ -43,4 +44,3 @@ def save_credentials(email: str, password: str) -> bool:
         else:
             session.add(Settings(key="bambu_cloud_password", value=password))
         session.commit()
-    return True

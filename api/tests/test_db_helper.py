@@ -7,7 +7,7 @@ db_file.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{db_file.name}"
 
 from app.db.database import create_tables
-from app.db.db_helper import get_cloud_token_db, get_credentials, save_credentials, save_token
+from app.db.crud import get_cloud_token, get_credentials, save_credentials, save_token
 
 
 class DbHelperTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class DbHelperTests(unittest.TestCase):
     def test_save_token_updates_existing_value(self):
         save_token("token-1")
         save_token("token-2")
-        self.assertEqual(get_cloud_token_db(), "token-2")
+        self.assertEqual(get_cloud_token(), "token-2")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from app.db.database import get_session
+from app.dependencies import get_session
 from app.db.models import Spool, Filament
 
 router = APIRouter()

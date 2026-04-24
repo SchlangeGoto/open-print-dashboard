@@ -1,25 +1,23 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-from app.db.db_helper import get_cloud_token_db
+from app.db.crud import get_cloud_token
+from app.schemas.auth import LoginStartRequest, LoginVerifyRequest
 from app.services.printer_service import printer_service
-from app.core.bambu_exceptions import *
+from app.core.bambu_exceptions import (
+    CloudflareError,
+    CodeRequiredError,
+    CodeExpiredError,
+    CodeIncorrectError,
+)
 
 router = APIRouter()
-
-class LoginStartRequest(BaseModel):
-    email: str
-    password: str
-
-class LoginVerifyRequest(BaseModel):
-    code: str
 
 _pending_login = False
 
 @router.post("/login/start")
 def login_start(payload: LoginStartRequest):
 
-    if get_cloud_token_db():
+    if get_cloud_token():
         raise HTTPException(status_code=400, detail="Already logged in")
 
     global _pending_login
@@ -59,3 +57,4 @@ def login_verify(payload: LoginVerifyRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

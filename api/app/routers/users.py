@@ -1,28 +1,13 @@
-import hashlib
-import secrets
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.db.database import get_session
+from app.core.security import hash_password, generate_salt
+from app.dependencies import get_session
 from app.db.models import User, Settings
+from app.schemas.users import UserCreate, UserLogin
 from app.services.printer_service import printer_service
 
 router = APIRouter()
-
-
-class UserCreate(BaseModel):
-    username: str
-    password: str
-
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-
-def _hash_password(password: str, salt: str) -> str:
-    return hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
 
 
 @router.get("/")
@@ -44,8 +29,8 @@ def register_user(payload: UserCreate, session: Session = Depends(get_session)):
     if existing:
         raise HTTPException(status_code=400, detail="A user already exists")
 
-    salt = secrets.token_hex(16)
-    password_hash = _hash_password(payload.password, salt)
+    salt = generate_salt()
+    password_hash = hash_password(payload.password, salt)
 
     user = User(username=payload.username, password_hash=f"{salt}:{password_hash}")
     session.add(user)
@@ -62,7 +47,7 @@ def login_user(payload: UserLogin, session: Session = Depends(get_session)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     salt, stored_hash = user.password_hash.split(":", 1)
-    if _hash_password(payload.password, salt) != stored_hash:
+    if hash_password(payload.password, salt) != stored_hash:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return {"ok": True, "username": user.username}

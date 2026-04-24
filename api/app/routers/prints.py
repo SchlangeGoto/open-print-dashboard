@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.params import Depends
 from sqlmodel import Session, select, desc
 
-from app.db.database import get_session
+from app.dependencies import get_session
 from app.db.models import PrintJob
 from app.services.printer_service import printer_service
 

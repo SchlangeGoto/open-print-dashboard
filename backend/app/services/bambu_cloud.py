@@ -1,15 +1,21 @@
-import requests
-import cloudscraper
 import logging
 
-from app.core.bambu_exceptions import *
+import cloudscraper
+import requests
+
+from app.core.bambu_exceptions import (
+    CloudflareError,
+    CodeExpiredError,
+    CodeIncorrectError,
+    CodeRequiredError,
+    NotLoggedInError,
+)
+from app.core.store import get_cloud_credentials, get_cloud_token
 
 logger = logging.getLogger("uvicorn.error")
 
-
-from app.db.db_helper import get_credentials, get_cloud_token
-
 BASE_URL = "https://api.bambulab.com"
+
 
 class BambuCloudClient:
     """Small client for the Bambu Lab cloud API.
@@ -21,6 +27,7 @@ class BambuCloudClient:
     - Some accounts require an email verification code during login.
     - `login()` must be called before any request method.
     """
+
     def __init__(self):
         self.email = None
         self.password = None
@@ -34,7 +41,7 @@ class BambuCloudClient:
     def _load_credentials(self):
         """Load credentials from db only when needed."""
         if not self.email:
-            creds = get_credentials()
+            creds = get_cloud_credentials()
             self.email = creds.get("email")
             self.password = creds.get("password")
 
@@ -59,11 +66,11 @@ class BambuCloudClient:
             timeout=30,
         )
 
-        if resp.status_code == 403 and 'cloudflare' in resp.text.lower():
+        if resp.status_code == 403 and "cloudflare" in resp.text.lower():
             logger.debug("Cloudflare detected, using cloudscraper")
             scraper = cloudscraper.create_scraper()
             resp = scraper.post(f"{BASE_URL}/v1/user-service/user/login", json=payload)
-            if resp.status_code == 403 and 'cloudflare' in resp.text.lower():
+            if resp.status_code == 403 and "cloudflare" in resp.text.lower():
                 raise CloudflareError()
 
         if code and resp.status_code == 400:

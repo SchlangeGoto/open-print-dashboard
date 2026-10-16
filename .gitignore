@@ -2,9 +2,8 @@
 node_modules/
 .pnp
 .pnp.js
-.yarn/install-state.gz
 
-# Testing
+# Testing / coverage
 coverage/
 .jest/
 .pytest_cache/
@@ -13,6 +12,8 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.ruff_cache/
+backend/htmlcov/
 
 # Build & Production
 .next/
@@ -75,7 +76,6 @@ venv.bak/
 .ipynb_checkpoints
 
 # Tools
-.python-version
 pnpm-lock.yaml
 yarn.lock
 package-lock.json
@@ -91,7 +91,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-
 
 # AI
 AGENTS.md

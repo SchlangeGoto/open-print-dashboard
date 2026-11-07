@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { API_ROOT } from "@/lib/api";
 
 const API_BASE = API_ROOT;
@@ -57,7 +57,7 @@ export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageP
   }, [cover]);
 
   if (!cover || failed || !objectUrl) {
-    return <div className={cn("bg-zinc-800/60", className)} aria-hidden="true" />;
+    return <div className={cn("bg-muted", className)} aria-hidden="true" />;
   }
 
   return (

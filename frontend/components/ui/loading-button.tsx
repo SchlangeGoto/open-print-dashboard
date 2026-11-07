@@ -1,6 +1,5 @@
-import { Loader2 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 function LoadingButton({
   loading,
@@ -10,7 +9,7 @@ function LoadingButton({
 }: React.ComponentProps<typeof Button> & { loading?: boolean }) {
   return (
     <Button disabled={loading || disabled} {...props}>
-      {loading ? <Loader2 className="animate-spin" /> : null}
+      {loading ? <Spinner /> : null}
       {children}
     </Button>
   );

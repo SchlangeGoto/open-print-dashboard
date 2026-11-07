@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Cell } from "recharts";
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api } from "@/lib/api";
@@ -21,6 +13,12 @@ import {
 } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { CoverImage } from "@/components/ui/CoverImage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +26,10 @@ import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import PrinterModal from "@/components/modals/PrinterModal";
 import SpoolModal from "@/components/modals/SpoolModal";
+
+const filamentChartConfig = {
+  remaining: { label: "Remaining", color: "var(--chart-1)" },
+} satisfies ChartConfig;
 
 export default function DashboardPage() {
   const [statusByDev, setStatusByDev] = useState<Record<string, any>>({});
@@ -133,42 +135,51 @@ export default function DashboardPage() {
             <CardTitle>Filaments in Stock</CardTitle>
           </CardHeader>
           <CardContent>
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={filamentChartData}
-                  barSize={36}
-                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                >
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}g`} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--popover)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    labelStyle={{ color: "var(--popover-foreground)" }}
-                    itemStyle={{ color: "var(--popover-foreground)" }}
-                    formatter={(val: any, _name: any, props: any) => [
-                      `${val}g (${props.payload.pct}%)`,
-                      "Remaining",
-                    ]}
-                  />
-                  <Bar dataKey="remaining" radius={[4, 4, 0, 0]}>
-                    {filamentChartData.map((entry, i) => (
-                      <Cell
-                        key={i}
-                        fill={stockColor(entry.pct, entry.color)}
-                        stroke="var(--border)"
-                        strokeWidth={1}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartContainer
+              config={filamentChartConfig}
+              className="h-[200px] w-full"
+            >
+              <BarChart
+                accessibilityLayer
+                data={filamentChartData}
+                barSize={36}
+                margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+              >
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `${value}g`}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, _name, item) => {
+                        const pct = (item.payload as { pct?: number } | undefined)
+                          ?.pct;
+                        return `${value}g${pct != null ? ` (${pct}%)` : ""}`;
+                      }}
+                    />
+                  }
+                />
+                <Bar dataKey="remaining" name="Remaining" radius={[4, 4, 0, 0]}>
+                  {filamentChartData.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={stockColor(entry.pct, entry.color)}
+                      stroke="var(--border)"
+                      strokeWidth={1}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
 
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
               {filamentChartData.map((f, i) => (

@@ -22,8 +22,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -155,33 +155,33 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={savePrinterConfig} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ip">Printer IP</Label>
+            <Field>
+              <FieldLabel htmlFor="ip">Printer IP</FieldLabel>
               <Input
                 id="ip"
                 placeholder="192.168.0.100"
                 value={printerIp}
                 onChange={(e) => setPrinterIp(e.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="serial">Serial Number</Label>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="serial">Serial Number</FieldLabel>
               <Input
                 id="serial"
                 placeholder="03919C462700XXX"
                 value={printerSerial}
                 onChange={(e) => setPrinterSerial(e.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="access-code">Access Code</Label>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="access-code">Access Code</FieldLabel>
               <Input
                 id="access-code"
                 placeholder="••••••••"
                 value={printerAccessCode}
                 onChange={(e) => setPrinterAccessCode(e.target.value)}
               />
-            </div>
+            </Field>
 
             <div className="flex items-center gap-4">
               <LoadingButton type="submit" loading={saving} size="sm">

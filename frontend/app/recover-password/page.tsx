@@ -7,8 +7,8 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 
 export default function RecoverPasswordPage() {
@@ -50,8 +50,8 @@ export default function RecoverPasswordPage() {
         </Alert>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input
               id="email"
               type="email"
@@ -61,7 +61,7 @@ export default function RecoverPasswordPage() {
               required
               autoComplete="email"
             />
-          </div>
+          </Field>
 
           {error ? (
             <Alert variant="destructive">

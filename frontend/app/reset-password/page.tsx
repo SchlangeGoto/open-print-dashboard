@@ -9,8 +9,8 @@ import { AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 
 export default function ResetPasswordPage() {
@@ -74,8 +74,8 @@ export default function ResetPasswordPage() {
   return (
     <AuthLayout title="Reset password" description="Choose a new password">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="password">New Password</Label>
+        <Field>
+          <FieldLabel htmlFor="password">New Password</FieldLabel>
           <Input
             id="password"
             type="password"
@@ -85,10 +85,10 @@ export default function ResetPasswordPage() {
             required
             autoComplete="new-password"
           />
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm Password</Label>
+        <Field>
+          <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
           <Input
             id="confirm-password"
             type="password"
@@ -98,7 +98,7 @@ export default function ResetPasswordPage() {
             required
             autoComplete="new-password"
           />
-        </div>
+        </Field>
 
         {error ? (
           <Alert variant="destructive">

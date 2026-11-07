@@ -9,8 +9,8 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 
 export default function Home() {
@@ -83,8 +83,8 @@ export default function Home() {
       }
     >
       <form onSubmit={handleLogin} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+        <Field>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
             id="email"
             type="email"
@@ -94,10 +94,10 @@ export default function Home() {
             required
             autoComplete="email"
           />
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+        <Field>
+          <FieldLabel htmlFor="password">Password</FieldLabel>
           <Input
             id="password"
             type="password"
@@ -107,7 +107,7 @@ export default function Home() {
             required
             autoComplete="current-password"
           />
-        </div>
+        </Field>
 
         {error ? (
           <Alert variant="destructive">

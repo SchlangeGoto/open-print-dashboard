@@ -26,8 +26,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 
 type SetupStep = "account" | "bambu" | "bambu-code" | "printer" | "done";
@@ -221,8 +221,8 @@ export default function SetupPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateAccount} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                <Field>
+                  <FieldLabel htmlFor="email">Email</FieldLabel>
                   <Input
                     id="email"
                     type="email"
@@ -231,9 +231,9 @@ export default function SetupPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="password">Password</FieldLabel>
                   <Input
                     id="password"
                     type="password"
@@ -242,9 +242,9 @@ export default function SetupPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm">Confirm Password</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="confirm">Confirm Password</FieldLabel>
                   <Input
                     id="confirm"
                     type="password"
@@ -253,7 +253,7 @@ export default function SetupPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                   />
-                </div>
+                </Field>
 
                 {error ? (
                   <Alert variant="destructive">
@@ -285,8 +285,8 @@ export default function SetupPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleBambuLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="bambu-email">Bambu Lab Email</Label>
+                <Field>
+                  <FieldLabel htmlFor="bambu-email">Bambu Lab Email</FieldLabel>
                   <Input
                     id="bambu-email"
                     type="email"
@@ -295,9 +295,9 @@ export default function SetupPage() {
                     onChange={(e) => setBambuEmail(e.target.value)}
                     required
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bambu-password">Bambu Lab Password</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="bambu-password">Bambu Lab Password</FieldLabel>
                   <Input
                     id="bambu-password"
                     type="password"
@@ -306,7 +306,7 @@ export default function SetupPage() {
                     onChange={(e) => setBambuPassword(e.target.value)}
                     required
                   />
-                </div>
+                </Field>
 
                 {error ? (
                   <Alert variant="destructive">
@@ -345,8 +345,8 @@ export default function SetupPage() {
               </Alert>
 
               <form onSubmit={handleBambuVerify} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="code">Verification Code</Label>
+                <Field>
+                  <FieldLabel htmlFor="code">Verification Code</FieldLabel>
                   <Input
                     id="code"
                     inputMode="numeric"
@@ -355,7 +355,7 @@ export default function SetupPage() {
                     onChange={(e) => setVerifyCode(e.target.value)}
                     required
                   />
-                </div>
+                </Field>
 
                 {error ? (
                   <Alert variant="destructive">
@@ -426,8 +426,8 @@ export default function SetupPage() {
               ) : null}
 
               <form onSubmit={handlePrinterSetup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ip">Printer IP Address</Label>
+                <Field>
+                  <FieldLabel htmlFor="ip">Printer IP Address</FieldLabel>
                   <Input
                     id="ip"
                     placeholder="192.168.0.100"
@@ -435,9 +435,9 @@ export default function SetupPage() {
                     onChange={(e) => setPrinterIp(e.target.value)}
                     required
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="serial">Printer Serial Number</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="serial">Printer Serial Number</FieldLabel>
                   <Input
                     id="serial"
                     placeholder="03919C462700XXX"
@@ -445,9 +445,9 @@ export default function SetupPage() {
                     onChange={(e) => setPrinterSerial(e.target.value)}
                     required
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="access-code">Access Code</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="access-code">Access Code</FieldLabel>
                   <Input
                     id="access-code"
                     placeholder="12345678"
@@ -455,7 +455,7 @@ export default function SetupPage() {
                     onChange={(e) => setPrinterAccessCode(e.target.value)}
                     required
                   />
-                </div>
+                </Field>
 
                 {error ? (
                   <Alert variant="destructive">

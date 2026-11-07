@@ -28,8 +28,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -282,8 +282,8 @@ export default function FilamentsPage() {
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="brand">Brand</Label>
+              <Field>
+                <FieldLabel htmlFor="brand">Brand</FieldLabel>
                 <Input
                   id="brand"
                   placeholder="Bambu Lab"
@@ -291,12 +291,16 @@ export default function FilamentsPage() {
                   onChange={(e) => setForm({ ...form, brand: e.target.value })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="material">Material</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="material">Material</FieldLabel>
                 <Select
                   value={form.material}
                   onValueChange={(v) => setForm({ ...form, material: v ?? "" })}
+                  items={MATERIALS.map((material) => ({
+                    value: material,
+                    label: material,
+                  }))}
                 >
                   <SelectTrigger id="material" className="w-full">
                     <SelectValue placeholder="Select material" />
@@ -309,12 +313,12 @@ export default function FilamentsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="color-name">Color Name</Label>
+              <Field>
+                <FieldLabel htmlFor="color-name">Color Name</FieldLabel>
                 <Input
                   id="color-name"
                   placeholder="Matte Black"
@@ -322,9 +326,9 @@ export default function FilamentsPage() {
                   onChange={(e) => setForm({ ...form, color_name: e.target.value })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="color-hex">Color</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="color-hex">Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -339,48 +343,48 @@ export default function FilamentsPage() {
                     className="flex-1"
                   />
                 </div>
-              </div>
+              </Field>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="nozzle-min">Nozzle Min °C</Label>
+              <Field>
+                <FieldLabel htmlFor="nozzle-min">Nozzle Min °C</FieldLabel>
                 <Input
                   id="nozzle-min"
                   type="number"
                   value={form.nozzle_temp_min ?? ""}
                   onChange={(e) => setForm({ ...form, nozzle_temp_min: Number(e.target.value) })}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="nozzle-max">Nozzle Max °C</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="nozzle-max">Nozzle Max °C</FieldLabel>
                 <Input
                   id="nozzle-max"
                   type="number"
                   value={form.nozzle_temp_max ?? ""}
                   onChange={(e) => setForm({ ...form, nozzle_temp_max: Number(e.target.value) })}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bed">Bed °C</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="bed">Bed °C</FieldLabel>
                 <Input
                   id="bed"
                   type="number"
                   value={form.bed_temp ?? ""}
                   onChange={(e) => setForm({ ...form, bed_temp: Number(e.target.value) })}
                 />
-              </div>
+              </Field>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bambu-idx">Bambu Info Index</Label>
+            <Field>
+              <FieldLabel htmlFor="bambu-idx">Bambu Info Index</FieldLabel>
               <Input
                 id="bambu-idx"
                 placeholder="GFL99"
                 value={form.bambu_info_idx}
                 onChange={(e) => setForm({ ...form, bambu_info_idx: e.target.value })}
               />
-            </div>
+            </Field>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>

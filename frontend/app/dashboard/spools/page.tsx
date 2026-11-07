@@ -28,8 +28,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -327,11 +327,15 @@ export default function SpoolsPage() {
             <DialogDescription>Track a filament spool.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="filament">Filament</Label>
+            <Field>
+              <FieldLabel htmlFor="filament">Filament</FieldLabel>
               <Select
                 value={form.filament_id}
                 onValueChange={(v) => setForm({ ...form, filament_id: v ?? "" })}
+                items={filaments.map((filament) => ({
+                  value: String(filament.id),
+                  label: `${filament.brand} — ${filament.color_name} (${filament.material})`,
+                }))}
               >
                 <SelectTrigger id="filament" className="w-full">
                   <SelectValue placeholder="Select filament…" />
@@ -344,11 +348,11 @@ export default function SpoolsPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="total-weight">Total Weight (g)</Label>
+              <Field>
+                <FieldLabel htmlFor="total-weight">Total Weight (g)</FieldLabel>
                 <Input
                   id="total-weight"
                   type="number"
@@ -356,9 +360,9 @@ export default function SpoolsPage() {
                   onChange={(e) => setForm({ ...form, total_weight_g: Number(e.target.value) })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="remaining">Remaining (g)</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="remaining">Remaining (g)</FieldLabel>
                 <Input
                   id="remaining"
                   type="number"
@@ -366,12 +370,12 @@ export default function SpoolsPage() {
                   onChange={(e) => setForm({ ...form, remaining_g: Number(e.target.value) })}
                   required
                 />
-              </div>
+              </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price">Price / kg (€)</Label>
+              <Field>
+                <FieldLabel htmlFor="price">Price / kg (€)</FieldLabel>
                 <Input
                   id="price"
                   type="number"
@@ -380,27 +384,27 @@ export default function SpoolsPage() {
                   value={form.price_per_kg}
                   onChange={(e) => setForm({ ...form, price_per_kg: e.target.value })}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="purchased">Purchased</Label>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="purchased">Purchased</FieldLabel>
                 <Input
                   id="purchased"
                   type="date"
                   value={form.purchased_at}
                   onChange={(e) => setForm({ ...form, purchased_at: e.target.value })}
                 />
-              </div>
+              </Field>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="nfc">NFC UID (optional)</Label>
+            <Field>
+              <FieldLabel htmlFor="nfc">NFC UID (optional)</FieldLabel>
               <Input
                 id="nfc"
                 placeholder="04:A2:3F:…"
                 value={form.nfc_uid}
                 onChange={(e) => setForm({ ...form, nfc_uid: e.target.value })}
               />
-            </div>
+            </Field>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>

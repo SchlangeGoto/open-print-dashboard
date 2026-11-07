@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrinterModal from "@/components/modals/PrinterModal";
@@ -177,21 +178,19 @@ export default function PrintersPage() {
 
                   {printing ? (
                     <div
-                      className="rounded-xl border border-blue-800/40 bg-blue-950/20 p-3"
+                      className="rounded-xl border border-primary/30 bg-primary/10 p-3"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <p className="mb-2 text-xs font-semibold text-blue-400">
+                      <p className="mb-2 text-xs font-semibold text-primary">
                         Currently Printing
                       </p>
                       <p className="truncate text-sm font-medium">
                         {deviceStatus?.subtask_name ?? "Unknown"}
                       </p>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-blue-500"
-                          style={{ width: `${deviceStatus?.mc_percent ?? 0}%` }}
-                        />
-                      </div>
+                      <Progress
+                        value={deviceStatus?.mc_percent ?? 0}
+                        className="mt-2 [&_[data-slot=progress-track]]:h-1.5"
+                      />
                       <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                         <span className="tabular-nums">
                           {deviceStatus?.mc_percent ?? 0}%
@@ -227,15 +226,18 @@ export default function PrintersPage() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{activeFilament.color_name}</p>
                           <p className="text-xs text-muted-foreground">{activeFilament.material}</p>
-                          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${pct}%`,
-                                backgroundColor: stockColor(pct, activeFilament.color_hex),
-                              }}
-                            />
-                          </div>
+                          <Progress
+                            value={pct}
+                            className="mt-1.5 [&_[data-slot=progress-track]]:h-1 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                            style={
+                              {
+                                "--spool-color": stockColor(
+                                  pct,
+                                  activeFilament.color_hex,
+                                ),
+                              } as React.CSSProperties
+                            }
+                          />
                         </div>
                       </div>
                     </button>

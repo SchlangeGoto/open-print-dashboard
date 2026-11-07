@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import { formatCurrency, formatDate, formatWeight, stockColor } from "@/lib/utils";
 
@@ -87,15 +88,15 @@ export default function SpoolModal({ spool, filament, onClose, onActivate }: Pro
               <span>{Math.round(spool?.remaining_g ?? 0)}g</span>
               <span>{pct}%</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${pct}%`,
-                  backgroundColor: stockColor(pct, filament?.color_hex),
-                }}
-              />
-            </div>
+            <Progress
+              value={pct}
+              className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+              style={
+                {
+                  "--spool-color": stockColor(pct, filament?.color_hex),
+                } as React.CSSProperties
+              }
+            />
           </div>
         </div>
 

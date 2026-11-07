@@ -31,6 +31,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -281,15 +282,15 @@ export default function SpoolsPage() {
                       <span>{formatWeight(s.remaining_g)}</span>
                       <span className="tabular-nums">{pct}%</span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: stockColor(pct, fil?.color_hex),
-                        }}
-                      />
-                    </div>
+                    <Progress
+                      value={pct}
+                      className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                      style={
+                        {
+                          "--spool-color": stockColor(pct, fil?.color_hex),
+                        } as React.CSSProperties
+                      }
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-1.5 text-[10px] text-muted-foreground">

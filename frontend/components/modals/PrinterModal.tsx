@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import { formatWeight, isPrintingStatus, stockColor } from "@/lib/utils";
 
@@ -139,17 +140,15 @@ export default function PrinterModal({
         </div>
 
         {printing ? (
-          <div className="rounded-xl border border-blue-800/40 bg-blue-950/20 p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-400">
+          <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
               Printing
             </p>
             <p className="font-medium">{status?.subtask_name ?? "Unknown"}</p>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-blue-500"
-                style={{ width: `${status?.mc_percent ?? 0}%` }}
-              />
-            </div>
+            <Progress
+              value={status?.mc_percent ?? 0}
+              className="mt-2 [&_[data-slot=progress-track]]:h-2"
+            />
             <div className="mt-1 flex justify-between text-xs text-muted-foreground">
               <span className="tabular-nums">{status?.mc_percent ?? 0}%</span>
               <span>
@@ -182,15 +181,15 @@ export default function PrinterModal({
                 <p className="text-sm text-muted-foreground">
                   {filament.brand} · {filament.material}
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${pct}%`,
-                      backgroundColor: stockColor(pct, filament.color_hex),
-                    }}
-                  />
-                </div>
+                <Progress
+                  value={pct}
+                  className="mt-2 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                  style={
+                    {
+                      "--spool-color": stockColor(pct, filament.color_hex),
+                    } as React.CSSProperties
+                  }
+                />
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formatWeight(activeSpool.remaining_g)} remaining
                 </p>

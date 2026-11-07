@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/chart";
 import { CoverImage } from "@/components/ui/CoverImage";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrintJobModal from "@/components/modals/PrintJobModal";
@@ -252,9 +253,10 @@ export default function DashboardPage() {
                         <span>Progress</span>
                         <span className="tabular-nums">{pct}%</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                      </div>
+                      <Progress
+                        value={pct}
+                        className="[&_[data-slot=progress-track]]:h-2"
+                      />
                       <p className="text-xs text-muted-foreground">
                         {remaining ? `${remaining} min remaining` : "—"}
                       </p>
@@ -357,7 +359,7 @@ export default function DashboardPage() {
                     {printing || printerPrint ? (
                       <button
                         type="button"
-                        className="w-full cursor-pointer rounded-xl border border-blue-800/40 bg-blue-950/20 p-3 text-left transition-colors hover:border-blue-700/50"
+                        className="w-full cursor-pointer rounded-xl border border-primary/30 bg-primary/10 p-3 text-left transition-colors hover:border-primary/50"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (printerPrint) {
@@ -367,20 +369,20 @@ export default function DashboardPage() {
                           }
                         }}
                       >
-                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                           Currently Printing
                         </p>
                         <p className="truncate text-sm font-medium">
                           {deviceStatus?.subtask_name ?? printerPrint?.title ?? "Unknown"}
                         </p>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-blue-500"
-                            style={{
-                              width: `${deviceStatus?.mc_percent ?? printerPrint?.mc_percent ?? 0}%`,
-                            }}
-                          />
-                        </div>
+                        <Progress
+                          value={
+                            deviceStatus?.mc_percent ??
+                            printerPrint?.mc_percent ??
+                            0
+                          }
+                          className="mt-2 [&_[data-slot=progress-track]]:h-1.5"
+                        />
                         <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                           <span className="tabular-nums">
                             {deviceStatus?.mc_percent ?? printerPrint?.mc_percent ?? 0}%
@@ -414,15 +416,18 @@ export default function DashboardPage() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">{activeFilament.color_name}</p>
                             <p className="text-xs text-muted-foreground">{activeFilament.material}</p>
-                            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${spoolPct}%`,
-                                  backgroundColor: stockColor(spoolPct, activeFilament.color_hex),
-                                }}
-                              />
-                            </div>
+                            <Progress
+                              value={spoolPct}
+                              className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                              style={
+                                {
+                                  "--spool-color": stockColor(
+                                    spoolPct,
+                                    activeFilament.color_hex,
+                                  ),
+                                } as React.CSSProperties
+                              }
+                            />
                             <p className="mt-1 text-[10px] text-muted-foreground">
                               {Math.round(activeSpool.remaining_g)}g remaining
                             </p>

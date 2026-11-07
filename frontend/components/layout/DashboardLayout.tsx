@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 
+import { AccentSelector } from "./AccentSelector";
 import { AppSidebar } from "./AppSidebar";
 import {
   SidebarInset,
@@ -32,6 +33,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
           <SidebarTrigger className="-ml-1 text-muted-foreground" />
+          <div className="ml-auto">
+            <AccentSelector />
+          </div>
         </header>
         <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
           <div className="mx-auto w-full max-w-7xl">{children}</div>

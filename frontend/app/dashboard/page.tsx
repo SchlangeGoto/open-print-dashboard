@@ -7,6 +7,7 @@ import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   buildPrinterStatusMap,
+  chartColor,
   formatEstimatedEnd,
   isPrintingStatus,
   stockColor,
@@ -173,7 +174,7 @@ export default function DashboardPage() {
                   {filamentChartData.map((entry, i) => (
                     <Cell
                       key={i}
-                      fill={stockColor(entry.pct, entry.color)}
+                      fill={chartColor(entry.pct, entry.color)}
                       stroke="var(--border)"
                       strokeWidth={1}
                     />
@@ -187,7 +188,7 @@ export default function DashboardPage() {
                 <div key={i} className="flex items-center gap-1.5 text-xs">
                   <div
                     className="size-2.5 shrink-0 rounded-full"
-                    style={{ background: stockColor(f.pct, f.color) }}
+                    style={{ background: chartColor(f.pct, f.color) }}
                   />
                   <span className="text-muted-foreground">{f.name}</span>
                   <span className="text-muted-foreground/50">·</span>

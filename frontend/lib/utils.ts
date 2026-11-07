@@ -129,3 +129,31 @@ export function stockColor(percent: number, fallback = "#3b82f6"): string {
   if (percent >= 70) return "#22c55e";
   return fallback;
 }
+
+/**
+ * Keep chart bars readable when the filament itself is very dark. Stock
+ * status colors are left alone; only the actual filament color is lightened.
+ */
+export function chartColor(percent: number, color?: string | null): string {
+  const base = stockColor(percent, color ?? undefined);
+  if (!color || percent <= 30 || percent >= 70) return base;
+
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return base;
+
+  const value = Number.parseInt(match[1], 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  const luminance = (0.2126 * r + 0.587 * g + 0.114 * b) / 255;
+
+  if (luminance >= 0.2) return base;
+
+  const mix = 0.4;
+  const lighten = (channel: number) =>
+    Math.round(channel + (255 - channel) * mix)
+      .toString(16)
+      .padStart(2, "0");
+
+  return `#${lighten(r)}${lighten(g)}${lighten(b)}`;
+}

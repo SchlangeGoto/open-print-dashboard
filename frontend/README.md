@@ -6,17 +6,20 @@ and [shadcn/ui](https://ui.shadcn.com).
 
 ## Requirements
 
-- Node.js 20.9+ and npm
+- Node.js 22+ and npm
 
 ## Quick Start
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 Open <http://localhost:3000>. The app talks to the backend at `http://localhost:8000`
 (override with `NEXT_PUBLIC_API_URL`).
+
+> TypeScript is pinned to 6.x because `typescript-eslint`, which is bundled by
+> `eslint-config-next`, does not support TypeScript 7 yet.
 
 ## Structure
 
@@ -32,7 +35,9 @@ Open <http://localhost:3000>. The app talks to the backend at `http://localhost:
 
 ## shadcn/ui
 
-Components are configured in `components.json`. Add more with:
+The project uses the **Nova** style (`radix-nova`) on the Radix base, with the
+neutral base color, a blue primary accent, Geist, and Lucide icons. Components
+are configured in `components.json`. Add more with:
 
 ```bash
 npx shadcn@latest add <component>

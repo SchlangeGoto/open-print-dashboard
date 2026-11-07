@@ -75,11 +75,6 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Tools
-pnpm-lock.yaml
-yarn.lock
-package-lock.json
-
 # Database
 *.db
 *.sqlite

@@ -3,7 +3,7 @@
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) for the Python backend
-- [Node.js](https://nodejs.org/) (20.9+) and npm for the Next.js frontend
+- [Node.js](https://nodejs.org/) (22+) and npm for the Next.js frontend
 - [Docker](https://www.docker.com/) and Docker Compose (for PostgreSQL and Mailpit)
 
 ## Local Development
@@ -33,7 +33,7 @@ The API is available at <http://localhost:8000>, with interactive docs at <http:
 From the `frontend` directory:
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 

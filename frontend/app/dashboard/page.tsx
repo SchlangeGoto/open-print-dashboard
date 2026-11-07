@@ -13,18 +13,25 @@ import {
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api } from "@/lib/api";
-import { stockColor } from "@/lib/utils";
+import {
+  buildPrinterStatusMap,
+  formatEstimatedEnd,
+  isPrintingStatus,
+  stockColor,
+} from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CoverImage } from "@/components/ui/CoverImage";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import PrinterModal from "@/components/modals/PrinterModal";
 import SpoolModal from "@/components/modals/SpoolModal";
 
 export default function DashboardPage() {
-  const [status, setStatus] = useState<any>(null);
+  const [statusByDev, setStatusByDev] = useState<Record<string, any>>({});
+  const [printerConfig, setPrinterConfig] = useState<any>(null);
   const [prints, setPrints] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
@@ -35,29 +42,22 @@ export default function DashboardPage() {
   const [selectedPrint, setSelectedPrint] = useState<any>(null);
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
   const [selectedPrinter, setSelectedPrinter] = useState<any>(null);
-  const [estimatedEnd, setEstimatedEnd] = useState("—");
 
   useEffect(() => {
     async function load() {
       try {
-        const [st, pr, fil, sp, act, devs] = await Promise.all([
+        const [st, cloud, config, pr, fil, sp, act, devs] = await Promise.all([
           api.getPrinterStatus().catch(() => null),
+          api.getCloudStatus().catch(() => []),
+          api.getPrinterConfig().catch(() => null),
           api.getPrintJobs().catch(() => []),
           api.getFilaments().catch(() => []),
           api.getSpools().catch(() => []),
           api.getActiveSpool().catch(() => null),
           api.getPrinters().catch(() => []),
         ]);
-        setStatus(st);
-        const mins = st?.mc_remaining_time;
-        setEstimatedEnd(
-          mins
-            ? new Date(Date.now() + mins * 60 * 1000).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "—",
-        );
+        setStatusByDev(buildPrinterStatusMap(cloud, st, config?.serial));
+        setPrinterConfig(config);
         setPrints(pr);
         setFilaments(fil);
         setSpools(sp);
@@ -88,7 +88,6 @@ export default function DashboardPage() {
   const spoolPct = activeSpool
     ? Math.round((activeSpool.remaining_g / activeSpool.total_weight_g) * 100)
     : 0;
-  const printing = status?.gcode_state === "RUNNING";
 
   const filamentChartData = filaments
     .filter((f) => f.total_remaining_g > 0)
@@ -108,11 +107,11 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 rounded skeleton" />
-        <div className="h-56 rounded-xl skeleton" />
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-56 rounded-xl" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {[0, 1].map((i) => (
-            <div key={i} className="h-64 rounded-xl skeleton" />
+            <Skeleton key={i} className="h-64 rounded-xl" />
           ))}
         </div>
       </div>
@@ -159,7 +158,12 @@ export default function DashboardPage() {
                   />
                   <Bar dataKey="remaining" radius={[4, 4, 0, 0]}>
                     {filamentChartData.map((entry, i) => (
-                      <Cell key={i} fill={stockColor(entry.pct, entry.color)} />
+                      <Cell
+                        key={i}
+                        fill={stockColor(entry.pct, entry.color)}
+                        stroke="var(--border)"
+                        strokeWidth={1}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -197,13 +201,24 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {activePrints.map((p) => {
               const printer = printers.find((d) => d.dev_id === p.device_id);
-              const pct = status?.mc_percent ?? p.mc_percent ?? 0;
-              const remaining = status?.mc_remaining_time;
+              const deviceStatus = statusByDev[p.device_id] ?? null;
+              const pct = deviceStatus?.mc_percent ?? p.mc_percent ?? 0;
+              const remaining =
+                deviceStatus?.mc_remaining_time ?? p.mc_remaining_time;
               return (
                 <Card
                   key={p.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedPrint(p)}
-                  className="cursor-pointer transition-colors hover:border-primary/40"
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedPrint(p);
+                    }
+                  }}
+                  className="cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                   <CardContent className="space-y-4">
                     <div className="flex gap-3">
@@ -214,7 +229,10 @@ export default function DashboardPage() {
                           {printer?.name ?? p.device_id ?? "Unknown printer"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Ends at <span className="text-foreground">{estimatedEnd}</span>
+                          Ends at{" "}
+                          <span className="text-foreground">
+                            {formatEstimatedEnd(remaining)}
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -250,135 +268,165 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            {printers.map((dev) => (
-              <Card
-                key={dev.dev_id}
-                onClick={() => setSelectedPrinter(dev)}
-                className="cursor-pointer gap-4 transition-colors hover:border-primary/40"
-              >
-                <CardContent className="space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="shrink-0 rounded-xl bg-primary/10 p-2.5">
-                        <PrinterIcon className="size-[18px] text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-semibold">{dev.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {dev.dev_model_name ?? dev.dev_id}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant={dev.online ? "success" : "secondary"}>
-                      {dev.online ? "Online" : "Offline"}
-                    </Badge>
-                  </div>
+            {printers.map((dev) => {
+              const deviceStatus = statusByDev[dev.dev_id] ?? null;
+              const printing = isPrintingStatus(deviceStatus);
+              const printerPrint =
+                activePrints.find((p) => p.device_id === dev.dev_id) ?? null;
+              const remaining =
+                deviceStatus?.mc_remaining_time ?? printerPrint?.mc_remaining_time;
+              const isLocalPrinter =
+                !printerConfig?.serial || printerConfig.serial === dev.dev_id;
+              const showSpool = isLocalPrinter && activeSpool && activeFilament;
 
-                  {status ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border bg-muted/40 p-3">
-                        <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Thermometer className="size-2.5" /> Nozzle
-                        </div>
-                        <p className="text-lg font-bold tabular-nums text-[#FF6D28]">
-                          {status.nozzle_temper ?? "—"}°C
-                        </p>
-                        {status.nozzle_target_temper ? (
-                          <p className="text-[10px] text-muted-foreground">
-                            Target: {status.nozzle_target_temper}°C
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="rounded-lg border bg-muted/40 p-3">
-                        <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Thermometer className="size-2.5" /> Bed
-                        </div>
-                        <p className="text-lg font-bold tabular-nums text-[#00D0B0]">
-                          {status.bed_temper ?? "—"}°C
-                        </p>
-                        {status.bed_target_temper ? (
-                          <p className="text-[10px] text-muted-foreground">
-                            Target: {status.bed_target_temper}°C
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {printing ? (
-                    <button
-                      type="button"
-                      className="w-full cursor-pointer rounded-xl border border-blue-800/40 bg-blue-950/20 p-3 text-left transition-colors hover:border-blue-700/50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const currentPrint =
-                          activePrints.find((p) => p.device_id === dev.dev_id) ?? activePrints[0];
-                        if (currentPrint) setSelectedPrint(currentPrint);
-                      }}
-                    >
-                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
-                        Currently Printing
-                      </p>
-                      <p className="truncate text-sm font-medium">
-                        {status?.subtask_name ?? "Unknown"}
-                      </p>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-blue-500" style={{ width: `${status?.mc_percent ?? 0}%` }} />
-                      </div>
-                      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                        <span className="tabular-nums">{status?.mc_percent ?? 0}%</span>
-                        <span>
-                          {status?.mc_remaining_time ? `${status.mc_remaining_time} min left` : ""}
-                        </span>
-                      </div>
-                    </button>
-                  ) : null}
-
-                  {activeSpool && activeFilament ? (
-                    <button
-                      type="button"
-                      className="w-full cursor-pointer rounded-xl border bg-muted/40 p-3 text-left transition-colors hover:border-primary/40"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSpool(activeSpool);
-                      }}
-                    >
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Loaded Spool
-                      </p>
+              return (
+                <Card
+                  key={dev.dev_id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedPrinter(dev)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedPrinter(dev);
+                    }
+                  }}
+                  className="cursor-pointer gap-4 transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <CardContent className="space-y-4">
+                    <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <SpoolIndicator
-                          remaining={activeSpool.remaining_g}
-                          total={activeSpool.total_weight_g}
-                          color={activeFilament.color_hex}
-                          size={52}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{activeFilament.color_name}</p>
-                          <p className="text-xs text-muted-foreground">{activeFilament.material}</p>
-                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${spoolPct}%`,
-                                backgroundColor: stockColor(spoolPct, activeFilament.color_hex),
-                              }}
-                            />
-                          </div>
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            {Math.round(activeSpool.remaining_g)}g remaining
+                        <div className="shrink-0 rounded-xl bg-primary/10 p-2.5">
+                          <PrinterIcon className="size-[18px] text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-semibold">{dev.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {dev.dev_model_name ?? dev.dev_id}
                           </p>
                         </div>
                       </div>
-                    </button>
-                  ) : (
-                    <div className="rounded-xl border border-dashed bg-muted/20 p-3 text-center">
-                      <p className="text-xs text-muted-foreground">No spool loaded</p>
+                      <Badge variant={dev.online ? "success" : "secondary"}>
+                        {dev.online ? "Online" : "Offline"}
+                      </Badge>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+
+                    {deviceStatus ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-lg border bg-muted/40 p-3">
+                          <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Thermometer className="size-2.5" /> Nozzle
+                          </div>
+                          <p className="text-lg font-bold tabular-nums text-[#FF6D28]">
+                            {deviceStatus.nozzle_temper ?? "—"}°C
+                          </p>
+                          {deviceStatus.nozzle_target_temper ? (
+                            <p className="text-[10px] text-muted-foreground">
+                              Target: {deviceStatus.nozzle_target_temper}°C
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="rounded-lg border bg-muted/40 p-3">
+                          <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Thermometer className="size-2.5" /> Bed
+                          </div>
+                          <p className="text-lg font-bold tabular-nums text-[#00D0B0]">
+                            {deviceStatus.bed_temper ?? "—"}°C
+                          </p>
+                          {deviceStatus.bed_target_temper ? (
+                            <p className="text-[10px] text-muted-foreground">
+                              Target: {deviceStatus.bed_target_temper}°C
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {printing || printerPrint ? (
+                      <button
+                        type="button"
+                        className="w-full cursor-pointer rounded-xl border border-blue-800/40 bg-blue-950/20 p-3 text-left transition-colors hover:border-blue-700/50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (printerPrint) {
+                            setSelectedPrint(printerPrint);
+                          } else {
+                            setSelectedPrinter(dev);
+                          }
+                        }}
+                      >
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
+                          Currently Printing
+                        </p>
+                        <p className="truncate text-sm font-medium">
+                          {deviceStatus?.subtask_name ?? printerPrint?.title ?? "Unknown"}
+                        </p>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-blue-500"
+                            style={{
+                              width: `${deviceStatus?.mc_percent ?? printerPrint?.mc_percent ?? 0}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                          <span className="tabular-nums">
+                            {deviceStatus?.mc_percent ?? printerPrint?.mc_percent ?? 0}%
+                          </span>
+                          <span>
+                            {remaining ? `${remaining} min left` : ""}
+                          </span>
+                        </div>
+                      </button>
+                    ) : null}
+
+                    {showSpool ? (
+                      <button
+                        type="button"
+                        className="w-full cursor-pointer rounded-xl border bg-muted/40 p-3 text-left transition-colors hover:border-primary/40"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSpool(activeSpool);
+                        }}
+                      >
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Loaded Spool
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <SpoolIndicator
+                            remaining={activeSpool.remaining_g}
+                            total={activeSpool.total_weight_g}
+                            color={activeFilament.color_hex}
+                            size={52}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{activeFilament.color_name}</p>
+                            <p className="text-xs text-muted-foreground">{activeFilament.material}</p>
+                            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${spoolPct}%`,
+                                  backgroundColor: stockColor(spoolPct, activeFilament.color_hex),
+                                }}
+                              />
+                            </div>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              {Math.round(activeSpool.remaining_g)}g remaining
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ) : isLocalPrinter ? (
+                      <div className="rounded-xl border border-dashed bg-muted/20 p-3 text-center">
+                        <p className="text-xs text-muted-foreground">No spool loaded</p>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -400,9 +448,17 @@ export default function DashboardPage() {
       {selectedPrinter ? (
         <PrinterModal
           printer={selectedPrinter}
-          status={status}
-          activeSpool={activeSpool}
-          filament={activeFilament}
+          status={statusByDev[selectedPrinter.dev_id]}
+          activeSpool={
+            !printerConfig?.serial || printerConfig.serial === selectedPrinter.dev_id
+              ? activeSpool
+              : null
+          }
+          filament={
+            !printerConfig?.serial || printerConfig.serial === selectedPrinter.dev_id
+              ? activeFilament
+              : null
+          }
           firmware={firmware[selectedPrinter.dev_id]}
           onClose={() => setSelectedPrinter(null)}
           onSpoolClick={() => setSelectedSpool(activeSpool)}

@@ -68,7 +68,7 @@ export default function FilamentModal({
       >
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
+            <DialogTitle className="flex items-center gap-3 pr-10">
               <span
                 className="size-10 shrink-0 rounded-xl border-2 border-border"
                 style={{ backgroundColor: filament?.color_hex }}

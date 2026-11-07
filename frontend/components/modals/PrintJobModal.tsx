@@ -59,7 +59,7 @@ export default function PrintJobModal({ print, onClose }: Props) {
         ) : null}
 
         <DialogHeader>
-          <DialogTitle className="flex items-start justify-between gap-4">
+          <DialogTitle className="flex items-start justify-between gap-4 pr-10">
             <span className="truncate">{print.title}</span>
             <Badge variant={getStatusVariant(print.status)}>
               {getStatusLabel(print.status)}

@@ -9,6 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,6 +31,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -132,10 +144,10 @@ export default function FilamentsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-7 w-32 rounded skeleton" />
+        <Skeleton className="h-7 w-32" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-44 rounded-xl skeleton" />
+            <Skeleton key={i} className="h-44 rounded-xl" />
           ))}
         </div>
       </div>
@@ -175,17 +187,32 @@ export default function FilamentsPage() {
             return (
               <Card
                 key={f.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedFilament(f)}
-                className="group relative cursor-pointer transition-colors hover:border-primary/40"
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedFilament(f);
+                  }
+                }}
+                className="group relative cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 <CardContent className="space-y-4">
-                  <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Button variant="secondary" size="icon-sm" onClick={(e) => openEdit(f, e)}>
+                  <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={`Edit ${f.color_name}`}
+                      onClick={(e) => openEdit(f, e)}
+                    >
                       <Pencil />
                     </Button>
                     <Button
                       variant="secondary"
                       size="icon-sm"
+                      aria-label={`Delete ${f.color_name}`}
                       className="hover:text-red-400"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -196,7 +223,7 @@ export default function FilamentsPage() {
                     </Button>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 pr-20">
                     <div
                       className="size-12 shrink-0 rounded-xl border shadow-inner"
                       style={{ backgroundColor: f.color_hex }}
@@ -266,12 +293,12 @@ export default function FilamentsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Material</Label>
+                <Label htmlFor="material">Material</Label>
                 <Select
                   value={form.material}
                   onValueChange={(v) => setForm({ ...form, material: v })}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger id="material" className="w-full">
                     <SelectValue placeholder="Select material" />
                   </SelectTrigger>
                   <SelectContent>
@@ -367,34 +394,34 @@ export default function FilamentsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <AlertDialog
         open={confirmDelete !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}
       >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Filament?</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Trash2 />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete Filament?</AlertDialogTitle>
+            <AlertDialogDescription>
               This will permanently delete the filament and all associated spools.
               This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
               variant="destructive"
-              className="flex-1"
               onClick={() => confirmDelete !== null && handleDelete(confirmDelete)}
             >
               <Trash2 /> Delete
-            </Button>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selectedFilament ? (
         <FilamentModal

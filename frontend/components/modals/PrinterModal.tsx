@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
-import { formatWeight, stockColor } from "@/lib/utils";
+import { formatWeight, isPrintingStatus, stockColor } from "@/lib/utils";
 
 interface Props {
   printer: any;
@@ -38,7 +38,7 @@ export default function PrinterModal({
 }: Props) {
   const router = useRouter();
   const isConnected = status && status.status !== "no_data";
-  const printing = status?.gcode_state === "RUNNING";
+  const printing = isPrintingStatus(status);
   const pct = activeSpool
     ? Math.round((activeSpool.remaining_g / activeSpool.total_weight_g) * 100)
     : 0;
@@ -59,7 +59,7 @@ export default function PrinterModal({
     >
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="flex items-start justify-between gap-4">
+          <DialogTitle className="flex items-start justify-between gap-4 pr-10">
             <span className="truncate">{printer?.name}</span>
             <Badge variant={printer?.online ? "success" : "secondary"}>
               {printer?.online ? "Online" : "Offline"}

@@ -1,10 +1,3 @@
-import clsx, { type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
 export function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return "—";
   const h = Math.floor(seconds / 3600);
@@ -58,13 +51,65 @@ export function getStatusLabel(status: number | null | undefined): string {
   }
 }
 
-export function getStatusColor(status: number | null | undefined): string {
-  switch (status) {
-    case 2: return "text-green-400";
-    case 3: return "text-red-400";
-    case 4: return "text-blue-400";
-    default: return "text-zinc-400";
+export function formatEstimatedEnd(minutes: number | null | undefined): string {
+  if (!minutes) return "—";
+  return new Date(Date.now() + minutes * 60 * 1000).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function statusDeviceId(status: any): string | null {
+  return (
+    status?.dev_id ??
+    status?.device_id ??
+    status?.serial ??
+    status?.sn ??
+    status?.id ??
+    null
+  );
+}
+
+function normalizePrinterStatus(status: any) {
+  if (!status) return status;
+  const printStatus = status.print_status;
+  const gcodeState =
+    status.gcode_state ??
+    (typeof printStatus === "string"
+      ? printStatus
+      : (printStatus?.gcode_state ?? printStatus?.status));
+  return { ...status, gcode_state: gcodeState };
+}
+
+/**
+ * Build a `dev_id -> status` map from the cloud status list and the local
+ * MQTT status. The local status is authoritative for the configured printer.
+ */
+export function buildPrinterStatusMap(
+  cloudStatuses: any[] | null | undefined,
+  localStatus: any | null | undefined,
+  localSerial?: string | null,
+): Record<string, any> {
+  const map: Record<string, any> = {};
+
+  for (const status of cloudStatuses ?? []) {
+    const id = statusDeviceId(status);
+    if (id) map[id] = normalizePrinterStatus(status);
   }
+
+  if (localStatus && localSerial) {
+    map[localSerial] = normalizePrinterStatus({
+      ...(map[localSerial] ?? {}),
+      ...localStatus,
+    });
+  }
+
+  return map;
+}
+
+export function isPrintingStatus(status: any): boolean {
+  const state = status?.gcode_state ?? status?.print_status;
+  return typeof state === "string" && state.toUpperCase() === "RUNNING";
 }
 
 export function getStatusVariant(

@@ -9,6 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,6 +31,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -151,10 +163,10 @@ export default function SpoolsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-7 w-24 rounded skeleton" />
+        <Skeleton className="h-7 w-24" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-56 rounded-xl skeleton" />
+            <Skeleton key={i} className="h-56 rounded-xl" />
           ))}
         </div>
       </div>
@@ -198,8 +210,17 @@ export default function SpoolsPage() {
             return (
               <Card
                 key={s.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedSpool(s)}
-                className="group relative cursor-pointer gap-4 transition-colors hover:border-primary/40"
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedSpool(s);
+                  }
+                }}
+                className="group relative cursor-pointer gap-4 transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 <CardContent className="flex flex-col gap-3">
                   <div className="absolute left-3 top-3 z-10">
@@ -214,13 +235,19 @@ export default function SpoolsPage() {
                     )}
                   </div>
 
-                  <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Button variant="secondary" size="icon-sm" onClick={(e) => openEdit(s, e)}>
+                  <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={`Edit ${fil?.color_name ?? "spool"}`}
+                      onClick={(e) => openEdit(s, e)}
+                    >
                       <Pencil />
                     </Button>
                     <Button
                       variant="secondary"
                       size="icon-sm"
+                      aria-label={`Delete ${fil?.color_name ?? "spool"}`}
                       className="hover:text-red-400"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -300,12 +327,12 @@ export default function SpoolsPage() {
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
-              <Label>Filament</Label>
+              <Label htmlFor="filament">Filament</Label>
               <Select
                 value={form.filament_id}
                 onValueChange={(v) => setForm({ ...form, filament_id: v })}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="filament" className="w-full">
                   <SelectValue placeholder="Select filament…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -386,33 +413,33 @@ export default function SpoolsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <AlertDialog
         open={confirmDelete !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}
       >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Spool?</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Trash2 />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete Spool?</AlertDialogTitle>
+            <AlertDialogDescription>
               This will permanently delete this spool and its history.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
               variant="destructive"
-              className="flex-1"
               onClick={() => confirmDelete !== null && handleDelete(confirmDelete)}
             >
               <Trash2 /> Delete
-            </Button>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selectedSpool ? (
         <SpoolModal

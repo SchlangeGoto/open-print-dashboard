@@ -10,14 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CoverImage } from "@/components/ui/CoverImage";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Table,
   TableBody,
@@ -141,8 +146,8 @@ export default function PrintsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-7 w-32 rounded skeleton" />
-        <div className="h-96 rounded-xl skeleton" />
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-96 rounded-xl" />
       </div>
     );
   }
@@ -154,21 +159,26 @@ export default function PrintsPage() {
         <p className="mt-0.5 text-xs text-muted-foreground">{prints.length} total jobs</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <ToggleGroup
+        type="single"
+        value={filter}
+        onValueChange={(value) => {
+          if (value) setFilter(value as Filter);
+        }}
+        variant="outline"
+        size="sm"
+        spacing={0}
+        className="flex-wrap"
+      >
         {FILTERS.map((f) => (
-          <Button
-            key={f.key}
-            size="sm"
-            variant={filter === f.key ? "secondary" : "ghost"}
-            onClick={() => setFilter(f.key)}
-          >
+          <ToggleGroupItem key={f.key} value={f.key}>
             {f.label}
-            <span className="ml-1 rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+            <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
               {counts[f.key]}
             </span>
-          </Button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -184,7 +194,8 @@ export default function PrintsPage() {
                 {COLUMNS.map((col) => (
                   <TableHead key={col.key}>
                     <button
-                      className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+                      type="button"
+                      className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground"
                       onClick={() => toggleSort(col.key)}
                     >
                       {col.label} <SortIcon col={col.key} />
@@ -198,8 +209,16 @@ export default function PrintsPage() {
               {filtered.map((p) => (
                 <TableRow
                   key={p.id}
-                  className="cursor-pointer"
+                  tabIndex={0}
+                  className="cursor-pointer focus-visible:ring-2 focus-visible:ring-ring/50"
                   onClick={() => setSelectedPrint(p)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedPrint(p);
+                    }
+                  }}
                 >
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -229,6 +248,7 @@ export default function PrintsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      aria-label={`Delete ${p.title}`}
                       className="text-muted-foreground hover:text-red-400"
                       onClick={() => setConfirmDelete(p.id)}
                     >
@@ -242,33 +262,33 @@ export default function PrintsPage() {
         </Card>
       )}
 
-      <Dialog
+      <AlertDialog
         open={confirmDelete !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}
       >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Print Record?</DialogTitle>
-            <DialogDescription>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Trash2 />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete Print Record?</AlertDialogTitle>
+            <AlertDialogDescription>
               This will permanently delete this print record.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
               variant="destructive"
-              className="flex-1"
               onClick={() => confirmDelete !== null && handleDelete(confirmDelete)}
             >
               <Trash2 /> Delete
-            </Button>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selectedPrint ? (
         <PrintJobModal print={selectedPrint} onClose={() => setSelectedPrint(null)} />

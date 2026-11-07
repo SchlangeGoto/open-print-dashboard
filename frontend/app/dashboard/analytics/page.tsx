@@ -6,8 +6,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
   CartesianGrid,
   Cell,
 } from "recharts";
@@ -23,7 +21,15 @@ import {
 
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/StatCard";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatCurrency, formatDuration, formatWeight } from "@/lib/utils";
 
 type Period = "weekly" | "monthly" | "yearly";
@@ -39,16 +45,13 @@ const MATERIAL_COLORS: Record<string, string> = {
   Other: "#6b7280",
 };
 
-const tooltipStyle = {
-  contentStyle: {
-    background: "var(--popover)",
-    border: "1px solid var(--border)",
-    borderRadius: 8,
-    fontSize: 12,
-  },
-  labelStyle: { color: "var(--popover-foreground)" },
-  itemStyle: { color: "var(--popover-foreground)" },
-};
+const activityChartConfig = {
+  count: { label: "Prints", color: "var(--chart-1)" },
+} satisfies ChartConfig;
+
+const materialChartConfig = {
+  value: { label: "Used", color: "var(--chart-1)" },
+} satisfies ChartConfig;
 
 export default function AnalyticsPage() {
   const [prints, setPrints] = useState<any[]>([]);
@@ -157,10 +160,10 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-7 w-32 rounded skeleton" />
+        <Skeleton className="h-7 w-32" />
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-28 rounded-xl skeleton" />
+            <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       </div>
@@ -188,38 +191,49 @@ export default function AnalyticsPage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle>Print Activity</CardTitle>
-          <div className="flex gap-1">
+          <ToggleGroup
+            type="single"
+            value={period}
+            onValueChange={(value) => {
+              if (value) setPeriod(value as Period);
+            }}
+            variant="outline"
+            size="sm"
+            spacing={0}
+          >
             {(["weekly", "monthly", "yearly"] as Period[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`rounded-lg px-3 py-1 text-xs font-medium transition-all ${
-                  period === p
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
+              <ToggleGroupItem key={p} value={p}>
                 {p.charAt(0).toUpperCase() + p.slice(1)}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
         </CardHeader>
         <CardContent>
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={activityData}
-                barSize={period === "monthly" ? 8 : 24}
-                margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-              >
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} interval={period === "monthly" ? 4 : 0} />
-                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <Tooltip {...tooltipStyle} />
-                <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} name="Prints" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartContainer config={activityChartConfig} className="h-[200px] w-full">
+            <BarChart
+              accessibilityLayer
+              data={activityData}
+              barSize={period === "monthly" ? 8 : 24}
+              margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+            >
+              <XAxis
+                dataKey="label"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                interval={period === "monthly" ? 4 : 0}
+              />
+              <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+              <CartesianGrid vertical={false} />
+              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+              <Bar
+                dataKey="count"
+                fill="var(--color-count)"
+                radius={[3, 3, 0, 0]}
+                name="Prints"
+              />
+            </BarChart>
+          </ChartContainer>
         </CardContent>
       </Card>
 
@@ -229,20 +243,30 @@ export default function AnalyticsPage() {
             <CardTitle>Filament Usage by Material</CardTitle>
           </CardHeader>
           <CardContent>
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={materialData} barSize={36} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}g`} />
-                  <Tooltip {...tooltipStyle} formatter={(v) => [`${v}g`, "Used"]} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                    {materialData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartContainer config={materialChartConfig} className="h-[200px] w-full">
+              <BarChart
+                accessibilityLayer
+                data={materialData}
+                barSize={36}
+                margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+              >
+                <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `${value}g`}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent />}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Used (g)">
+                  {materialData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
           </CardContent>
         </Card>
       ) : null}

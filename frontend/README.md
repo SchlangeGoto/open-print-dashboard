@@ -31,11 +31,11 @@ Open <http://localhost:3000>. The app talks to the backend at `http://localhost:
 - `components/modals/` — dialog-based detail and edit modals
 - `lib/api.ts` — typed fetch client for the `/api/v1` backend
 - `lib/auth.tsx` — auth context (JWT in `localStorage`)
-- `lib/utils.ts` — formatting helpers and `cn`
+- `lib/utils.ts` — formatting, stock, and printer-status helpers
 
 ## shadcn/ui
 
-The project uses the **Nova** style (`radix-nova`) on the Radix base, with the
+The project uses the **Nova** style (`base-nova`) on the Base UI base, with the
 neutral base color, a blue primary accent, Geist, and Lucide icons. Components
 are configured in `components.json`. Add more with:
 
@@ -43,9 +43,10 @@ are configured in `components.json`. Add more with:
 npx shadcn@latest add <component>
 ```
 
-Generated components import `cn` from the `cn` package and Radix primitives from
-`radix-ui`. Shared primitives live in `components/ui` and can be customized there
-(for example, the extra `success` / `warning` / `info` `Badge` variants).
+Generated components import `cn` from the `cn` package and Base UI primitives
+from `@base-ui/react`. Shared primitives live in `components/ui` and can be
+customized there (for example, the extra `success` / `warning` / `info` `Badge`
+variants).
 
 ## Scripts
 

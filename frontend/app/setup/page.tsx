@@ -482,10 +482,8 @@ export default function SetupPage() {
               <p className="mb-6 text-sm text-muted-foreground">
                 Your dashboard is ready to go.
               </p>
-              <Button size="lg" asChild>
-                <Link href="/dashboard">
-                  Go to Dashboard <ChevronRight />
-                </Link>
+              <Button size="lg" render={<Link href="/dashboard" />}>
+                Go to Dashboard <ChevronRight />
               </Button>
             </CardContent>
           </Card>

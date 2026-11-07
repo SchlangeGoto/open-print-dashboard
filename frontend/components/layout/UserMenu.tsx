@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -39,44 +40,46 @@ export function UserMenu() {
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
-              <Avatar className="size-8 rounded-lg">
-                <AvatarFallback className="rounded-lg bg-primary/15 text-primary">
-                  {initials(username)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{username}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  Signed in
-                </span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
+          <SidebarMenuButton
+            size="lg"
+            className="data-open:bg-sidebar-accent"
+            render={<DropdownMenuTrigger />}
+          >
+            <Avatar className="size-8 rounded-lg">
+              <AvatarFallback className="rounded-lg bg-primary/15 text-primary">
+                {initials(username)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">{username}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                Signed in
+              </span>
+            </div>
+            <ChevronsUpDown className="ml-auto size-4" />
+          </SidebarMenuButton>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="w-(--anchor-width) min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex items-center gap-2">
-                <Avatar className="size-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg bg-primary/15 text-primary">
-                    {initials(username)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="truncate text-sm">{username}</span>
-              </div>
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex items-center gap-2">
+                  <Avatar className="size-8 rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-primary/15 text-primary">
+                      {initials(username)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="truncate text-sm">{username}</span>
+                </div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/settings">
-                <Settings />
-                Settings
-              </Link>
+            <DropdownMenuItem render={<Link href="/dashboard/settings" />}>
+              <Settings />
+              Settings
             </DropdownMenuItem>
             <DropdownMenuItem onClick={logout}>
               <LogOut />

@@ -296,7 +296,7 @@ export default function FilamentsPage() {
                 <Label htmlFor="material">Material</Label>
                 <Select
                   value={form.material}
-                  onValueChange={(v) => setForm({ ...form, material: v })}
+                  onValueChange={(v) => setForm({ ...form, material: v ?? "" })}
                 >
                   <SelectTrigger id="material" className="w-full">
                     <SelectValue placeholder="Select material" />

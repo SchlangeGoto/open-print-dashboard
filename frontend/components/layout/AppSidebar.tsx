@@ -45,18 +45,16 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/20">
-                  <Disc3 className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Open Print</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    Dashboard
-                  </span>
-                </div>
-              </Link>
+            <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/20">
+                <Disc3 className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">Open Print</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  Dashboard
+                </span>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -72,11 +70,13 @@ export function AppSidebar() {
                     : pathname.startsWith(item.href);
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </Link>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive}
+                      tooltip={item.label}
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

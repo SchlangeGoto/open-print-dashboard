@@ -28,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <TooltipProvider delayDuration={200}>
+        <TooltipProvider delay={200}>
           <AuthProvider>{children}</AuthProvider>
           <Toaster theme="dark" richColors closeButton position="top-right" />
         </TooltipProvider>

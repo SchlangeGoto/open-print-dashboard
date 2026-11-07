@@ -192,10 +192,9 @@ export default function AnalyticsPage() {
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle>Print Activity</CardTitle>
           <ToggleGroup
-            type="single"
-            value={period}
+            value={[period]}
             onValueChange={(value) => {
-              if (value) setPeriod(value as Period);
+              if (value[0]) setPeriod(value[0] as Period);
             }}
             variant="outline"
             size="sm"

@@ -160,10 +160,9 @@ export default function PrintsPage() {
       </div>
 
       <ToggleGroup
-        type="single"
-        value={filter}
+        value={[filter]}
         onValueChange={(value) => {
-          if (value) setFilter(value as Filter);
+          if (value[0]) setFilter(value[0] as Filter);
         }}
         variant="outline"
         size="sm"

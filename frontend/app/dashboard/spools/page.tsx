@@ -330,7 +330,7 @@ export default function SpoolsPage() {
               <Label htmlFor="filament">Filament</Label>
               <Select
                 value={form.filament_id}
-                onValueChange={(v) => setForm({ ...form, filament_id: v })}
+                onValueChange={(v) => setForm({ ...form, filament_id: v ?? "" })}
               >
                 <SelectTrigger id="filament" className="w-full">
                   <SelectValue placeholder="Select filament…" />

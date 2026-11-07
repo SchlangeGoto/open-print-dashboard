@@ -80,7 +80,7 @@ export default function PrinterModal({
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="rounded-lg border bg-muted/40 p-3">
               <p className="mb-1 text-[10px] text-muted-foreground">Nozzle</p>
-              <p className="text-lg font-bold tabular-nums text-[#FF6D28]">
+              <p className="text-lg font-bold tabular-nums text-orange-500">
                 {status?.nozzle_temper ?? "—"}°C
               </p>
               {status?.nozzle_target_temper ? (
@@ -91,7 +91,7 @@ export default function PrinterModal({
             </div>
             <div className="rounded-lg border bg-muted/40 p-3">
               <p className="mb-1 text-[10px] text-muted-foreground">Bed</p>
-              <p className="text-lg font-bold tabular-nums text-[#00D0B0]">
+              <p className="text-lg font-bold tabular-nums text-teal-600 dark:text-teal-400">
                 {status?.bed_temper ?? "—"}°C
               </p>
               {status?.bed_target_temper ? (
@@ -116,7 +116,7 @@ export default function PrinterModal({
 
         <div className="rounded-xl border bg-muted/30 p-4">
           <div className="mb-3 flex items-center gap-2">
-            <Zap className="size-3.5 text-amber-400" />
+            <Zap className="size-3.5 text-amber-500" />
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Energy
             </p>

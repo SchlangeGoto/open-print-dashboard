@@ -180,12 +180,12 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <StatCard title="Total Jobs" value={totalPrints} icon={Layers} iconColor="text-blue-400" iconBg="bg-blue-950/50" />
-        <StatCard title="Success Rate" value={`${successRate}%`} icon={CheckCircle} iconColor="text-emerald-400" iconBg="bg-emerald-950/50" />
-        <StatCard title="Print Time" value={formatDuration(totalTime)} icon={Clock} iconColor="text-purple-400" iconBg="bg-purple-950/50" />
-        <StatCard title="Filament Used" value={formatWeight(totalWeight)} icon={Weight} iconColor="text-amber-400" iconBg="bg-amber-950/50" />
-        <StatCard title="Money Spent" value={formatCurrency(totalCost)} icon={CircleDollarSign} iconColor="text-rose-400" iconBg="bg-rose-950/50" />
-        <StatCard title="Prints per Day" value={avgPrintsPerDay} icon={CalendarDays} iconColor="text-sky-400" iconBg="bg-sky-950/50" />
+        <StatCard title="Total Jobs" value={totalPrints} icon={Layers} iconColor="text-blue-500" iconBg="bg-blue-500/10" />
+        <StatCard title="Success Rate" value={`${successRate}%`} icon={CheckCircle} iconColor="text-emerald-500" iconBg="bg-emerald-500/10" />
+        <StatCard title="Print Time" value={formatDuration(totalTime)} icon={Clock} iconColor="text-violet-500" iconBg="bg-violet-500/10" />
+        <StatCard title="Filament Used" value={formatWeight(totalWeight)} icon={Weight} iconColor="text-amber-500" iconBg="bg-amber-500/10" />
+        <StatCard title="Money Spent" value={formatCurrency(totalCost)} icon={CircleDollarSign} iconColor="text-rose-500" iconBg="bg-rose-500/10" />
+        <StatCard title="Prints per Day" value={avgPrintsPerDay} icon={CalendarDays} iconColor="text-sky-500" iconBg="bg-sky-500/10" />
       </div>
 
       <Card>

@@ -274,7 +274,7 @@ export default function SetupPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <span className="rounded-lg bg-emerald-500/10 p-2 text-emerald-400">
+                <span className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400">
                   <Cloud className="size-5" />
                 </span>
                 Connect Bambu Lab account
@@ -327,7 +327,7 @@ export default function SetupPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <span className="rounded-lg bg-amber-500/10 p-2 text-amber-400">
+                <span className="rounded-lg bg-amber-500/10 p-2 text-amber-500">
                   <Cloud className="size-5" />
                 </span>
                 Verification code
@@ -476,7 +476,7 @@ export default function SetupPage() {
           <Card>
             <CardContent className="pt-6 text-center">
               <div className="mb-4 inline-flex rounded-full bg-emerald-500/10 p-4">
-                <Check className="size-8 text-emerald-400" />
+                <Check className="size-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h2 className="mb-2 text-xl font-bold">You&apos;re all set!</h2>
               <p className="mb-6 text-sm text-muted-foreground">

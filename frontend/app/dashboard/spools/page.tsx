@@ -249,7 +249,7 @@ export default function SpoolsPage() {
                       variant="secondary"
                       size="icon-sm"
                       aria-label={`Delete ${fil?.color_name ?? "spool"}`}
-                      className="hover:text-red-400"
+                      className="hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         setConfirmDelete(s.id);

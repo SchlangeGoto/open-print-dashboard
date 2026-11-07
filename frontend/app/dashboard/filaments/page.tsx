@@ -213,7 +213,7 @@ export default function FilamentsPage() {
                       variant="secondary"
                       size="icon-sm"
                       aria-label={`Delete ${f.color_name}`}
-                      className="hover:text-red-400"
+                      className="hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         setConfirmDelete(f.id);

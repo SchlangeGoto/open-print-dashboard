@@ -194,10 +194,14 @@ export default function DashboardPage() {
                   <span className="text-muted-foreground/50">·</span>
                   <span className="tabular-nums text-muted-foreground">{f.pct}%</span>
                   {f.pct <= 10 ? (
-                    <span className="ml-0.5 font-semibold text-red-400">⚠ Buy now</span>
+                    <span className="ml-0.5 font-semibold text-red-600 dark:text-red-400">
+                      ⚠ Buy now
+                    </span>
                   ) : null}
                   {f.pct > 10 && f.pct <= 30 ? (
-                    <span className="ml-0.5 font-medium text-amber-400">Low</span>
+                    <span className="ml-0.5 font-medium text-amber-600 dark:text-amber-500">
+                      Low
+                    </span>
                   ) : null}
                 </div>
               ))}
@@ -208,7 +212,8 @@ export default function DashboardPage() {
 
       {activePrints.length > 0 ? (
         <div>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="h-3 w-0.5 rounded-full bg-primary" />
             Current Prints
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -271,7 +276,8 @@ export default function DashboardPage() {
       ) : null}
 
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="h-3 w-0.5 rounded-full bg-primary" />
           Printers
         </p>
         {printers.length === 0 ? (
@@ -332,7 +338,7 @@ export default function DashboardPage() {
                           <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                             <Thermometer className="size-2.5" /> Nozzle
                           </div>
-                          <p className="text-lg font-bold tabular-nums text-[#FF6D28]">
+                          <p className="text-lg font-bold tabular-nums text-orange-500">
                             {deviceStatus.nozzle_temper ?? "—"}°C
                           </p>
                           {deviceStatus.nozzle_target_temper ? (
@@ -345,7 +351,7 @@ export default function DashboardPage() {
                           <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                             <Thermometer className="size-2.5" /> Bed
                           </div>
-                          <p className="text-lg font-bold tabular-nums text-[#00D0B0]">
+                          <p className="text-lg font-bold tabular-nums text-teal-600 dark:text-teal-400">
                             {deviceStatus.bed_temper ?? "—"}°C
                           </p>
                           {deviceStatus.bed_target_temper ? (

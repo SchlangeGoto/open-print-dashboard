@@ -248,7 +248,7 @@ export default function PrintsPage() {
                       variant="ghost"
                       size="icon-sm"
                       aria-label={`Delete ${p.title}`}
-                      className="text-muted-foreground hover:text-red-400"
+                      className="text-muted-foreground hover:text-destructive"
                       onClick={() => setConfirmDelete(p.id)}
                     >
                       <Trash2 />

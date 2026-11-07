@@ -26,8 +26,8 @@ export function SpoolIndicator({ remaining, total, color, size = 120, className 
             <stop offset="100%" stopColor={color} stopOpacity="0.55" />
           </radialGradient>
           <radialGradient id={`spool-body-${color.replace("#","")}`} cx="50%" cy="30%" r="70%">
-            <stop offset="0%" stopColor="#2a2a32" />
-            <stop offset="100%" stopColor="#111116" />
+            <stop offset="0%" stopColor="var(--muted)" />
+            <stop offset="100%" stopColor="var(--card)" />
           </radialGradient>
         </defs>
 
@@ -35,7 +35,7 @@ export function SpoolIndicator({ remaining, total, color, size = 120, className 
         <circle
           cx={size / 2} cy={size / 2} r={outerR}
           fill={`url(#spool-body-${color.replace("#","")})`}
-          stroke="#2a2a32"
+          stroke="var(--border)"
           strokeWidth="1.5"
         />
 
@@ -50,11 +50,11 @@ export function SpoolIndicator({ remaining, total, color, size = 120, className 
         />
 
         {/* hub body */}
-        <circle cx={size / 2} cy={size / 2} r={hubR} fill="#0e0e12" stroke="#2a2a32" strokeWidth="1.2" />
+        <circle cx={size / 2} cy={size / 2} r={hubR} fill="var(--card)" stroke="var(--border)" strokeWidth="1.2" />
         {/* hub inner ring */}
-        <circle cx={size / 2} cy={size / 2} r={hubR * 0.5} fill="#1a1a20" stroke="#222228" strokeWidth="0.8" />
+        <circle cx={size / 2} cy={size / 2} r={hubR * 0.5} fill="var(--muted)" stroke="var(--border)" strokeWidth="0.8" />
         {/* center bolt */}
-        <circle cx={size / 2} cy={size / 2} r={hubR * 0.18} fill="#2a2a32" />
+        <circle cx={size / 2} cy={size / 2} r={hubR * 0.18} fill="var(--border)" />
 
         {/* spoke marks */}
         {Array.from({ length: 6 }).map((_, i) => {
@@ -65,7 +65,7 @@ export function SpoolIndicator({ remaining, total, color, size = 120, className 
           const y2 = size / 2 + Math.sin(a) * hubR * 0.9;
           return (
             <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke="#2a2a35" strokeWidth="1.5" strokeLinecap="round" />
+              stroke="var(--border)" strokeWidth="1.5" strokeLinecap="round" />
           );
         })}
       </svg>

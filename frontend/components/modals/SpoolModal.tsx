@@ -116,7 +116,7 @@ export default function SpoolModal({ spool, filament, onClose, onActivate }: Pro
             </Button>
           ) : null}
           {spool?.active ? (
-            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-emerald-400">
+            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
               <Check className="size-4" /> Currently loaded
             </div>
           ) : null}

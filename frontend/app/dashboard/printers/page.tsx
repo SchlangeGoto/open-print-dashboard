@@ -151,7 +151,7 @@ export default function PrintersPage() {
                         <div className="mb-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                           <Thermometer className="size-2.5" /> Nozzle
                         </div>
-                        <p className="text-base font-bold tabular-nums text-[#FF6D28]">
+                        <p className="text-base font-bold tabular-nums text-orange-500">
                           {deviceStatus.nozzle_temper ?? "—"}°C
                         </p>
                         {deviceStatus.nozzle_target_temper ? (
@@ -164,7 +164,7 @@ export default function PrintersPage() {
                         <div className="mb-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                           <Thermometer className="size-2.5" /> Bed
                         </div>
-                        <p className="text-base font-bold tabular-nums text-[#00D0B0]">
+                        <p className="text-base font-bold tabular-nums text-teal-600 dark:text-teal-400">
                           {deviceStatus.bed_temper ?? "—"}°C
                         </p>
                         {deviceStatus.bed_target_temper ? (

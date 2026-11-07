@@ -50,6 +50,7 @@
 }
 
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
   --brand: oklch(0.62 0.19 259.8);
   --brand-foreground: oklch(0.985 0 0);
@@ -145,9 +146,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.3 0 0);
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.4 0 0);
+  background: color-mix(in oklab, var(--foreground) 35%, transparent);
 }

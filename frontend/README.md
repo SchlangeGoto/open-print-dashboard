@@ -48,6 +48,12 @@ from `@base-ui/react`. Shared primitives live in `components/ui` and can be
 customized there (for example, the extra `success` / `warning` / `info` `Badge`
 variants).
 
+### Theming
+
+Light, dark, and system modes are handled by `next-themes`. The accent color is
+stored in `localStorage` and applied through the `--brand` CSS tokens, so primary
+actions, focus rings, navigation, and charts follow the selected accent.
+
 ## Scripts
 
 | Command | Description |

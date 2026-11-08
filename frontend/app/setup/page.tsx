@@ -107,7 +107,7 @@ export default function SetupPage() {
     try {
       await api.register(email, password);
       const auth = await api.loginUser(email, password);
-      login(auth.username, auth.token);
+      login(auth.username);
       setStep("bambu");
     } catch (err: any) {
       setError(err.message || "Failed to create account");

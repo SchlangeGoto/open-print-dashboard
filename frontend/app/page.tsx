@@ -54,7 +54,7 @@ export default function Home() {
     try {
       const result = await api.loginUser(email, password);
       if (result.ok) {
-        login(result.username, result.token);
+        login(result.username);
         router.push("/dashboard");
       }
     } catch (err: any) {
@@ -142,7 +142,7 @@ export default function Home() {
             <FlaskConical /> Open demo dashboard
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            Development only — mock data, no backend required.
+            Demo mode — mock data, no backend required.
           </p>
         </div>
       ) : null}

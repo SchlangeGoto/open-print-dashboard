@@ -8,7 +8,12 @@ import {
   ReactNode,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { api } from "@/lib/api";
+import {
+  api,
+  clearTokens,
+  hasStoredSession,
+  SESSION_EXPIRED_EVENT,
+} from "@/lib/api";
 import {
   DEMO_AVAILABLE,
   DEMO_USER,
@@ -22,7 +27,7 @@ interface AuthContextType {
   isLoading: boolean;
   demo: boolean;
   demoAvailable: boolean;
-  login: (username: string, token: string) => void;
+  login: (username: string) => void;
   logout: () => void;
   enterDemo: () => void;
   exitDemo: () => void;
@@ -56,24 +61,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const storedToken = localStorage.getItem("access_token");
-
-    if (!storedToken) {
+    if (!hasStoredSession()) {
       setIsLoading(false);
       return;
     }
 
-    // Validate token by fetching the current user.
+    // Validate the stored session. The API layer refreshes the access token
+    // automatically when it has expired.
     api
       .getMe()
       .then((me) => {
         setUsername(me.full_name || me.email);
       })
       .catch(() => {
-        localStorage.removeItem("access_token");
+        clearTokens();
         setUsername(null);
       })
       .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      setUsername(null);
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () =>
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
   useEffect(() => {
@@ -88,13 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [username, isLoading, pathname, router]);
 
-  function login(name: string, token: string) {
-    localStorage.setItem("access_token", token);
+  function login(name: string) {
     setUsername(name);
   }
 
   function logout() {
-    localStorage.removeItem("access_token");
+    // api.logout reads the refresh token before clearing it, so the local
+    // session can be cleared immediately.
+    void api.logout();
+    clearTokens();
     if (demo) {
       disableDemo();
       setDemo(false);
@@ -106,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function enterDemo() {
     if (!DEMO_AVAILABLE) return;
     enableDemo();
-    localStorage.removeItem("access_token");
+    clearTokens();
     setDemo(true);
     setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
     setIsLoading(false);
@@ -116,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function exitDemo() {
     if (!DEMO_AVAILABLE) return;
     disableDemo();
-    localStorage.removeItem("access_token");
+    clearTokens();
     setDemo(false);
     setUsername(null);
     router.push("/");

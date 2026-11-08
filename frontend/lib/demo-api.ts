@@ -170,7 +170,10 @@ export const demoApi: ApiShape = {
       ok: true,
       username: email || DEMO_USER.email,
       token: "demo-token",
+      refreshToken: "demo-refresh-token",
     }),
+
+  logout: () => delay(undefined),
 
   getMe: () => delay({ ...DEMO_USER }),
 

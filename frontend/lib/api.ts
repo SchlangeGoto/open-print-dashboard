@@ -2,24 +2,174 @@ import { DEMO_AVAILABLE, isDemoActive } from "@/lib/demo";
 
 const API_ROOT = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1`;
 
-function getToken(): string | null {
+const ACCESS_TOKEN_KEY = "access_token";
+const REFRESH_TOKEN_KEY = "refresh_token";
+const ACCESS_TOKEN_EXPIRES_AT_KEY = "access_token_expires_at";
+
+export const SESSION_EXPIRED_EVENT = "opd:session-expired";
+
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
+}
+
+export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("access_token");
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function hasStoredSession(): boolean {
+  return Boolean(getAccessToken() || getRefreshToken());
+}
+
+// Incremented whenever the stored session changes. In-flight refreshes from an
+// older session are ignored so a late response cannot resurrect a logged-out
+// session or overwrite a fresh login.
+let tokenEpoch = 0;
+
+function storeTokens(tokens: TokenResponse): void {
+  if (typeof window === "undefined") return;
+  tokenEpoch += 1;
+  if (tokens.access_token) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+  }
+  if (tokens.refresh_token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+  }
+  if (typeof tokens.expires_in === "number") {
+    localStorage.setItem(
+      ACCESS_TOKEN_EXPIRES_AT_KEY,
+      String(Date.now() + tokens.expires_in * 1000),
+    );
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
+  }
+  sessionExpiredNotified = false;
+}
+
+export function clearTokens(): void {
+  if (typeof window === "undefined") return;
+  tokenEpoch += 1;
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+let sessionExpiredNotified = false;
+
+function accessTokenIsFresh(): boolean {
+  if (!getAccessToken()) return false;
+  const expiresAt = Number(
+    localStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY) ?? 0,
+  );
+  // Refresh slightly early so a request cannot expire in flight.
+  return expiresAt > Date.now() + 15_000;
+}
+
+function notifySessionExpired(): void {
+  if (sessionExpiredNotified || typeof window === "undefined") return;
+  sessionExpiredNotified = true;
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+}
+
+async function withRefreshLock<T>(callback: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    return navigator.locks.request("opd-refresh-token", callback);
+  }
+  return callback();
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  if (refreshPromise) return refreshPromise;
+
+  const epoch = tokenEpoch;
+  refreshPromise = withRefreshLock(async () => {
+    if (epoch !== tokenEpoch) return null;
+
+    // Another tab may have refreshed while this one waited for the lock.
+    if (accessTokenIsFresh()) return getAccessToken();
+
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      clearTokens();
+      notifySessionExpired();
+      return null;
+    }
+
+    const res = await fetch(`${API_ROOT}/login/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (epoch !== tokenEpoch) return null;
+
+    if (!res.ok) {
+      clearTokens();
+      notifySessionExpired();
+      return null;
+    }
+
+    const tokens = (await res.json()) as TokenResponse;
+    if (epoch !== tokenEpoch) return null;
+    storeTokens(tokens);
+    return tokens.access_token;
+  }).finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
+async function fetchWithAuth(
+  url: string,
+  options: RequestInit = {},
+  retry = true,
+): Promise<Response> {
+  const headers = new Headers(options.headers);
+  const token = getAccessToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401 && retry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryHeaders = new Headers(options.headers);
+      retryHeaders.set("Authorization", `Bearer ${newToken}`);
+      return fetch(url, { ...options, headers: retryHeaders });
+    }
+  }
+
+  return res;
+}
+
+/** Authenticated fetch with transparent token refresh, for non-JSON resources. */
+export function authenticatedFetch(
+  url: string,
+  options?: RequestInit,
+): Promise<Response> {
+  return fetchWithAuth(url, options);
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options?.headers as Record<string, string>),
-  };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`${API_ROOT}${path}`, {
+  const res = await fetchWithAuth(`${API_ROOT}${path}`, {
     ...options,
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers as Record<string, string>),
+    },
   });
 
   if (!res.ok) {
@@ -119,11 +269,32 @@ const apiImpl = {
       const data = await res.json().catch(() => ({}));
       throw new ApiError(res.status, data.detail ?? "Login failed");
     }
-    const data = await res.json();
-    if (data.access_token) {
-      localStorage.setItem("access_token", data.access_token);
+    const data = (await res.json()) as TokenResponse;
+    storeTokens(data);
+    return {
+      ok: true as const,
+      username: email,
+      token: data.access_token,
+      refreshToken: data.refresh_token ?? null,
+    };
+  },
+
+  logout: async () => {
+    const refreshToken = getRefreshToken();
+    try {
+      if (refreshToken) {
+        await fetch(`${API_ROOT}/login/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+          keepalive: true,
+        });
+      }
+    } catch {
+      // Revoking server-side is best-effort; local logout must still happen.
+    } finally {
+      clearTokens();
     }
-    return { ok: true, username: email, token: data.access_token as string };
   },
 
   getMe: () => request<UserPublic>("/users/me"),

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { cn } from "cn";
-import { API_ROOT } from "@/lib/api";
+import { API_ROOT, authenticatedFetch } from "@/lib/api";
 
 const API_BASE = API_ROOT;
 
@@ -33,10 +33,9 @@ export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageP
     async function loadCover() {
       try {
         setFailed(false);
-        const token = localStorage.getItem("access_token");
-        const response = await fetch(`${API_BASE}/printers/cover/${encodeURIComponent(coverUrl)}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
+        const response = await authenticatedFetch(
+          `${API_BASE}/printers/cover/${encodeURIComponent(coverUrl)}`,
+        );
 
         if (!response.ok) throw new Error("Cover failed to load");
         const blob = await response.blob();

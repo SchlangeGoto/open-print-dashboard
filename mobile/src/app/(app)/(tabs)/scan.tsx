@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,17 +27,52 @@ import { ColorDot } from "@/components/ui/color-dot";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/lib/auth";
+import { APP_BUILD_TAG } from "@/lib/build-info";
 import { formatError, formatWeight } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
 
 const BARCODE_TYPES: BarcodeType[] = ["ean13", "ean8", "upc_a", "upc_e"];
 
+/**
+ * Retail barcodes carry a check digit. Rejecting invalid checksums filters out
+ * most blurred or partially-read frames before they create a bogus filament.
+ */
+function hasValidRetailChecksum(value: string): boolean {
+  if (!/^\d+$/.test(value)) return false;
+  const digits = value.split("").map(Number);
+  const check = digits.pop();
+  if (check === undefined) return false;
+
+  let sum = 0;
+  for (let index = digits.length - 1, weight = 3; index >= 0; index -= 1) {
+    sum += digits[index] * weight;
+    weight = weight === 3 ? 1 : 3;
+  }
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+function isValidBarcode(value: string, type?: string): boolean {
+  const normalizedType = (type ?? "").toLowerCase();
+  // UPC-E's check digit is calculated over the expanded UPC-A, so only
+  // validate its length here. Bambu boxes use EAN-13.
+  if (normalizedType.includes("upc_e") || normalizedType.includes("upce")) {
+    return /^\d{8}$/.test(value);
+  }
+  if (value.length === 13 || value.length === 12 || value.length === 8) {
+    return hasValidRetailChecksum(value);
+  }
+  return false;
+}
+
 export default function ScanScreen() {
   const { api } = useAuth();
   const router = useRouter();
   const theme = useTheme();
   const { width } = useWindowDimensions();
+  const modernScannerAvailable =
+    Platform.OS !== "web" && CameraView.isModernBarcodeScannerAvailable;
+  const [modernFailed, setModernFailed] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const requested = useRef(false);
   const scanLock = useRef(false);
@@ -79,51 +115,106 @@ export default function ScanScreen() {
     }, []),
   );
 
-  async function handleCode(raw: string) {
-    const code = typeof raw === "string" ? raw.trim() : "";
-    if (!code || scanLock.current) return;
+  const handleCode = useCallback(
+    async (raw: string, source: "camera" | "manual" = "manual") => {
+      const code = typeof raw === "string" ? raw.trim() : "";
+      if (!code || scanLock.current) return;
 
-    // State updates are async; the ref is the synchronous guard against
-    // multiple decoded frames creating duplicate spools.
-    scanLock.current = true;
-    resultRef.current = null;
-    setResult(null);
-    setBusy(true);
+      if (source === "camera" && !isValidBarcode(code)) {
+        setError(
+          "That barcode didn't read cleanly. Hold it flat and try again, or enter it manually.",
+        );
+        return;
+      }
+
+      // State updates are async; the ref is the synchronous guard against
+      // multiple decoded frames creating duplicate spools.
+      scanLock.current = true;
+      resultRef.current = null;
+      setResult(null);
+      setBusy(true);
+      setError(null);
+
+      try {
+        const scan = await api.scanBarcode(code);
+        if (!focusedRef.current) return;
+        resultRef.current = scan;
+        setResult(scan);
+        void Haptics.notificationAsync(
+          scan.found
+            ? Haptics.NotificationFeedbackType.Success
+            : Haptics.NotificationFeedbackType.Warning,
+        );
+      } catch (err) {
+        if (!focusedRef.current) return;
+        setError(formatError(err));
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        scanLock.current = false;
+        setBusy(false);
+      }
+    },
+    [api],
+  );
+
+  useEffect(() => {
+    if (!modernScannerAvailable || modernFailed) return;
+
+    const subscription = CameraView.onModernBarcodeScanned((event) => {
+      const data = typeof event.data === "string" ? event.data : "";
+      void CameraView.dismissScanner().catch(() => {});
+      if (!data) {
+        setError(
+          "That barcode didn't read cleanly. Try again or enter it manually.",
+        );
+        return;
+      }
+      void handleCode(data, "camera");
+    });
+
+    return () => subscription.remove();
+  }, [modernScannerAvailable, modernFailed, handleCode]);
+
+  async function openSystemScanner() {
+    if (!modernScannerAvailable || modernFailed) return;
     setError(null);
 
+    if (!permission?.granted) {
+      const next = await requestPermission();
+      if (!next.granted) {
+        setError("Camera access is needed to scan barcodes.");
+        return;
+      }
+    }
+
     try {
-      const scan = await api.scanBarcode(code);
-      if (!focusedRef.current) return;
-      resultRef.current = scan;
-      setResult(scan);
-      void Haptics.notificationAsync(
-        scan.found
-          ? Haptics.NotificationFeedbackType.Success
-          : Haptics.NotificationFeedbackType.Warning,
+      await CameraView.launchScanner({
+        barcodeTypes: BARCODE_TYPES,
+        isGuidanceEnabled: true,
+        isHighlightingEnabled: true,
+      });
+    } catch {
+      setModernFailed(true);
+      setError(
+        "The system scanner couldn't start. Using the in-app camera instead.",
       );
-    } catch (err) {
-      if (!focusedRef.current) return;
-      setError(formatError(err));
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      scanLock.current = false;
-      setBusy(false);
     }
   }
 
   function handleBarcodeScanned(scan: BarcodeScanningResult) {
     if (!focusedRef.current || scanLock.current) return;
     const data = typeof scan.data === "string" ? scan.data : "";
-    if (!data) return;
+    if (!data) {
+      setError(
+        "That barcode didn't read cleanly. Try again or enter it manually.",
+      );
+      return;
+    }
     // Keep the camera live after a result: a different box scans immediately.
     // The same code is ignored until "Scan next" so one box cannot create
     // duplicate spools frame after frame.
     if (resultRef.current?.code === data) return;
-    void handleCode(data).catch((err) => {
-      if (focusedRef.current) {
-        setError(formatError(err));
-      }
-    });
+    void handleCode(data, "camera");
   }
 
   function resetScan() {
@@ -131,6 +222,16 @@ export default function ScanScreen() {
     setResult(null);
     setError(null);
     setManual("");
+  }
+
+  const useEmbeddedScanner = !modernScannerAvailable || modernFailed;
+
+  function startNextScan() {
+    if (useEmbeddedScanner) {
+      resetScan();
+    } else {
+      void openSystemScanner();
+    }
   }
 
   const cameraHeight = Math.min(Math.max(width * 0.78, 300), 420);
@@ -147,34 +248,37 @@ export default function ScanScreen() {
           title="Scan"
           subtitle="Add a spool from its filament box"
           right={
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Toggle torch"
-              onPress={() => setTorch((value) => !value)}
-              style={[
-                styles.iconButton,
-                {
-                  backgroundColor: torch
-                    ? `${theme.colors.accent}22`
-                    : theme.colors.surfaceAlt,
-                },
-              ]}
-            >
-              <Ionicons
-                name={torch ? "flash" : "flash-outline"}
-                size={18}
-                color={torch ? theme.colors.accent : theme.colors.muted}
-              />
-            </Pressable>
+            useEmbeddedScanner ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Toggle torch"
+                onPress={() => setTorch((value) => !value)}
+                style={[
+                  styles.iconButton,
+                  {
+                    backgroundColor: torch
+                      ? `${theme.colors.accent}22`
+                      : theme.colors.surfaceAlt,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={torch ? "flash" : "flash-outline"}
+                  size={18}
+                  color={torch ? theme.colors.accent : theme.colors.muted}
+                />
+              </Pressable>
+            ) : undefined
           }
         />
 
-        <View
-          style={[
-            styles.cameraCard,
-            { height: cameraHeight, backgroundColor: "#000" },
-          ]}
-        >
+        {useEmbeddedScanner ? (
+          <View
+            style={[
+              styles.cameraCard,
+              { height: cameraHeight, backgroundColor: "#000" },
+            ]}
+          >
           {cameraActive ? (
             <CameraView
               style={StyleSheet.absoluteFill}
@@ -261,7 +365,63 @@ export default function ScanScreen() {
               </AppText>
             </View>
           ) : null}
-        </View>
+          </View>
+        ) : (
+          <Card style={styles.systemScannerCard}>
+            <View
+              style={[
+                styles.systemScannerIcon,
+                { backgroundColor: `${theme.colors.accent}18` },
+              ]}
+            >
+              <Ionicons name="scan" size={42} color={theme.colors.accent} />
+            </View>
+            <AppText variant="heading" style={styles.center}>
+              Scan a filament box
+            </AppText>
+            <AppText muted style={[styles.center, styles.systemScannerText]}>
+              Uses your phone&apos;s fast system scanner. It opens full-screen
+              and closes automatically after one barcode.
+            </AppText>
+            <AppButton
+              title={result ? "Scan another barcode" : "Open scanner"}
+              onPress={openSystemScanner}
+              icon={
+                <Ionicons
+                  name="scan-outline"
+                  size={19}
+                  color={theme.colors.onAccent}
+                />
+              }
+            />
+            {permission && !permission.granted ? (
+              <AppButton
+                title={
+                  permission.canAskAgain
+                    ? "Allow camera"
+                    : "Open device settings"
+                }
+                variant="secondary"
+                size="sm"
+                onPress={() =>
+                  permission.canAskAgain
+                    ? requestPermission()
+                    : Linking.openSettings()
+                }
+              />
+            ) : null}
+            <AppText variant="caption" faint style={styles.center}>
+              The system scanner has its own torch and zoom controls.
+            </AppText>
+          </Card>
+        )}
+
+        {!useEmbeddedScanner && busy ? (
+          <Card style={styles.lookupCard}>
+            <ActivityIndicator color={theme.colors.accent} />
+            <AppText muted>Checking the catalog…</AppText>
+          </Card>
+        ) : null}
 
         {error ? (
           <View
@@ -346,7 +506,7 @@ export default function ScanScreen() {
                   <AppButton
                     title="Scan another"
                     variant="secondary"
-                    onPress={resetScan}
+                    onPress={startNextScan}
                   />
                 </View>
               </>
@@ -397,7 +557,7 @@ export default function ScanScreen() {
                   <AppButton
                     title="Scan another"
                     variant="secondary"
-                    onPress={resetScan}
+                    onPress={startNextScan}
                   />
                 </View>
               </>
@@ -441,6 +601,11 @@ export default function ScanScreen() {
           Known Bambu boxes are created automatically. For other brands, the app
           asks for the colour and material once.
         </AppText>
+
+        <AppText variant="caption" faint style={styles.buildTag}>
+          Scanner: {useEmbeddedScanner ? "in-app camera" : "native system"} ·
+          build {APP_BUILD_TAG}
+        </AppText>
       </ScrollView>
     </Screen>
   );
@@ -464,6 +629,32 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.12)",
+  },
+  systemScannerCard: {
+    minHeight: 300,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+  },
+  systemScannerIcon: {
+    width: 86,
+    height: 86,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
+  systemScannerText: {
+    lineHeight: 21,
+    marginBottom: spacing.xs,
+  },
+  lookupCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
   },
   cameraFallback: {
     flex: 1,
@@ -585,5 +776,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     paddingHorizontal: spacing.md,
+  },
+  buildTag: {
+    textAlign: "center",
+    fontFamily: "monospace",
+    fontSize: 10,
   },
 });

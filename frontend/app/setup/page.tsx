@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,7 @@ import {
   User,
 } from "lucide-react";
 
-import { api } from "@/lib/api";
+import { api, type Printer as PrinterDevice } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isDemoActive } from "@/lib/demo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -31,13 +31,14 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Spinner } from "@/components/ui/spinner";
 
 type SetupStep = "account" | "bambu" | "bambu-code" | "printer" | "done";
 
 const steps = [
   { key: "account", label: "Create Account" },
   { key: "bambu", label: "Bambu Lab Login" },
-  { key: "printer", label: "Printer Setup" },
+  { key: "printer", label: "Choose Printer" },
 ];
 
 export default function SetupPage() {
@@ -58,6 +59,10 @@ export default function SetupPage() {
   const [verifyCode, setVerifyCode] = useState("");
 
   // Printer fields
+  const [cloudPrinters, setCloudPrinters] = useState<PrinterDevice[]>([]);
+  const [selectedSerial, setSelectedSerial] = useState("");
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [showLanForm, setShowLanForm] = useState(false);
   const [printerIp, setPrinterIp] = useState("");
   const [printerSerial, setPrinterSerial] = useState("");
   const [printerAccessCode, setPrinterAccessCode] = useState("");
@@ -85,6 +90,30 @@ export default function SetupPage() {
       })
       .catch(() => {});
   }, [router]);
+
+  const loadCloudPrinters = useCallback(async () => {
+    setLoadingPrinters(true);
+    try {
+      const printers = await api.getPrinters();
+      const available = printers.filter(
+        (printer) =>
+          printer.connection_mode === "cloud" &&
+          !printer.configured &&
+          !printer.id,
+      );
+      setCloudPrinters(available);
+      setSelectedSerial(available[0]?.serial ?? "");
+      setShowLanForm(available.length === 0);
+    } catch {
+      setShowLanForm(true);
+    } finally {
+      setLoadingPrinters(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step === "printer") void loadCloudPrinters();
+  }, [step, loadCloudPrinters]);
 
   const currentStepIndex = steps.findIndex(
     (s) => s.key === step || (step === "bambu-code" && s.key === "bambu"),
@@ -116,6 +145,11 @@ export default function SetupPage() {
     }
   }
 
+  async function afterBambuLogin() {
+    const status = await api.getSetupStatus();
+    setStep(status.printer_configured ? "done" : "printer");
+  }
+
   async function handleBambuLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -125,7 +159,7 @@ export default function SetupPage() {
       if (res.requireCode) {
         setStep("bambu-code");
       } else {
-        setStep("printer");
+        await afterBambuLogin();
       }
     } catch (err: any) {
       setError(err.message || "Login failed");
@@ -145,10 +179,34 @@ export default function SetupPage() {
         setError("Code expired — a new one has been sent");
         setVerifyCode("");
       } else {
-        setStep("printer");
+        await afterBambuLogin();
       }
     } catch (err: any) {
       setError(err.message || "Verification failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCloudPrinterSetup() {
+    const device = cloudPrinters.find(
+      (printer) => printer.serial === selectedSerial,
+    );
+    if (!device) {
+      setError("Choose a printer first");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      await api.createPrinter({
+        name: device.name,
+        serial: device.serial,
+        connection_mode: "cloud",
+      });
+      setStep("done");
+    } catch (err: any) {
+      setError(err.message || "Failed to add printer");
     } finally {
       setBusy(false);
     }
@@ -162,6 +220,7 @@ export default function SetupPage() {
       await api.createPrinter({
         name: printerSerial,
         serial: printerSerial,
+        connection_mode: "lan",
         ip: printerIp,
         access_code: printerAccessCode,
       });
@@ -386,95 +445,201 @@ export default function SetupPage() {
                 <span className="rounded-lg bg-purple-500/10 p-2 text-purple-400">
                   <Printer className="size-5" />
                 </span>
-                Printer configuration
+                Choose a printer
               </CardTitle>
               <CardDescription>
-                Connect to your printer via your local network.
+                Printers on your Bambu Lab account appear here automatically. No
+                IP address or access code needed.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => setShowPrinterHelp((v) => !v)}
-              >
-                <Info />
-                Where do I find these values? Click to expand.
-              </Button>
-
-              {showPrinterHelp ? (
-                <div className="space-y-2 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
-                  <p>
-                    <strong className="text-foreground">Printer IP:</strong> Found in
-                    your printer&apos;s network settings or your router&apos;s DHCP
-                    client list.
-                  </p>
-                  <p>
-                    <strong className="text-foreground">Serial Number:</strong> On the
-                    printer → Settings → Device → Serial Number, or on the sticker on
-                    the back.
-                  </p>
-                  <p>
-                    <strong className="text-foreground">Access Code:</strong> On the
-                    printer → Settings → Network → Access Code (LAN mode must be
-                    enabled).
-                  </p>
-                  <a
-                    href="https://wiki.bambulab.com/en/general/find-sn"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    Bambu Lab Wiki — Finding serial number
-                    <ExternalLink className="size-3" />
-                  </a>
+              {loadingPrinters ? (
+                <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  <Spinner /> Looking for printers on your Bambu account…
                 </div>
-              ) : null}
-
-              <form onSubmit={handlePrinterSetup} className="space-y-4">
-                <Field>
-                  <FieldLabel htmlFor="ip">Printer IP Address</FieldLabel>
-                  <Input
-                    id="ip"
-                    placeholder="192.168.0.100"
-                    value={printerIp}
-                    onChange={(e) => setPrinterIp(e.target.value)}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="serial">Printer Serial Number</FieldLabel>
-                  <Input
-                    id="serial"
-                    placeholder="03919C462700XXX"
-                    value={printerSerial}
-                    onChange={(e) => setPrinterSerial(e.target.value)}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="access-code">Access Code</FieldLabel>
-                  <Input
-                    id="access-code"
-                    placeholder="12345678"
-                    value={printerAccessCode}
-                    onChange={(e) => setPrinterAccessCode(e.target.value)}
-                    required
-                  />
-                </Field>
-
-                {error ? (
-                  <Alert variant="destructive">
-                    <AlertCircle />
-                    <AlertDescription>{error}</AlertDescription>
+              ) : cloudPrinters.length > 0 ? (
+                <>
+                  <div className="space-y-2">
+                    {cloudPrinters.map((device) => {
+                      const selected = device.serial === selectedSerial;
+                      return (
+                        <button
+                          key={device.serial}
+                          type="button"
+                          onClick={() => setSelectedSerial(device.serial)}
+                          className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/10"
+                              : "bg-muted/20 hover:border-primary/40"
+                          }`}
+                        >
+                          <span
+                            className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
+                              selected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {selected ? <Check className="size-3" /> : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {device.name}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {device.model ?? "Bambu Lab printer"} ·{" "}
+                              {device.serial}
+                            </span>
+                          </span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Cloud
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <LoadingButton
+                    type="button"
+                    loading={busy}
+                    className="w-full"
+                    onClick={handleCloudPrinterSetup}
+                  >
+                    Add selected printer <Check />
+                  </LoadingButton>
+                </>
+              ) : (
+                <>
+                  <Alert>
+                    <Info />
+                    <AlertDescription>
+                      No printers were found on this Bambu Lab account. Bind the
+                      printer to your account in Bambu Handy, then refresh.
+                    </AlertDescription>
                   </Alert>
-                ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={loadCloudPrinters}
+                  >
+                    Refresh
+                  </Button>
+                </>
+              )}
 
-                <LoadingButton type="submit" loading={busy} className="w-full">
-                  Finish Setup <Check />
-                </LoadingButton>
-              </form>
+              <div className="space-y-3 border-t pt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => setShowLanForm((value) => !value)}
+                >
+                  <Info />
+                  {showLanForm
+                    ? "Hide LAN setup"
+                    : "Connect a LAN printer instead"}
+                </Button>
+
+                {showLanForm ? (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      LAN mode is optional. It works without Bambu Cloud, but the
+                      printer must be on the same network as this server and may
+                      need LAN-only mode with Developer Mode enabled.
+                    </p>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setShowPrinterHelp((value) => !value)}
+                    >
+                      <Info />
+                      Where do I find these values? Click to expand.
+                    </Button>
+
+                    {showPrinterHelp ? (
+                      <div className="space-y-2 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+                        <p>
+                          <strong className="text-foreground">Printer IP:</strong>{" "}
+                          Found in your printer&apos;s network settings or your
+                          router&apos;s DHCP client list.
+                        </p>
+                        <p>
+                          <strong className="text-foreground">
+                            Serial Number:
+                          </strong>{" "}
+                          On the printer → Settings → Device → Serial Number, or
+                          on the sticker on the back.
+                        </p>
+                        <p>
+                          <strong className="text-foreground">Access Code:</strong>{" "}
+                          On the printer → Settings → Network → Access Code.
+                        </p>
+                        <a
+                          href="https://wiki.bambulab.com/en/general/find-sn"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          Bambu Lab Wiki — Finding serial number
+                          <ExternalLink className="size-3" />
+                        </a>
+                      </div>
+                    ) : null}
+
+                    <form onSubmit={handlePrinterSetup} className="space-y-4">
+                      <Field>
+                        <FieldLabel htmlFor="ip">Printer IP Address</FieldLabel>
+                        <Input
+                          id="ip"
+                          placeholder="192.168.0.100"
+                          value={printerIp}
+                          onChange={(e) => setPrinterIp(e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="serial">
+                          Printer Serial Number
+                        </FieldLabel>
+                        <Input
+                          id="serial"
+                          placeholder="03919C462700XXX"
+                          value={printerSerial}
+                          onChange={(e) => setPrinterSerial(e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="access-code">Access Code</FieldLabel>
+                        <Input
+                          id="access-code"
+                          placeholder="12345678"
+                          value={printerAccessCode}
+                          onChange={(e) => setPrinterAccessCode(e.target.value)}
+                          required
+                        />
+                      </Field>
+
+                      <LoadingButton
+                        type="submit"
+                        loading={busy}
+                        className="w-full"
+                      >
+                        Finish setup with LAN <Check />
+                      </LoadingButton>
+                    </form>
+                  </div>
+                ) : null}
+              </div>
+
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertCircle />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}

@@ -34,7 +34,6 @@ import {
   Clock,
   Coins,
   Layers,
-  Printer as PrinterIcon,
   Timer,
   Weight,
 } from "lucide-react";
@@ -47,7 +46,14 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/StatCard";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -364,6 +370,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>("all");
   const [metric, setMetric] = useState<Metric>("count");
+  const [printerFilter, setPrinterFilter] = useState("all");
   const [now] = useState(() => new Date());
 
   useEffect(() => {
@@ -386,10 +393,34 @@ export default function AnalyticsPage() {
     load();
   }, []);
 
+  const scopedPrints = useMemo(
+    () =>
+      printerFilter === "all"
+        ? prints
+        : prints.filter((print) => print.device_id === printerFilter),
+    [prints, printerFilter],
+  );
+
+  const printerOptions = useMemo(
+    () => [
+      { value: "all", label: "All printers" },
+      ...printers.map((printer) => ({
+        value: printer.serial,
+        label: printer.name || printer.serial,
+      })),
+    ],
+    [printers],
+  );
+  const selectedPrinterLabel =
+    printerFilter === "all"
+      ? "All printers"
+      : (printers.find((printer) => printer.serial === printerFilter)?.name ??
+        "Printer");
+
   const rangeStart = useMemo(() => getRangeStart(range, now), [range, now]);
   const rangePrints = useMemo(
-    () => filterPrints(prints, rangeStart, now),
-    [prints, rangeStart, now],
+    () => filterPrints(scopedPrints, rangeStart, now),
+    [scopedPrints, rangeStart, now],
   );
   const previousBounds = useMemo(
     () => getPreviousBounds(range, rangeStart),
@@ -398,9 +429,9 @@ export default function AnalyticsPage() {
   const previousPrints = useMemo(
     () =>
       previousBounds
-        ? filterPrints(prints, previousBounds.start, previousBounds.end)
+        ? filterPrints(scopedPrints, previousBounds.start, previousBounds.end)
         : [],
-    [prints, previousBounds],
+    [scopedPrints, previousBounds],
   );
 
   const stats = useMemo(() => computeStats(rangePrints), [rangePrints]);
@@ -416,13 +447,13 @@ export default function AnalyticsPage() {
         Math.ceil((now.getTime() - rangeStart.getTime()) / 86400000),
       );
     }
-    const dates = prints
+    const dates = scopedPrints
       .map(printDate)
       .filter((date): date is Date => date !== null);
     if (dates.length === 0) return 0;
     const first = Math.min(...dates.map((date) => date.getTime()));
     return Math.max(1, Math.ceil((now.getTime() - first) / 86400000));
-  }, [now, prints, rangeStart]);
+  }, [now, scopedPrints, rangeStart]);
 
   const previousDays = previousBounds
     ? Math.max(
@@ -542,66 +573,6 @@ export default function AnalyticsPage() {
     });
   }, [rangePrints, spoolById, filamentById]);
 
-  const printerData = useMemo(() => {
-    const printerBySerial = new Map(
-      printers.map((printer) => [printer.serial, printer]),
-    );
-    const usage = new Map<
-      string,
-      {
-        serial: string;
-        name: string;
-        count: number;
-        weight: number;
-        cost: number;
-        time: number;
-        completed: number;
-        canceled: number;
-      }
-    >();
-
-    for (const print of rangePrints) {
-      const serial = print.device_id || "unknown";
-      const printer = printerBySerial.get(serial);
-      const entry = usage.get(serial) ?? {
-        serial,
-        name:
-          printer?.name ??
-          (serial === "unknown" ? "Unknown printer" : serial),
-        count: 0,
-        weight: 0,
-        cost: 0,
-        time: 0,
-        completed: 0,
-        canceled: 0,
-      };
-      entry.count += 1;
-      entry.weight += print.weight || 0;
-      entry.cost += print.estimated_cost || 0;
-      entry.time += print.duration_seconds || 0;
-      if (print.status === 2) entry.completed += 1;
-      if (print.status === 3) entry.canceled += 1;
-      usage.set(serial, entry);
-    }
-
-    return Array.from(usage.values())
-      .map((entry) => {
-        const finished = entry.completed + entry.canceled;
-        return {
-          ...entry,
-          successRate: finished
-            ? Math.round((entry.completed / finished) * 100)
-            : null,
-        };
-      })
-      .sort((a, b) => b.count - a.count);
-  }, [rangePrints, printers]);
-
-  const maxPrinterJobs = Math.max(
-    1,
-    ...printerData.map((printer) => printer.count),
-  );
-
   const activityTotal = activityData.reduce(
     (sum, entry) => sum + entry[metric],
     0,
@@ -631,25 +602,50 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="text-xl font-bold">Analytics</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {RANGE_LABELS[range]} · {stats.total} jobs
+            {RANGE_LABELS[range]} · {selectedPrinterLabel} · {stats.total} jobs
           </p>
         </div>
-        <ToggleGroup
-          value={[range]}
-          onValueChange={(value) => {
-            if (value[0]) setRange(value[0] as Range);
-          }}
-          variant="outline"
-          size="sm"
-          spacing={0}
-          aria-label="Analytics range"
-        >
-          {RANGE_OPTIONS.map((option) => (
-            <ToggleGroupItem key={option.value} value={option.value}>
-              {option.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={printerFilter}
+            onValueChange={(value) => setPrinterFilter(value ?? "all")}
+            items={printerOptions}
+          >
+            <SelectTrigger
+              size="sm"
+              className="min-w-[180px]"
+              aria-label="Filter by printer"
+            >
+              <SelectValue placeholder="All printers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All printers</SelectItem>
+                {printers.map((printer) => (
+                  <SelectItem key={printer.serial} value={printer.serial}>
+                    {printer.name || printer.serial}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <ToggleGroup
+            value={[range]}
+            onValueChange={(value) => {
+              if (value[0]) setRange(value[0] as Range);
+            }}
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="Analytics range"
+          >
+            {RANGE_OPTIONS.map((option) => (
+              <ToggleGroupItem key={option.value} value={option.value}>
+                {option.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -884,51 +880,6 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Printer Breakdown</CardTitle>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {printerData.length} printers · {RANGE_LABELS[range]}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {printerData.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              No printer data in this range.
-            </p>
-          ) : (
-            printerData.map((printer) => (
-              <div key={printer.serial} className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <PrinterIcon className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate text-sm font-medium">
-                      {printer.name}
-                    </span>
-                  </div>
-                  <span className="text-sm tabular-nums text-muted-foreground">
-                    {printer.count} jobs
-                  </span>
-                </div>
-                <Progress
-                  value={(printer.count / maxPrinterJobs) * 100}
-                  className="[&_[data-slot=progress-track]]:h-1.5"
-                />
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>{formatWeight(printer.weight)}</span>
-                  <span>{formatDuration(printer.time)}</span>
-                  <span>{formatCurrency(printer.cost)}</span>
-                  <span>
-                    {printer.successRate == null
-                      ? "No finished jobs"
-                      : `${printer.successRate}% success`}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -7,11 +7,12 @@ import uuid
 from datetime import UTC, datetime
 
 import paho.mqtt.client as mqtt
-from sqlmodel import Session, desc, select
+from sqlmodel import Session, col, desc, select
 
 from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
 from app.core.db import engine
 from app.models import Filament, Printer, PrintJob, Spool
+from app.services.bambu_catalog import BAMBU_COLOR_NAMES
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -122,6 +123,8 @@ class BambuClient:
 
         self._connected = False
         self._current_status: dict = {}
+        self._ams_signature: str | None = None
+        self._last_ams_sync = 0.0
 
         self.client: mqtt.Client | None = None
         self._mqtt_thread: MqttThread | None = None
@@ -140,6 +143,8 @@ class BambuClient:
         self.access_code = access_code
         self._connected = False
         self._current_status = {}
+        self._ams_signature = None
+        self._last_ams_sync = 0.0
 
     def connect(self) -> None:
         """Set up the MQTT client and start the background thread."""
@@ -261,6 +266,17 @@ class BambuClient:
         self._current_status.update(print_data)
         new_state = self._current_status.get("gcode_state")
 
+        ams = self._current_status.get("ams")
+        if ams:
+            signature = json.dumps(ams, sort_keys=True)
+            now = time.time()
+            if signature != self._ams_signature and now - self._last_ams_sync > 2:
+                self._ams_signature = signature
+                self._last_ams_sync = now
+                threading.Thread(
+                    target=self._sync_ams_trays, args=(ams,), daemon=True
+                ).start()
+
         if (
             old_state in ("IDLE", "FINISH", "FAILED", "PREPARE")
             and new_state == "RUNNING"
@@ -291,6 +307,173 @@ class BambuClient:
         if not printer:
             return None
         return session.exec(select(Spool).where(Spool.printer_id == printer.id)).first()
+
+    @staticmethod
+    def _real_tag(tag: str | None) -> str | None:
+        value = (tag or "").strip()
+        if not value or set(value) <= {"0"}:
+            return None
+        return value
+
+    @staticmethod
+    def _tray_color(tray: dict) -> str | None:
+        raw = str(tray.get("tray_color") or "").strip().lstrip("#")
+        if len(raw) < 6:
+            return None
+        return f"#{raw[:6].lower()}"
+
+    @staticmethod
+    def _tray_weight(tray: dict) -> float:
+        try:
+            value = float(tray.get("tray_weight") or 0)
+        except (TypeError, ValueError):
+            value = 0
+        return value if value > 0 else 1000.0
+
+    @staticmethod
+    def _tray_remaining(tray: dict, total: float) -> float:
+        try:
+            remain = float(tray.get("remain") or 0)
+        except (TypeError, ValueError):
+            remain = 0
+        if remain <= 0:
+            return total
+        return max(0.0, min(total, total * remain / 100))
+
+    def _ams_filament(self, session: Session, tray: dict) -> Filament:
+        info_idx = tray.get("tray_info_idx") or tray.get("setting_id") or None
+        color = self._tray_color(tray)
+        material = str(tray.get("tray_type") or "Unknown")
+        series = str(tray.get("tray_sub_brands") or "")
+        label = str(tray.get("tray_id_name") or "")
+        brand = (
+            "Bambu Lab"
+            if info_idx
+            and str(info_idx).startswith("GF")
+            and not str(info_idx).endswith(("98", "99"))
+            else "Unknown"
+        )
+
+        filament = session.exec(
+            select(Filament).where(
+                Filament.bambu_info_idx == info_idx,
+                Filament.color_hex == color,
+            )
+        ).first()
+        if filament:
+            return filament
+
+        def temp(key: str) -> int | None:
+            try:
+                value = int(float(tray.get(key) or 0))
+            except (TypeError, ValueError):
+                return None
+            return value or None
+
+        filament = Filament(
+            brand=brand,
+            material=material,
+            color_name=(
+                label
+                or BAMBU_COLOR_NAMES.get(color or "")
+                or f"{series or material} {color or ''}".strip()
+            ),
+            color_hex=color or "#9ca3af",
+            nozzle_temp_min=temp("nozzle_temp_min"),
+            nozzle_temp_max=temp("nozzle_temp_max"),
+            bed_temp=temp("bed_temp"),
+            bambu_info_idx=str(info_idx) if info_idx else None,
+            spool_weight_g=self._tray_weight(tray),
+            notes="Auto-created from AMS",
+        )
+        session.add(filament)
+        session.flush()
+        return filament
+
+    def _sync_ams_trays(self, ams: dict) -> None:
+        """Create and update spools from AMS trays reported by the printer."""
+        if not self.serial:
+            return
+        try:
+            with Session(engine) as session:
+                printer = session.exec(
+                    select(Printer).where(Printer.serial == self.serial)
+                ).first()
+                if not printer:
+                    return
+
+                try:
+                    tray_now = int(self._current_status.get("tray_now"))
+                except (TypeError, ValueError):
+                    tray_now = None
+
+                active_spool: Spool | None = None
+                trays: list[tuple[dict, bool]] = []
+                for unit in ams.get("ams", []):
+                    try:
+                        ams_id = int(unit.get("id") or 0)
+                    except (TypeError, ValueError):
+                        ams_id = 0
+                    for tray in unit.get("tray", []):
+                        try:
+                            tray_id = int(tray.get("id") or 0)
+                        except (TypeError, ValueError):
+                            tray_id = 0
+                        trays.append((tray, tray_now == (ams_id * 4 + tray_id)))
+
+                external = self._current_status.get("vt_tray")
+                if external:
+                    trays.append((external, tray_now == 254))
+
+                for tray, is_active in trays:
+                    tag = self._real_tag(tray.get("tag_uid"))
+                    if not tag:
+                        continue
+                    total = self._tray_weight(tray)
+                    remaining = self._tray_remaining(tray, total)
+                    spool = session.exec(
+                        select(Spool).where(Spool.tag_uid == tag)
+                    ).first()
+                    if not spool:
+                        filament = self._ams_filament(session, tray)
+                        spool = Spool(
+                            filament_id=filament.id,
+                            total_weight_g=total,
+                            remaining_g=remaining,
+                            tag_uid=tag,
+                            source="ams",
+                        )
+                        session.add(spool)
+                        session.flush()
+                    else:
+                        spool.remaining_g = remaining
+                        if is_active:
+                            spool.last_used_at = datetime.now(UTC)
+
+                    if is_active:
+                        active_spool = spool
+
+                if active_spool:
+                    for other in session.exec(
+                        select(Spool).where(
+                            Spool.printer_id == printer.id,
+                            col(Spool.id) != active_spool.id,
+                        )
+                    ).all():
+                        other.active = False
+                        other.printer_id = None
+                    active_spool.active = True
+                    active_spool.printer_id = printer.id
+
+                session.commit()
+                if active_spool:
+                    logger.info(
+                        "AMS synced %s trays; active spool %s",
+                        len(trays),
+                        active_spool.id,
+                    )
+        except Exception as exc:
+            logger.error("AMS sync failed: %s", exc)
 
     def _save_print_job_init(self) -> None:
         """Fetch cloud data and save a PrintJob when a print starts."""

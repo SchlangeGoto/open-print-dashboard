@@ -76,6 +76,7 @@ class FilamentBase(SQLModel):
     nozzle_temp_max: int | None = None
     bed_temp: int | None = None
     bambu_info_idx: str | None = Field(default=None, max_length=50)
+    spool_weight_g: float = Field(default=1000, gt=0)
     notes: str | None = Field(default=None, max_length=1000)
 
 
@@ -92,6 +93,7 @@ class FilamentUpdate(SQLModel):
     nozzle_temp_max: int | None = None
     bed_temp: int | None = None
     bambu_info_idx: str | None = Field(default=None, max_length=50)
+    spool_weight_g: float | None = Field(default=None, gt=0)
     notes: str | None = Field(default=None, max_length=1000)
 
 
@@ -127,6 +129,13 @@ class FilamentStats(SQLModel):
     avg_price_per_kg: float | None = None
 
 
+class FilamentBarcode(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    code: str = Field(unique=True, index=True, max_length=100)
+    filament_id: uuid.UUID = Field(foreign_key="filament.id", ondelete="CASCADE")
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+
+
 # ────────────────────────────────────────────────────────────
 # Spools
 # ────────────────────────────────────────────────────────────
@@ -134,6 +143,9 @@ class SpoolBase(SQLModel):
     total_weight_g: float = Field(gt=0)
     remaining_g: float = Field(ge=0)
     nfc_uid: str | None = Field(default=None, max_length=100)
+    tag_uid: str | None = Field(default=None, max_length=100, index=True)
+    barcode: str | None = Field(default=None, max_length=100, index=True)
+    source: str | None = Field(default=None, max_length=20)
     active: bool = False
     price_per_kg: float | None = Field(default=None, ge=0)
     purchased_at: datetime | None = None
@@ -150,6 +162,9 @@ class SpoolUpdate(SQLModel):
     total_weight_g: float | None = Field(default=None, gt=0)
     remaining_g: float | None = Field(default=None, ge=0)
     nfc_uid: str | None = Field(default=None, max_length=100)
+    tag_uid: str | None = Field(default=None, max_length=100)
+    barcode: str | None = Field(default=None, max_length=100)
+    source: str | None = Field(default=None, max_length=20)
     active: bool | None = None
     price_per_kg: float | None = Field(default=None, ge=0)
     purchased_at: datetime | None = None
@@ -202,6 +217,25 @@ class SpoolScanResult(SQLModel):
     uid: str
     spool: SpoolPublic | None = None
     unassigned_spools: list[SpoolPublic] = []
+
+
+class BarcodeScanRequest(SQLModel):
+    code: str = Field(min_length=1, max_length=100)
+
+
+class BarcodeConfirmRequest(SQLModel):
+    code: str = Field(min_length=1, max_length=100)
+    filament: FilamentCreate
+    total_weight_g: float | None = Field(default=None, gt=0)
+    price_per_kg: float | None = Field(default=None, ge=0)
+
+
+class BarcodeScanResult(SQLModel):
+    found: bool
+    code: str
+    filament: FilamentPublic | None = None
+    spool: SpoolPublic | None = None
+    suggested_filament: dict[str, Any] | None = None
 
 
 # ────────────────────────────────────────────────────────────

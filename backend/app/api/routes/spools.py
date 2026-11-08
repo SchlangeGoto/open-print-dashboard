@@ -7,7 +7,12 @@ from sqlmodel import col, select
 
 from app.api.deps import SessionDep, get_current_user
 from app.models import (
+    BarcodeConfirmRequest,
+    BarcodeScanRequest,
+    BarcodeScanResult,
     Filament,
+    FilamentBarcode,
+    FilamentPublic,
     Message,
     Printer,
     Spool,
@@ -20,6 +25,7 @@ from app.models import (
     SpoolsPublic,
     SpoolUpdate,
 )
+from app.services.bambu_catalog import lookup_barcode, parse_bambu_sku
 
 router = APIRouter(
     prefix="/spools",
@@ -37,6 +43,58 @@ def _unload_other_spools(
     for spool in others:
         spool.active = False
         spool.printer_id = None
+
+
+def _find_or_create_catalog_filament(
+    *, session: SessionDep, data: dict[str, Any]
+) -> Filament:
+    filament = session.exec(
+        select(Filament).where(
+            Filament.bambu_info_idx == data.get("bambu_info_idx"),
+            Filament.color_hex == data["color_hex"],
+        )
+    ).first()
+    if filament:
+        return filament
+
+    filament = Filament(
+        brand=data["brand"],
+        material=data["material"],
+        color_name=data["color_name"],
+        color_hex=data["color_hex"],
+        nozzle_temp_min=data.get("nozzle_temp_min"),
+        nozzle_temp_max=data.get("nozzle_temp_max"),
+        bed_temp=data.get("bed_temp"),
+        bambu_info_idx=data.get("bambu_info_idx"),
+        spool_weight_g=data.get("spool_weight_g", 1000),
+        notes=data.get("notes"),
+    )
+    session.add(filament)
+    session.flush()
+    return filament
+
+
+def _create_barcode_spool(
+    *,
+    session: SessionDep,
+    filament: Filament,
+    code: str,
+    total_weight_g: float | None = None,
+    price_per_kg: float | None = None,
+) -> Spool:
+    weight = total_weight_g or filament.spool_weight_g or 1000
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=weight,
+        remaining_g=weight,
+        barcode=code,
+        source="barcode",
+        price_per_kg=price_per_kg,
+    )
+    session.add(spool)
+    session.commit()
+    session.refresh(spool)
+    return spool
 
 
 @router.get("/", response_model=SpoolsPublic)
@@ -107,6 +165,68 @@ def assign_nfc(payload: SpoolAssignRequest, session: SessionDep) -> Any:
     session.refresh(spool)
     return SpoolScanResult(
         found=True, uid=payload.uid, spool=SpoolPublic.model_validate(spool)
+    )
+
+
+@router.post("/scan/barcode", response_model=BarcodeScanResult)
+def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
+    """Look up a packaging barcode and create a spool when it is known."""
+    code = payload.code.strip()
+    mapping = session.exec(
+        select(FilamentBarcode).where(FilamentBarcode.code == code)
+    ).first()
+    filament = session.get(Filament, mapping.filament_id) if mapping else None
+
+    if not filament:
+        catalog = lookup_barcode(code)
+        if catalog:
+            filament = _find_or_create_catalog_filament(session=session, data=catalog)
+            session.add(FilamentBarcode(code=code, filament_id=filament.id))
+            session.flush()
+
+    if not filament:
+        return BarcodeScanResult(
+            found=False,
+            code=code,
+            suggested_filament=parse_bambu_sku(code),
+        )
+
+    spool = _create_barcode_spool(session=session, filament=filament, code=code)
+    return BarcodeScanResult(
+        found=True,
+        code=code,
+        filament=FilamentPublic.model_validate(filament),
+        spool=SpoolPublic.model_validate(spool),
+    )
+
+
+@router.post("/scan/barcode/confirm", response_model=BarcodeScanResult)
+def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
+    """Create a new filament from a scanned barcode and add its first spool."""
+    code = payload.code.strip()
+    mapping = session.exec(
+        select(FilamentBarcode).where(FilamentBarcode.code == code)
+    ).first()
+    filament = session.get(Filament, mapping.filament_id) if mapping else None
+
+    if not filament:
+        filament = Filament(**payload.filament.model_dump())
+        session.add(filament)
+        session.flush()
+        session.add(FilamentBarcode(code=code, filament_id=filament.id))
+
+    spool = _create_barcode_spool(
+        session=session,
+        filament=filament,
+        code=code,
+        total_weight_g=payload.total_weight_g,
+        price_per_kg=payload.price_per_kg,
+    )
+    return BarcodeScanResult(
+        found=True,
+        code=code,
+        filament=FilamentPublic.model_validate(filament),
+        spool=SpoolPublic.model_validate(spool),
     )
 
 

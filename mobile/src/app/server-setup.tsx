@@ -143,8 +143,9 @@ export default function ServerSetupScreen() {
             color={theme.colors.faint}
           />
           <AppText variant="caption" faint style={styles.hintText}>
-            Tokens are stored in the device keychain. The app never sends your
-            password anywhere except your own server.
+            On iOS and Android, tokens are stored in the device&apos;s secure
+            storage. The app never sends your password anywhere except your own
+            server.
           </AppText>
         </View>
       </ScrollView>

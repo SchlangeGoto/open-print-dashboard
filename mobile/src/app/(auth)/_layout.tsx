@@ -1,4 +1,4 @@
-import { Redirect, Stack, usePathname } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 
 import { LoadingScreen } from "@/components/loading-screen";
 import { useAuth } from "@/lib/auth";
@@ -6,7 +6,6 @@ import { useTheme } from "@/lib/theme";
 
 export default function AuthLayout() {
   const { status } = useAuth();
-  const pathname = usePathname();
   const theme = useTheme();
 
   if (status === "loading") {
@@ -18,7 +17,7 @@ export default function AuthLayout() {
   if (status === "unreachable") {
     return <Redirect href="/connection-error" />;
   }
-  if (status === "needs-server" && pathname !== "/server-setup") {
+  if (status === "needs-server") {
     return <Redirect href="/server-setup" />;
   }
 

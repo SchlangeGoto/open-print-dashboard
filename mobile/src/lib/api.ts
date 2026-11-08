@@ -33,16 +33,32 @@ interface ApiClientOptions {
   onSessionExpired: () => void;
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 function isPrivateHost(host: string): boolean {
   return (
     host === "localhost" ||
     host === "127.0.0.1" ||
+    host === "::1" ||
     host.endsWith(".local") ||
     /^10\./.test(host) ||
     /^192\.168\./.test(host) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host)
+    /^169\.254\./.test(host) ||
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) ||
+    /^fe80:/i.test(host) ||
+    /^f[cd][0-9a-f]{2}:/i.test(host)
   );
+}
+
+function hostFromUrl(value: string): string {
+  const authority = value
+    .replace(/^https?:\/\//i, "")
+    .split("/")[0];
+  if (authority.startsWith("[")) {
+    return authority.slice(1, authority.indexOf("]")).toLowerCase();
+  }
+  return authority.split(":")[0].toLowerCase();
 }
 
 export function normalizeServerUrl(input: string): string {
@@ -51,8 +67,9 @@ export function normalizeServerUrl(input: string): string {
     throw new Error("Enter your server URL");
   }
 
-  if (!/^https?:\/\//i.test(value)) {
-    const host = value.split("/")[0].split(":")[0];
+  const hasProtocol = /^https?:\/\//i.test(value);
+  if (!hasProtocol) {
+    const host = hostFromUrl(`https://${value}`);
     value = `${isPrivateHost(host) ? "http" : "https"}://${value}`;
   }
 
@@ -62,7 +79,36 @@ export function normalizeServerUrl(input: string): string {
     throw new Error("Enter a valid URL, for example https://print.example.com");
   }
 
+  const host = hostFromUrl(value);
+  if (value.toLowerCase().startsWith("http://") && !isPrivateHost(host)) {
+    throw new Error(
+      "Use HTTPS for a public server. Plain HTTP is only allowed for local network addresses.",
+    );
+  }
+
   return value;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError(0, "The server took too long to respond.");
+    }
+    throw new ApiError(
+      0,
+      "Can't reach the server. Check the URL and your connection.",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function testServerConnection(input: string): Promise<string> {
@@ -144,17 +190,26 @@ export class ApiClient {
       headers.set("Content-Type", "application/json");
     }
 
-    const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
+    const res = await fetchWithTimeout(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
 
-    if (res.status === 401 && retry) {
-      const accessToken = await this.refreshAccessToken();
+    // Only refresh for this app's own bearer challenge. Other 401s (for
+    // example an unlinked Bambu Cloud account) must not sign the user out.
+    const isAuthChallenge =
+      res.status === 401 &&
+      res.headers.get("www-authenticate")?.toLowerCase().includes("bearer");
+
+    if (isAuthChallenge && retry) {
+      const accessToken = await this.refreshAccessToken(true);
       if (accessToken) {
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
         if (init.body && !retryHeaders.has("Content-Type")) {
           retryHeaders.set("Content-Type", "application/json");
         }
-        return fetch(`${baseUrl}${path}`, {
+        return fetchWithTimeout(`${baseUrl}${path}`, {
           ...init,
           headers: retryHeaders,
         });
@@ -164,6 +219,11 @@ export class ApiClient {
     return res;
   }
 
+  /** Invalidate any in-flight refresh after the server/session changes. */
+  invalidateSession(): void {
+    this.epoch += 1;
+  }
+
   private async expire(epoch: number): Promise<void> {
     if (epoch !== this.epoch) return;
     this.epoch += 1;
@@ -171,31 +231,27 @@ export class ApiClient {
     this.options.onSessionExpired();
   }
 
-  private async runRefresh(epoch: number): Promise<string | null> {
+  private async runRefresh(
+    epoch: number,
+    force: boolean,
+  ): Promise<string | null> {
     const tokens = this.options.getTokens();
     if (!tokens?.refreshToken) {
-      await this.expire(epoch);
+      if (tokens) {
+        await this.expire(epoch);
+      }
       return null;
     }
 
-    if (tokens.accessToken && tokens.expiresAt > Date.now() + 15_000) {
+    if (!force && tokens.accessToken && tokens.expiresAt > Date.now() + 15_000) {
       return tokens.accessToken;
     }
 
-    let res: Response;
-    try {
-      res = await fetch(`${this.baseUrl}/login/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: tokens.refreshToken }),
-      });
-    } catch {
-      // Keep the session while offline so a retry can refresh it later.
-      throw new ApiError(
-        0,
-        "Can't reach the server. Check the URL and your connection.",
-      );
-    }
+    const res = await fetchWithTimeout(`${this.baseUrl}/login/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: tokens.refreshToken }),
+    });
 
     if (epoch !== this.epoch) return null;
 
@@ -210,7 +266,12 @@ export class ApiClient {
       );
     }
 
-    const data = (await res.json()) as TokenResponse;
+    let data: TokenResponse;
+    try {
+      data = (await res.json()) as TokenResponse;
+    } catch {
+      throw new ApiError(0, "The server returned an invalid session response.");
+    }
     if (epoch !== this.epoch) return null;
 
     const next: AuthTokens = {
@@ -219,19 +280,15 @@ export class ApiClient {
       expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
     };
 
-    const writeEpoch = ++this.epoch;
+    this.epoch += 1;
     await this.options.setTokens(next);
-    if (writeEpoch !== this.epoch) {
-      await this.options.clearTokens();
-      return null;
-    }
     return next.accessToken;
   }
 
-  private async refreshAccessToken(): Promise<string | null> {
+  private async refreshAccessToken(force = false): Promise<string | null> {
     if (this.refreshPromise) return this.refreshPromise;
     const epoch = this.epoch;
-    this.refreshPromise = this.runRefresh(epoch).finally(() => {
+    this.refreshPromise = this.runRefresh(epoch, force).finally(() => {
       this.refreshPromise = null;
     });
     return this.refreshPromise;
@@ -242,7 +299,7 @@ export class ApiClient {
       username: email.trim(),
       password,
     });
-    const res = await fetch(`${this.baseUrl}/login/access-token`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/login/access-token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
@@ -263,11 +320,15 @@ export class ApiClient {
     this.epoch += 1;
     try {
       if (tokens?.refreshToken) {
-        await fetch(`${this.baseUrl}/login/logout`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: tokens.refreshToken }),
-        });
+        await fetchWithTimeout(
+          `${this.baseUrl}/login/logout`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: tokens.refreshToken }),
+          },
+          10_000,
+        );
       }
     } catch {
       // Local sign-out has to succeed even when the server is unreachable.

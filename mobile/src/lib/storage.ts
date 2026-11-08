@@ -62,10 +62,6 @@ export async function saveStoredServerUrl(url: string): Promise<void> {
   await writeItem(SERVER_URL_KEY, url);
 }
 
-export async function clearStoredServerUrl(): Promise<void> {
-  await removeItem(SERVER_URL_KEY);
-}
-
 export async function loadStoredSession(): Promise<StoredSession | null> {
   const raw = await readItem(SESSION_KEY);
   if (!raw) return null;

@@ -49,6 +49,9 @@ export default function SpoolDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const loader = useCallback(async (): Promise<DetailData> => {
+    if (!id) {
+      throw new Error("Spool not found");
+    }
     const spool = await api.getSpool(id);
     const [filament, printers] = await Promise.all([
       spool.filament_id ? api.getFilament(spool.filament_id) : null,
@@ -61,7 +64,7 @@ export default function SpoolDetailScreen() {
     useAsyncData(loader);
 
   async function loadInto(printer: Printer) {
-    if (!printer.id) return;
+    if (!id || !printer.id) return;
     setBusyPrinter(printer.id);
     setActionError(null);
     try {
@@ -264,11 +267,12 @@ export default function SpoolDetailScreen() {
           {printers.length > 0 ? (
             <View style={styles.printerList}>
               {printers.map((printer) => {
-                if (!printer.id) return null;
-                const isCurrent = printer.id === spool.printer_id;
+                const isCurrent = Boolean(
+                  printer.id && printer.id === spool.printer_id,
+                );
                 return (
                   <View
-                    key={printer.id}
+                    key={printer.id ?? printer.serial}
                     style={[
                       styles.printerRow,
                       { borderColor: theme.colors.border },
@@ -280,16 +284,21 @@ export default function SpoolDetailScreen() {
                       </AppText>
                       <AppText variant="caption" faint>
                         {printer.online ? "Online" : "Offline"}
+                        {printer.configured ? "" : " · Cloud only"}
                       </AppText>
                     </View>
-                    <AppButton
-                      title={isCurrent ? "Loaded" : "Load here"}
-                      size="sm"
-                      variant={isCurrent ? "ghost" : "secondary"}
-                      disabled={isCurrent}
-                      loading={busyPrinter === printer.id}
-                      onPress={() => loadInto(printer)}
-                    />
+                    {printer.id ? (
+                      <AppButton
+                        title={isCurrent ? "Loaded" : "Load here"}
+                        size="sm"
+                        variant={isCurrent ? "ghost" : "secondary"}
+                        disabled={isCurrent}
+                        loading={busyPrinter === printer.id}
+                        onPress={() => loadInto(printer)}
+                      />
+                    ) : (
+                      <Badge label="Cloud only" variant="warning" />
+                    )}
                   </View>
                 );
               })}

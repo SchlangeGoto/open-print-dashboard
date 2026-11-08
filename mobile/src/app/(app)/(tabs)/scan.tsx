@@ -6,8 +6,8 @@ import {
   type BarcodeType,
 } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -30,17 +30,7 @@ import { formatError, formatWeight } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
 
-const BARCODE_TYPES: BarcodeType[] = [
-  "ean13",
-  "ean8",
-  "upc_a",
-  "upc_e",
-  "code128",
-  "code39",
-  "code93",
-  "itf14",
-  "qr",
-];
+const BARCODE_TYPES: BarcodeType[] = ["ean13", "ean8", "upc_a", "upc_e"];
 
 export default function ScanScreen() {
   const { api } = useAuth();
@@ -49,6 +39,9 @@ export default function ScanScreen() {
   const { width } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
   const requested = useRef(false);
+  const scanLock = useRef(false);
+  const focusedRef = useRef(false);
+  const [focused, setFocused] = useState(false);
   const [scanning, setScanning] = useState(true);
   const [busy, setBusy] = useState(false);
   const [torch, setTorch] = useState(false);
@@ -68,16 +61,36 @@ export default function ScanScreen() {
     }
   }, [permission, requestPermission]);
 
+  useFocusEffect(
+    useCallback(() => {
+      focusedRef.current = true;
+      setFocused(true);
+      return () => {
+        focusedRef.current = false;
+        setFocused(false);
+        setTorch(false);
+        setScanning(true);
+        setResult(null);
+        setError(null);
+        setManual("");
+      };
+    }, []),
+  );
+
   async function handleCode(raw: string) {
     const code = raw.trim();
-    if (!code || busy) return;
+    if (!code || busy || scanLock.current) return;
 
+    // State updates are async; the ref is the synchronous guard against
+    // multiple decoded frames creating duplicate spools.
+    scanLock.current = true;
     setBusy(true);
     setError(null);
     setScanning(false);
 
     try {
       const scan = await api.scanBarcode(code);
+      if (!focusedRef.current) return;
       setResult(scan);
       void Haptics.notificationAsync(
         scan.found
@@ -85,16 +98,18 @@ export default function ScanScreen() {
           : Haptics.NotificationFeedbackType.Warning,
       );
     } catch (err) {
+      if (!focusedRef.current) return;
       setError(formatError(err));
       setScanning(true);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
+      scanLock.current = false;
       setBusy(false);
     }
   }
 
   function handleBarcodeScanned(scan: BarcodeScanningResult) {
-    if (!scanning || busy || result) return;
+    if (!scanning || busy || result || scanLock.current) return;
     void handleCode(scan.data);
   }
 
@@ -106,7 +121,7 @@ export default function ScanScreen() {
   }
 
   const cameraHeight = Math.min(Math.max(width * 0.62, 250), 360);
-  const cameraReady = permission?.granted;
+  const cameraActive = focused && Boolean(permission?.granted);
 
   return (
     <Screen>
@@ -147,7 +162,7 @@ export default function ScanScreen() {
             { height: cameraHeight, backgroundColor: "#000" },
           ]}
         >
-          {cameraReady ? (
+          {cameraActive ? (
             <CameraView
               style={StyleSheet.absoluteFill}
               facing="back"
@@ -165,9 +180,11 @@ export default function ScanScreen() {
                 color="rgba(255,255,255,0.7)"
               />
               <AppText color="rgba(255,255,255,0.8)" style={styles.center}>
-                {permission
-                  ? "Camera access is needed to scan barcodes."
-                  : "Checking camera permission…"}
+                {permission?.granted
+                  ? "Camera paused."
+                  : permission
+                    ? "Camera access is needed to scan barcodes."
+                    : "Checking camera permission…"}
               </AppText>
               {permission && !permission.granted ? (
                 <AppButton
@@ -187,7 +204,7 @@ export default function ScanScreen() {
             </View>
           )}
 
-          {cameraReady ? (
+          {cameraActive ? (
             <>
               <View style={styles.scanFrame}>
                 <View style={[styles.corner, styles.cornerTopLeft]} />

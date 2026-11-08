@@ -20,6 +20,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(app)" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="server-setup" />
         <Stack.Screen name="connection-error" />
       </Stack>
     </AuthProvider>

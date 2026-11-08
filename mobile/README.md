@@ -7,8 +7,8 @@ refresh-token auth.
 ## Features
 
 - Configurable server URL with a live connection test
-- Email/password login with rotating refresh tokens stored in the device
-  keychain
+- Email/password login with rotating refresh tokens stored in secure device
+  storage (Keychain on iOS, Keystore on Android)
 - Filament inventory with search, remaining weight, and loaded-printer state
 - Spool details and one-tap loading into a printer
 - Native barcode scanning with `expo-camera`
@@ -54,9 +54,10 @@ The app appends `/api/v1` itself; you can paste either the root URL or one that
 already includes `/api/v1`.
 
 For access outside your LAN, expose the backend over HTTPS (reverse proxy,
-Tailscale Funnel, Cloudflare Tunnel, etc.) and enter that URL. Do **not** expose
-the backend over plain HTTP to the public internet — the login protects the API,
-but the credentials and tokens would travel unencrypted.
+Tailscale Funnel, Cloudflare Tunnel, etc.) and enter that URL. Plain HTTP is
+only accepted for local/private addresses; a public host must use HTTPS. Do
+**not** expose the backend over plain HTTP to the public internet — the login
+protects the API, but the credentials and tokens would travel unencrypted.
 
 ### Local HTTP notes
 
@@ -70,8 +71,9 @@ but the credentials and tokens would travel unencrypted.
 ## Auth
 
 - Access tokens expire after 1 hour.
-- Refresh tokens expire after 90 days of inactivity and rotate on every use.
-- Both are stored with `expo-secure-store`; the app never stores the password.
+- Refresh tokens expire 90 days after issuance and rotate on every use.
+- Both are stored with `expo-secure-store` on iOS/Android; the app never stores
+  the password.
 - On a `401`, the client refreshes once and retries the request. If the refresh
   token is revoked, the app returns to the login screen.
 - A temporary network failure keeps the session instead of signing the user out.

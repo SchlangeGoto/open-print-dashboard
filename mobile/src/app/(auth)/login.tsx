@@ -153,7 +153,12 @@ export default function LoginScreen() {
           </AppText>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/server-setup?edit=1")}
+            onPress={() =>
+              router.push({
+                pathname: "/server-setup",
+                params: { edit: "1" },
+              })
+            }
           >
             <AppText variant="caption" color={theme.colors.accent}>
               Change server

@@ -86,7 +86,12 @@ export default function ConnectionErrorScreen() {
         <AppButton
           title="Change server"
           variant="secondary"
-          onPress={() => router.replace("/server-setup?edit=1")}
+          onPress={() =>
+            router.replace({
+              pathname: "/server-setup",
+              params: { edit: "1" },
+            })
+          }
         />
       </View>
     </View>

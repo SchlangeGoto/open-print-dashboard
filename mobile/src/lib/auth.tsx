@@ -145,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    apiClient.invalidateSession();
     await clearStoredSession();
     sessionTokens = null;
     sessionServerUrl = normalized;

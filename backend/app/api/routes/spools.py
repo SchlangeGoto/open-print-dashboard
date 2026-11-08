@@ -55,6 +55,15 @@ def _find_or_create_catalog_filament(
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
         )
     ).first()
+    if not filament:
+        # Match an AMS-created filament whose preset id differs from the box
+        # catalog by colour + material.
+        filament = session.exec(
+            select(Filament).where(
+                func.lower(Filament.color_hex) == data["color_hex"].lower(),
+                func.lower(Filament.material) == data["material"].lower(),
+            )
+        ).first()
     if filament:
         return filament
 

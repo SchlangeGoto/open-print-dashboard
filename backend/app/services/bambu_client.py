@@ -361,6 +361,15 @@ class BambuClient:
                 func.lower(Filament.color_hex) == (color or "").lower(),
             )
         ).first()
+        if not filament and color:
+            # The AMS sometimes reports a different preset id than the box
+            # catalog. Fall back to colour + material for the same spool.
+            filament = session.exec(
+                select(Filament).where(
+                    func.lower(Filament.color_hex) == color.lower(),
+                    func.lower(Filament.material) == material.lower(),
+                )
+            ).first()
         if filament:
             return filament
 

@@ -17,6 +17,7 @@ from app.models import (
     PrinterCreate,
     PrinterUpdate,
     PrintJob,
+    RefreshToken,
     Spool,
     User,
     UserCreate,
@@ -82,6 +83,21 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
 
 def count_users(*, session: Session) -> int:
     return session.exec(select(func.count()).select_from(User)).one()
+
+
+def revoke_user_refresh_tokens(*, session: Session, user_id: uuid.UUID) -> None:
+    """Revoke every active refresh token for a user."""
+    now = get_datetime_utc()
+    tokens = session.exec(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            col(RefreshToken.revoked_at).is_(None),
+        )
+    ).all()
+    for token in tokens:
+        token.revoked_at = now
+        session.add(token)
+    session.commit()
 
 
 # ────────────────────────────────────────────────────────────

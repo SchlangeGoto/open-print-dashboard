@@ -13,6 +13,7 @@ from app.models import (
     Filament,
     Printer,
     PrintJob,
+    RefreshToken,
     Spool,
     User,
     UserCreate,
@@ -46,6 +47,7 @@ def db() -> Generator[Session]:
         session.execute(delete(Printer))
         session.execute(delete(Filament))
         session.execute(delete(AppSetting))
+        session.execute(delete(RefreshToken))
         session.execute(delete(User))
         session.commit()
 

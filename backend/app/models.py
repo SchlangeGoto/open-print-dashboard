@@ -64,6 +64,15 @@ class UsersPublic(SQLModel):
     count: int
 
 
+class RefreshToken(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    token_hash: str = Field(unique=True, index=True, max_length=64)
+    expires_at: datetime
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    revoked_at: datetime | None = None
+
+
 # ────────────────────────────────────────────────────────────
 # Filaments
 # ────────────────────────────────────────────────────────────
@@ -361,7 +370,13 @@ class NewPassword(SQLModel):
 
 class Token(SQLModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
+    expires_in: int | None = None
+
+
+class RefreshTokenRequest(SQLModel):
+    refresh_token: str = Field(min_length=1, max_length=512)
 
 
 class TokenPayload(SQLModel):

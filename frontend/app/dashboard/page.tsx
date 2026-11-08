@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import PrinterModal from "@/components/modals/PrinterModal";
+import SpoolModal from "@/components/modals/SpoolModal";
 
 const filamentChartConfig = {
   remaining: { label: "Remaining", color: "var(--chart-1)" },
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [firmware, setFirmware] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedPrint, setSelectedPrint] = useState<any>(null);
+  const [selectedSpool, setSelectedSpool] = useState<any>(null);
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
 
   useEffect(() => {
@@ -80,6 +82,14 @@ export default function DashboardPage() {
   const statusByDev = Object.fromEntries(
     printers.map((printer) => [printer.serial, printer.status]),
   );
+  const selectedLoadedSpool = selectedPrinter?.id
+    ? spools.find((spool) => spool.printer_id === selectedPrinter.id)
+    : null;
+  const selectedLoadedFilament = selectedLoadedSpool
+    ? filaments.find(
+        (filament) => filament.id === selectedLoadedSpool.filament_id,
+      )
+    : null;
 
   const filamentChartData = filaments
     .filter((f) => f.total_remaining_g > 0)
@@ -453,6 +463,15 @@ export default function DashboardPage() {
       {selectedPrint ? (
         <PrintJobModal print={selectedPrint} onClose={() => setSelectedPrint(null)} />
       ) : null}
+      {selectedSpool ? (
+        <SpoolModal
+          spool={selectedSpool}
+          filament={filaments.find(
+            (filament) => filament.id === selectedSpool.filament_id,
+          )}
+          onClose={() => setSelectedSpool(null)}
+        />
+      ) : null}
       {selectedPrinter ? (
         <PrinterModal
           printer={selectedPrinter}
@@ -461,12 +480,18 @@ export default function DashboardPage() {
             activePrints.find((p) => p.device_id === selectedPrinter.serial) ??
             null
           }
+          loadedSpool={selectedLoadedSpool}
+          loadedFilament={selectedLoadedFilament}
           firmware={firmware[selectedPrinter.serial]}
           onClose={() => setSelectedPrinter(null)}
           onSettings={() => router.push("/dashboard/printers")}
           onPrintClick={(print) => {
             setSelectedPrinter(null);
             setSelectedPrint(print);
+          }}
+          onSpoolClick={(spool) => {
+            setSelectedPrinter(null);
+            setSelectedSpool(spool);
           }}
         />
       ) : null}

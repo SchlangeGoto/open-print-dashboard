@@ -3,7 +3,7 @@
 import { Settings2, Thermometer } from "lucide-react";
 
 import type { Printer } from "@/lib/api";
-import { isPrintingStatus } from "@/lib/utils";
+import { formatWeight, isPrintingStatus } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,25 +15,32 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 
 interface Props {
   printer: Printer;
   status?: any | null;
   activePrint?: any | null;
+  loadedSpool?: any | null;
+  loadedFilament?: any | null;
   firmware?: any;
   onClose: () => void;
   onSettings: () => void;
   onPrintClick?: (print: any) => void;
+  onSpoolClick?: (spool: any) => void;
 }
 
 export default function PrinterModal({
   printer,
   status,
   activePrint,
+  loadedSpool,
+  loadedFilament,
   firmware,
   onClose,
   onSettings,
   onPrintClick,
+  onSpoolClick,
 }: Props) {
   const liveStatus = status ?? printer.status;
   const isConnected = Boolean(
@@ -45,6 +52,45 @@ export default function PrinterModal({
     liveStatus?.mc_remaining_time ?? activePrint?.mc_remaining_time;
   const printTitle =
     liveStatus?.subtask_name ?? activePrint?.title ?? "Unknown print";
+
+  const spoolPct =
+    loadedSpool && loadedSpool.total_weight_g > 0
+      ? Math.round((loadedSpool.remaining_g / loadedSpool.total_weight_g) * 100)
+      : 0;
+
+  const loadedSpoolContent = loadedSpool && loadedFilament ? (
+    <>
+      <div className="flex items-center gap-3">
+        <SpoolIndicator
+          remaining={loadedSpool.remaining_g}
+          total={loadedSpool.total_weight_g}
+          color={loadedFilament.color_hex}
+          size={52}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Loaded spool
+          </p>
+          <p className="truncate text-sm font-medium">
+            {loadedFilament.color_name}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {loadedFilament.brand} · {loadedFilament.material} ·{" "}
+            {formatWeight(loadedSpool.remaining_g)}
+          </p>
+          <Progress
+            value={spoolPct}
+            className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+            style={
+              {
+                "--spool-color": loadedFilament.color_hex ?? "#9ca3af",
+              } as React.CSSProperties
+            }
+          />
+        </div>
+      </div>
+    </>
+  ) : null;
 
   const currentPrintContent = (
     <>
@@ -172,6 +218,26 @@ export default function PrinterModal({
             ) : null}
           </>
         )}
+
+        {loadedSpoolContent ? (
+          onSpoolClick ? (
+            <button
+              type="button"
+              className="w-full cursor-pointer rounded-xl border bg-muted/30 p-3 text-left transition-colors hover:border-primary/40"
+              onClick={() => onSpoolClick(loadedSpool)}
+            >
+              {loadedSpoolContent}
+            </button>
+          ) : (
+            <div className="rounded-xl border bg-muted/30 p-3">
+              {loadedSpoolContent}
+            </div>
+          )
+        ) : printer.configured ? (
+          <div className="rounded-xl border border-dashed bg-muted/20 p-3 text-center">
+            <p className="text-xs text-muted-foreground">No spool loaded</p>
+          </div>
+        ) : null}
 
         {firmware?.firmware?.length ? (
           <div>

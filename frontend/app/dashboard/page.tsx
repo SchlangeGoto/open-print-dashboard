@@ -114,6 +114,7 @@ export default function DashboardPage() {
         remaining: Math.round(f.total_remaining_g),
         pct: Math.round(pct),
         color: f.color_hex,
+        filament: f,
       };
     });
 
@@ -144,6 +145,9 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Filaments in Stock</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Click a bar to open the filament
+            </p>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -184,6 +188,11 @@ export default function DashboardPage() {
                   name="Remaining"
                   radius={[4, 4, 0, 0]}
                   isAnimationActive={false}
+                  className="cursor-pointer"
+                  onClick={(entry) => {
+                    const filament = entry?.payload?.filament;
+                    if (filament) setSelectedFilament(filament);
+                  }}
                 >
                   {filamentChartData.map((entry, i) => (
                     <Cell
@@ -199,7 +208,12 @@ export default function DashboardPage() {
 
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
               {filamentChartData.map((f, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-xs">
+                <button
+                  key={i}
+                  type="button"
+                  className="flex cursor-pointer items-center gap-1.5 rounded-sm text-xs transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => setSelectedFilament(f.filament)}
+                >
                   <div
                     className="size-2.5 shrink-0 rounded-full"
                     style={{ background: chartColor(f.color) }}
@@ -217,7 +231,7 @@ export default function DashboardPage() {
                       Low
                     </span>
                   ) : null}
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>

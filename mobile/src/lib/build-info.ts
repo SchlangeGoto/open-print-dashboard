@@ -1,13 +1,11 @@
 import Constants from "expo-constants";
-import { CameraView } from "expo-camera";
 import { Platform } from "react-native";
 
 /**
  * Bump this whenever the mobile bundle changes in a way you need to verify on
- * a device. The Settings screen and Scan tab show it so a stale Metro bundle is
- * immediately obvious.
+ * a device. Settings shows it so a stale Metro bundle is immediately obvious.
  */
-export const APP_BUILD_TAG = "native-scanner-3";
+export const APP_BUILD_TAG = "in-app-scanner-fix";
 
 export interface BuildInfo {
   buildTag: string;
@@ -17,7 +15,6 @@ export interface BuildInfo {
   expoGoVersion: string | null;
   sdkVersion: string | null;
   metroHost: string | null;
-  nativeScannerAvailable: boolean;
 }
 
 export function getBuildInfo(): BuildInfo {
@@ -41,8 +38,5 @@ export function getBuildInfo(): BuildInfo {
     expoGoVersion: Constants.expoVersion,
     sdkVersion: Constants.expoConfig?.sdkVersion ?? null,
     metroHost: Constants.expoConfig?.hostUri ?? null,
-    nativeScannerAvailable:
-      Platform.OS !== "web" &&
-      Boolean(CameraView.isModernBarcodeScannerAvailable),
   };
 }

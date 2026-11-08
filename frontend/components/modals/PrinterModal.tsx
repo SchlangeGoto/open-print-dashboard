@@ -46,6 +46,23 @@ export default function PrinterModal({
   const printTitle =
     liveStatus?.subtask_name ?? activePrint?.title ?? "Unknown print";
 
+  const currentPrintContent = (
+    <>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+        {activePrint ? "Current print" : "Currently printing"}
+      </p>
+      <p className="truncate font-medium">{printTitle}</p>
+      <Progress
+        value={pct}
+        className="mt-3 [&_[data-slot=progress-track]]:h-1.5"
+      />
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+        <span className="tabular-nums">{pct}%</span>
+        <span>{remaining ? `${remaining} min left` : ""}</span>
+      </div>
+    </>
+  );
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -139,34 +156,19 @@ export default function PrinterModal({
             )}
 
             {isPrinting ? (
-              <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                  {activePrint ? "Current print" : "Currently printing"}
-                </p>
-                {activePrint && onPrintClick ? (
-                  <button
-                    type="button"
-                    className="w-full text-left"
-                    onClick={() => onPrintClick(activePrint)}
-                  >
-                    <p className="truncate font-medium hover:underline">
-                      {printTitle}
-                    </p>
-                  </button>
-                ) : (
-                  <p className="truncate font-medium">{printTitle}</p>
-                )}
-                <Progress
-                  value={pct}
-                  className="mt-3 [&_[data-slot=progress-track]]:h-1.5"
-                />
-                <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                  <span className="tabular-nums">{pct}%</span>
-                  <span>
-                    {remaining ? `${remaining} min left` : ""}
-                  </span>
+              activePrint && onPrintClick ? (
+                <button
+                  type="button"
+                  className="w-full cursor-pointer rounded-xl border border-primary/30 bg-primary/10 p-4 text-left transition-colors hover:border-primary/50"
+                  onClick={() => onPrintClick(activePrint)}
+                >
+                  {currentPrintContent}
+                </button>
+              ) : (
+                <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
+                  {currentPrintContent}
                 </div>
-              </div>
+              )
             ) : null}
           </>
         )}

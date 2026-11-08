@@ -129,7 +129,20 @@ export default function PrintersPage() {
               status?.mc_remaining_time ?? activePrint?.mc_remaining_time;
 
             return (
-              <Card key={printer.serial}>
+              <Card
+                key={printer.serial}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedPrinter(printer)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedPrinter(printer);
+                  }
+                }}
+                className="cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
                 <CardContent className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -199,7 +212,8 @@ export default function PrintersPage() {
                     <button
                       type="button"
                       className="w-full rounded-lg border border-primary/30 bg-primary/10 p-3 text-left transition-colors hover:border-primary/50"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         if (activePrint) {
                           setSelectedPrint(activePrint);
                         } else {
@@ -235,14 +249,20 @@ export default function PrintersPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedPrinter(printer)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedPrinter(printer);
+                      }}
                     >
                       <Eye /> Details
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => openSettings(printer)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openSettings(printer);
+                      }}
                     >
                       <Settings2 /> Settings
                     </Button>

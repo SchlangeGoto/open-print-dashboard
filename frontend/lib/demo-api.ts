@@ -200,7 +200,11 @@ export const demoApi: ApiShape = {
 
   createPrinter: (data) => {
     const printers = getPrintersRaw();
-    if (printers.some((printer) => printer.serial === data.serial)) {
+    if (
+      printers.some(
+        (printer) => printer.id && printer.serial === data.serial,
+      )
+    ) {
       return Promise.reject(
         new Error("A printer with this serial number is already configured"),
       );
@@ -208,7 +212,11 @@ export const demoApi: ApiShape = {
     const now = new Date().toISOString();
     const printer = {
       id: newId(),
-      ...data,
+      name: data.name,
+      serial: data.serial,
+      connection_mode: data.connection_mode ?? "cloud",
+      ip: data.ip ?? null,
+      access_code: data.access_code ?? null,
       model: null,
       configured: true,
       online: false,
@@ -216,7 +224,10 @@ export const demoApi: ApiShape = {
       created_at: now,
       updated_at: now,
     };
-    save("printers", [...printers, printer]);
+    save(
+      "printers",
+      [...printers.filter((item) => item.serial !== data.serial), printer],
+    );
     return delay(printer);
   },
 

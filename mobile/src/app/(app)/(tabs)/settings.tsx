@@ -46,7 +46,6 @@ export default function SettingsScreen() {
     `Expo Go: ${build.expoGoVersion ?? "—"}`,
     `Expo SDK: ${build.sdkVersion ?? "—"}`,
     `Metro host: ${build.metroHost ?? "—"}`,
-    `Native scanner: ${build.nativeScannerAvailable ? "available" : "unavailable"}`,
   ].join("\n");
 
   async function handleTestConnection() {
@@ -263,17 +262,6 @@ export default function SettingsScreen() {
               value={`${build.platform} ${build.osVersion}`}
             />
             <DiagnosticRow label="Runtime" value={build.runtime} />
-            <DiagnosticRow
-              label="Native scanner"
-              value={
-                build.nativeScannerAvailable ? "Available" : "Unavailable"
-              }
-              valueColor={
-                build.nativeScannerAvailable
-                  ? theme.colors.success
-                  : theme.colors.warning
-              }
-            />
             <DiagnosticRow
               label="Metro host"
               value={build.metroHost ?? "Not connected"}

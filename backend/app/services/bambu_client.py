@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 
 import paho.mqtt.client as mqtt
+from sqlalchemy import func
 from sqlmodel import Session, col, desc, select
 
 from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
@@ -357,7 +358,7 @@ class BambuClient:
         filament = session.exec(
             select(Filament).where(
                 Filament.bambu_info_idx == info_idx,
-                Filament.color_hex == color,
+                func.lower(Filament.color_hex) == (color or "").lower(),
             )
         ).first()
         if filament:
@@ -436,14 +437,34 @@ class BambuClient:
                     ).first()
                     if not spool:
                         filament = self._ams_filament(session, tray)
-                        spool = Spool(
-                            filament_id=filament.id,
-                            total_weight_g=total,
-                            remaining_g=remaining,
-                            tag_uid=tag,
-                            source="ams",
-                        )
-                        session.add(spool)
+                        # If exactly one barcode-created spool of this
+                        # filament has no RFID tag yet, this is almost
+                        # certainly the physical spool that was just scanned.
+                        # Link the tag instead of creating a duplicate.
+                        candidates = session.exec(
+                            select(Spool)
+                            .where(
+                                Spool.filament_id == filament.id,
+                                col(Spool.tag_uid).is_(None),
+                                Spool.source == "barcode",
+                            )
+                            .order_by(col(Spool.created_at).desc())
+                        ).all()
+                        if len(candidates) == 1:
+                            spool = candidates[0]
+                            spool.tag_uid = tag
+                            spool.total_weight_g = total
+                            spool.remaining_g = remaining
+                            session.add(spool)
+                        else:
+                            spool = Spool(
+                                filament_id=filament.id,
+                                total_weight_g=total,
+                                remaining_g=remaining,
+                                tag_uid=tag,
+                                source="ams",
+                            )
+                            session.add(spool)
                         session.flush()
                     else:
                         spool.remaining_g = remaining

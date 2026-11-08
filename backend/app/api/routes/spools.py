@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlmodel import col, select
 
 from app.api.deps import SessionDep, get_current_user
@@ -51,7 +52,7 @@ def _find_or_create_catalog_filament(
     filament = session.exec(
         select(Filament).where(
             Filament.bambu_info_idx == data.get("bambu_info_idx"),
-            Filament.color_hex == data["color_hex"],
+            func.lower(Filament.color_hex) == data["color_hex"].lower(),
         )
     ).first()
     if filament:
@@ -74,6 +75,39 @@ def _find_or_create_catalog_filament(
     return filament
 
 
+def _existing_barcode_spools(*, session: SessionDep, code: str) -> list[Spool]:
+    return list(
+        session.exec(
+            select(Spool)
+            .where(Spool.barcode == code)
+            .order_by(col(Spool.created_at).desc())
+        ).all()
+    )
+
+
+def _adopt_unlinked_ams_spool(
+    *, session: SessionDep, filament: Filament, code: str
+) -> Spool | None:
+    """Attach a barcode to an AMS spool that has no barcode yet.
+
+    Only adopt when there is exactly one candidate; with several identical
+    spools we cannot know which physical box was scanned.
+    """
+    candidates = session.exec(
+        select(Spool).where(
+            Spool.filament_id == filament.id,
+            col(Spool.barcode).is_(None),
+            Spool.source == "ams",
+        )
+    ).all()
+    if len(candidates) != 1:
+        return None
+    spool = candidates[0]
+    spool.barcode = code
+    session.add(spool)
+    return spool
+
+
 def _create_barcode_spool(
     *,
     session: SessionDep,
@@ -82,6 +116,17 @@ def _create_barcode_spool(
     total_weight_g: float | None = None,
     price_per_kg: float | None = None,
 ) -> Spool:
+    # If the spool was already read by the AMS, link the barcode to that
+    # existing row instead of creating a duplicate.
+    spool = _adopt_unlinked_ams_spool(session=session, filament=filament, code=code)
+    if spool is not None:
+        if price_per_kg is not None:
+            spool.price_per_kg = price_per_kg
+        session.add(spool)
+        session.commit()
+        session.refresh(spool)
+        return spool
+
     weight = total_weight_g or filament.spool_weight_g or 1000
     spool = Spool(
         filament_id=filament.id,
@@ -191,12 +236,25 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
             suggested_filament=parse_bambu_sku(code),
         )
 
+    existing = _existing_barcode_spools(session=session, code=code)
+    if not payload.create:
+        return BarcodeScanResult(
+            found=True,
+            code=code,
+            filament=FilamentPublic.model_validate(filament),
+            spool=SpoolPublic.model_validate(existing[0]) if existing else None,
+            created=False,
+            existing_spools=[SpoolPublic.model_validate(s) for s in existing],
+        )
+
     spool = _create_barcode_spool(session=session, filament=filament, code=code)
     return BarcodeScanResult(
         found=True,
         code=code,
         filament=FilamentPublic.model_validate(filament),
         spool=SpoolPublic.model_validate(spool),
+        created=True,
+        existing_spools=[SpoolPublic.model_validate(s) for s in existing],
     )
 
 
@@ -227,6 +285,7 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
         code=code,
         filament=FilamentPublic.model_validate(filament),
         spool=SpoolPublic.model_validate(spool),
+        created=True,
     )
 
 

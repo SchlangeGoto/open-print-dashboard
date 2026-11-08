@@ -363,10 +363,13 @@ export class ApiClient {
     return this.request<Filament>(`/filaments/${id}`);
   }
 
-  scanBarcode(code: string): Promise<BarcodeScanResult> {
+  scanBarcode(
+    code: string,
+    create = true,
+  ): Promise<BarcodeScanResult> {
     return this.request<BarcodeScanResult>("/spools/scan/barcode", {
       method: "POST",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, create }),
     });
   }
 

@@ -114,14 +114,82 @@ export default function ScanScreen() {
     setError(null);
 
     try {
-      const scan = await api.scanBarcode(code);
+      // Look first so an existing physical spool is never duplicated just
+      // because its barcode was scanned again.
+      const lookup = await api.scanBarcode(code, false);
       if (!focusedRef.current) return;
-      resultRef.current = scan;
-      setResult(scan);
+
+      // Compatibility with a backend that predates create=false: it creates
+      // the spool during the lookup and returns no `created` field.
+      if (lookup.created === undefined && lookup.spool) {
+        const normalized: BarcodeScanResult = {
+          ...lookup,
+          created: true,
+          existing_spools: [],
+        };
+        resultRef.current = normalized;
+        setResult(normalized);
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+        return;
+      }
+
+      const existing = lookup.existing_spools ?? [];
+      if (!lookup.found || existing.length > 0) {
+        const normalized: BarcodeScanResult = {
+          ...lookup,
+          created: lookup.created ?? false,
+          existing_spools: existing,
+        };
+        resultRef.current = normalized;
+        setResult(normalized);
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Warning,
+        );
+        return;
+      }
+
+      const created = await api.scanBarcode(code, true);
+      if (!focusedRef.current) return;
+      const normalized: BarcodeScanResult = {
+        ...created,
+        created: created.created ?? true,
+        existing_spools: created.existing_spools ?? [],
+      };
+      resultRef.current = normalized;
+      setResult(normalized);
       void Haptics.notificationAsync(
-        scan.found
-          ? Haptics.NotificationFeedbackType.Success
-          : Haptics.NotificationFeedbackType.Warning,
+        Haptics.NotificationFeedbackType.Success,
+      );
+    } catch (err) {
+      if (!focusedRef.current) return;
+      setError(formatError(err));
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      scanLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function addAnotherSpool(code: string) {
+    if (scanLock.current) return;
+
+    scanLock.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await api.scanBarcode(code, true);
+      if (!focusedRef.current) return;
+      const normalized: BarcodeScanResult = {
+        ...created,
+        created: created.created ?? true,
+        existing_spools: created.existing_spools ?? [],
+      };
+      resultRef.current = normalized;
+      setResult(normalized);
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
       );
     } catch (err) {
       if (!focusedRef.current) return;
@@ -313,7 +381,7 @@ export default function ScanScreen() {
 
         {result ? (
           <Card style={styles.resultCard}>
-            {result.found && result.filament ? (
+            {result.created && result.found && result.filament ? (
               <>
                 <View style={styles.resultHeader}>
                   <View
@@ -369,6 +437,84 @@ export default function ScanScreen() {
                   <AppButton
                     title="Scan another"
                     variant="secondary"
+                    onPress={resetScan}
+                  />
+                </View>
+              </>
+            ) : result.found && result.filament ? (
+              <>
+                <View style={styles.resultHeader}>
+                  <View
+                    style={[
+                      styles.resultIcon,
+                      { backgroundColor: `${theme.colors.info}1f` },
+                    ]}
+                  >
+                    <Ionicons
+                      name="information-circle"
+                      size={22}
+                      color={theme.colors.info}
+                    />
+                  </View>
+                  <View style={styles.resultTitleWrap}>
+                    <AppText variant="heading">Already in inventory</AppText>
+                    <AppText variant="caption" faint>
+                      {result.code}
+                    </AppText>
+                  </View>
+                  <Badge
+                    label={`${result.existing_spools.length} ${
+                      result.existing_spools.length === 1 ? "spool" : "spools"
+                    }`}
+                    variant="warning"
+                  />
+                </View>
+
+                <View style={styles.filamentRow}>
+                  <ColorDot color={result.filament.color_hex} size={40} />
+                  <View style={styles.filamentText}>
+                    <AppText variant="label" numberOfLines={1}>
+                      {result.filament.color_name}
+                    </AppText>
+                    <AppText variant="caption" muted>
+                      {result.filament.brand} · {result.filament.material}
+                    </AppText>
+                  </View>
+                  {result.spool ? (
+                    <AppText variant="label" color={theme.colors.info}>
+                      {formatWeight(result.spool.remaining_g)} left
+                    </AppText>
+                  ) : null}
+                </View>
+
+                <AppText muted style={styles.resultDescription}>
+                  This barcode is already linked to{" "}
+                  {result.existing_spools.length}{" "}
+                  {result.existing_spools.length === 1 ? "spool" : "spools"}.
+                  Open the latest one, or add another physical box.
+                </AppText>
+
+                <View style={styles.resultActions}>
+                  {result.spool ? (
+                    <AppButton
+                      title="Open latest spool"
+                      onPress={() =>
+                        router.push({
+                          pathname: "/spool/[id]",
+                          params: { id: result.spool!.id },
+                        })
+                      }
+                    />
+                  ) : null}
+                  <AppButton
+                    title="Add another spool"
+                    variant="secondary"
+                    loading={busy}
+                    onPress={() => addAnotherSpool(result.code)}
+                  />
+                  <AppButton
+                    title="Scan next barcode"
+                    variant="ghost"
                     onPress={resetScan}
                   />
                 </View>

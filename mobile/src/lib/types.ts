@@ -86,6 +86,8 @@ export interface BarcodeScanResult {
   code: string;
   filament: Filament | null;
   spool: Spool | null;
+  created: boolean;
+  existing_spools: Spool[];
   suggested_filament: SuggestedFilament | null;
 }
 

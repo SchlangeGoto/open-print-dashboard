@@ -230,6 +230,9 @@ class SpoolScanResult(SQLModel):
 
 class BarcodeScanRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
+    # Existing clients omit this and keep the old create-on-scan behavior.
+    # The mobile app first sends create=false to check for a duplicate.
+    create: bool = True
 
 
 class BarcodeConfirmRequest(SQLModel):
@@ -244,6 +247,8 @@ class BarcodeScanResult(SQLModel):
     code: str
     filament: FilamentPublic | None = None
     spool: SpoolPublic | None = None
+    created: bool = False
+    existing_spools: list[SpoolPublic] = []
     suggested_filament: dict[str, Any] | None = None
 
 

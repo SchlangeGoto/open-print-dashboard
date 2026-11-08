@@ -5,7 +5,7 @@ import { Platform } from "react-native";
  * Bump this whenever the mobile bundle changes in a way you need to verify on
  * a device. Settings shows it so a stale Metro bundle is immediately obvious.
  */
-export const APP_BUILD_TAG = "in-app-barcode-2";
+export const APP_BUILD_TAG = "in-app-barcode-3";
 
 export interface BuildInfo {
   buildTag: string;

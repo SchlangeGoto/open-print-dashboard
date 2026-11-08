@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Cell } from "recharts";
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
@@ -27,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import PrinterModal from "@/components/modals/PrinterModal";
+import PrinterSettingsModal from "@/components/modals/PrinterSettingsModal";
 import SpoolModal from "@/components/modals/SpoolModal";
 
 const filamentChartConfig = {
@@ -34,7 +34,6 @@ const filamentChartConfig = {
 } satisfies ChartConfig;
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [prints, setPrints] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
@@ -44,39 +43,42 @@ export default function DashboardPage() {
   const [selectedPrint, setSelectedPrint] = useState<any>(null);
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsPrinter, setSettingsPrinter] = useState<Printer | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [devs, pr, fil, sp] = await Promise.all([
+        api.getPrinters().catch(() => []),
+        api.getPrintJobs().catch(() => []),
+        api.getFilaments().catch(() => []),
+        api.getSpools().catch(() => []),
+      ]);
+      setPrinters(devs);
+      setPrints(pr);
+      setFilaments(fil);
+      setSpools(sp);
+
+      const fwMap: Record<string, any> = {};
+      await Promise.all(
+        devs
+          .filter((printer) => printer.configured)
+          .map(async (printer) => {
+            const fw = await api.getFirmware(printer.serial).catch(() => null);
+            if (fw) fwMap[printer.serial] = fw;
+          }),
+      );
+      setFirmware(fwMap);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [devs, pr, fil, sp] = await Promise.all([
-          api.getPrinters().catch(() => []),
-          api.getPrintJobs().catch(() => []),
-          api.getFilaments().catch(() => []),
-          api.getSpools().catch(() => []),
-        ]);
-        setPrinters(devs);
-        setPrints(pr);
-        setFilaments(fil);
-        setSpools(sp);
-
-        const fwMap: Record<string, any> = {};
-        await Promise.all(
-          devs
-            .filter((printer) => printer.configured)
-            .map(async (printer) => {
-              const fw = await api.getFirmware(printer.serial).catch(() => null);
-              if (fw) fwMap[printer.serial] = fw;
-            }),
-        );
-        setFirmware(fwMap);
-      } finally {
-        setLoading(false);
-      }
-    }
     load();
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [load]);
 
   const activePrints = prints.filter((p) => p.status === 4);
   const statusByDev = Object.fromEntries(
@@ -90,6 +92,12 @@ export default function DashboardPage() {
         (filament) => filament.id === selectedLoadedSpool.filament_id,
       )
     : null;
+
+  function openSettings(printer: Printer) {
+    setSelectedPrinter(null);
+    setSettingsPrinter(printer);
+    setSettingsOpen(true);
+  }
 
   const filamentChartData = filaments
     .filter((f) => f.total_remaining_g > 0)
@@ -491,7 +499,7 @@ export default function DashboardPage() {
           loadedFilament={selectedLoadedFilament}
           firmware={firmware[selectedPrinter.serial]}
           onClose={() => setSelectedPrinter(null)}
-          onSettings={() => router.push("/dashboard/printers")}
+          onSettings={() => openSettings(selectedPrinter)}
           onPrintClick={(print) => {
             setSelectedPrinter(null);
             setSelectedPrint(print);
@@ -500,6 +508,14 @@ export default function DashboardPage() {
             setSelectedPrinter(null);
             setSelectedSpool(spool);
           }}
+        />
+      ) : null}
+
+      {settingsOpen ? (
+        <PrinterSettingsModal
+          printer={settingsPrinter}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={load}
         />
       ) : null}
     </div>

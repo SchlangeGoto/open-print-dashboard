@@ -9,7 +9,9 @@ from app.api.deps import SessionDep, get_current_user
 from app.models import (
     Filament,
     Message,
+    Printer,
     Spool,
+    SpoolActivateRequest,
     SpoolAssignRequest,
     SpoolCreate,
     SpoolPublic,
@@ -26,11 +28,17 @@ router = APIRouter(
 )
 
 
-def _deactivate_other_spools(*, session: SessionDep, keep_id: uuid.UUID | None) -> None:
-    active_spools = session.exec(select(Spool).where(col(Spool.active).is_(True))).all()
-    for spool in active_spools:
-        if spool.id != keep_id:
-            spool.active = False
+def _unload_other_spools(
+    *, session: SessionDep, printer_id: uuid.UUID, keep_id: uuid.UUID
+) -> None:
+    others = session.exec(
+        select(Spool).where(
+            Spool.printer_id == printer_id, col(Spool.id) != keep_id
+        )
+    ).all()
+    for spool in others:
+        spool.active = False
+        spool.printer_id = None
 
 
 @router.get("/", response_model=SpoolsPublic)
@@ -46,9 +54,14 @@ def read_spools(session: SessionDep, filament_id: uuid.UUID | None = None) -> An
 
 
 @router.get("/active", response_model=SpoolPublic)
-def read_active_spool(session: SessionDep) -> Any:
-    """Return the spool that is currently loaded in the printer."""
-    spool = session.exec(select(Spool).where(col(Spool.active).is_(True))).first()
+def read_active_spool(
+    session: SessionDep, printer_id: uuid.UUID | None = None
+) -> Any:
+    """Return a loaded spool, optionally scoped to one printer."""
+    query = select(Spool).where(col(Spool.active).is_(True))
+    if printer_id:
+        query = query.where(Spool.printer_id == printer_id)
+    spool = session.exec(query).first()
     if not spool:
         raise HTTPException(status_code=404, detail="No active spool")
     return spool
@@ -60,7 +73,6 @@ def scan_nfc(payload: SpoolScanRequest, session: SessionDep) -> Any:
     spool = session.exec(select(Spool).where(Spool.nfc_uid == payload.uid)).first()
 
     if spool:
-        _deactivate_other_spools(session=session, keep_id=spool.id)
         spool.active = True
         session.add(spool)
         session.commit()
@@ -93,7 +105,6 @@ def assign_nfc(payload: SpoolAssignRequest, session: SessionDep) -> Any:
 
     spool.nfc_uid = payload.uid
     spool.last_used_at = datetime.now(UTC)
-    _deactivate_other_spools(session=session, keep_id=spool.id)
     spool.active = True
     session.add(spool)
     session.commit()
@@ -119,9 +130,6 @@ def create_spool(*, session: SessionDep, spool_in: SpoolCreate) -> Any:
             raise HTTPException(status_code=404, detail="Filament not found")
     spool = Spool.model_validate(spool_in)
     session.add(spool)
-    session.flush()
-    if spool.active:
-        _deactivate_other_spools(session=session, keep_id=spool.id)
     session.commit()
     session.refresh(spool)
     return spool
@@ -139,10 +147,9 @@ def update_spool(
         raise HTTPException(status_code=404, detail="Spool not found")
     update_dict = spool_in.model_dump(exclude_unset=True)
     spool.sqlmodel_update(update_dict)
+    if "active" in update_dict and not spool.active:
+        spool.printer_id = None
     session.add(spool)
-    session.flush()
-    if spool.active:
-        _deactivate_other_spools(session=session, keep_id=spool.id)
     session.commit()
     session.refresh(spool)
     return spool
@@ -159,12 +166,24 @@ def delete_spool(spool_id: uuid.UUID, session: SessionDep) -> Any:
 
 
 @router.put("/{spool_id}/activate", response_model=SpoolPublic)
-def activate_spool(spool_id: uuid.UUID, session: SessionDep) -> Any:
+def activate_spool(
+    spool_id: uuid.UUID,
+    payload: SpoolActivateRequest,
+    session: SessionDep,
+) -> Any:
     spool = session.get(Spool, spool_id)
     if not spool:
         raise HTTPException(status_code=404, detail="Spool not found")
-    _deactivate_other_spools(session=session, keep_id=spool.id)
+    printer = session.get(Printer, payload.printer_id)
+    if not printer:
+        raise HTTPException(status_code=404, detail="Printer not found")
+
+    _unload_other_spools(
+        session=session, printer_id=payload.printer_id, keep_id=spool.id
+    )
+    spool.printer_id = payload.printer_id
     spool.active = True
+    spool.last_used_at = datetime.now(UTC)
     session.add(spool)
     session.commit()
     session.refresh(spool)

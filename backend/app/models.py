@@ -162,6 +162,9 @@ class Spool(SpoolBase, table=True):
     filament_id: uuid.UUID | None = Field(
         default=None, foreign_key="filament.id", ondelete="CASCADE"
     )
+    printer_id: uuid.UUID | None = Field(
+        default=None, foreign_key="printer.id", ondelete="SET NULL", index=True
+    )
     filament: Filament | None = Relationship(back_populates="spools")
     print_jobs: list["PrintJob"] = Relationship(
         back_populates="spool", cascade_delete=True
@@ -171,6 +174,7 @@ class Spool(SpoolBase, table=True):
 class SpoolPublic(SpoolBase):
     id: uuid.UUID
     filament_id: uuid.UUID | None = None
+    printer_id: uuid.UUID | None = None
     created_at: datetime | None = None
 
 
@@ -186,6 +190,10 @@ class SpoolScanRequest(SQLModel):
 class SpoolAssignRequest(SQLModel):
     uid: str
     spool_id: uuid.UUID
+
+
+class SpoolActivateRequest(SQLModel):
+    printer_id: uuid.UUID
 
 
 class SpoolScanResult(SQLModel):

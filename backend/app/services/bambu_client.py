@@ -11,7 +11,7 @@ from sqlmodel import Session, desc, select
 
 from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
 from app.core.db import engine
-from app.models import Filament, PrintJob, Spool
+from app.models import Filament, Printer, PrintJob, Spool
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -281,6 +281,19 @@ class BambuClient:
         t = threading.Thread(target=self._save_print_job_init, daemon=True)
         t.start()
 
+    def _active_spool(self, session: Session) -> Spool | None:
+        """Return the spool loaded in this printer, not another printer."""
+        if not self.serial:
+            return None
+        printer = session.exec(
+            select(Printer).where(Printer.serial == self.serial)
+        ).first()
+        if not printer:
+            return None
+        return session.exec(
+            select(Spool).where(Spool.printer_id == printer.id)
+        ).first()
+
     def _save_print_job_init(self) -> None:
         """Fetch cloud data and save a PrintJob when a print starts."""
         from app.services.printer_service import printer_service
@@ -307,9 +320,7 @@ class BambuClient:
                 return
 
             with Session(engine) as session:
-                active_spool = session.exec(
-                    select(Spool).where(Spool.active.is_(True))
-                ).first()
+                active_spool = self._active_spool(session)
 
                 job = PrintJob(
                     spool_id=active_spool.id if active_spool else None,
@@ -361,9 +372,7 @@ class BambuClient:
                 return
 
             with Session(engine) as session:
-                active_spool = session.exec(
-                    select(Spool).where(Spool.active.is_(True))
-                ).first()
+                active_spool = self._active_spool(session)
 
                 estimated_cost = None
                 if active_spool and task.get("weight"):
@@ -426,11 +435,13 @@ class BambuClient:
         Falls back to deducting from the active spool if mapping is unavailable.
         """
         ams_mapping = task.get("amsDetailMapping", [])
+        printer = session.exec(
+            select(Printer).where(Printer.serial == self.serial)
+        ).first()
+        printer_id = printer.id if printer else None
 
         if not ams_mapping:
-            active_spool = session.exec(
-                select(Spool).where(Spool.active.is_(True))
-            ).first()
+            active_spool = self._active_spool(session)
             if active_spool and task.get("weight"):
                 active_spool.remaining_g = max(
                     0, active_spool.remaining_g - task["weight"]
@@ -449,17 +460,17 @@ class BambuClient:
             filament_id = slot.get("filamentId")  # e.g. "GFL99"
             filament_type = slot.get("filamentType")  # e.g. "PLA"
 
-            spool = session.exec(
-                select(Spool)
-                .join(Filament, Spool.filament_id == Filament.id)
-                .where(Filament.bambu_info_idx == filament_id)
-                .where(Spool.active.is_(True))
-            ).first()
+            spool = None
+            if printer_id:
+                spool = session.exec(
+                    select(Spool)
+                    .join(Filament, Spool.filament_id == Filament.id)
+                    .where(Filament.bambu_info_idx == filament_id)
+                    .where(Spool.printer_id == printer_id)
+                ).first()
 
             if not spool:
-                spool = session.exec(
-                    select(Spool).where(Spool.active.is_(True))
-                ).first()
+                spool = self._active_spool(session)
 
             if spool:
                 spool.remaining_g = max(0, spool.remaining_g - used_g)

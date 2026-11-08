@@ -4,7 +4,7 @@ import { ThemeProvider } from "next-themes";
 
 import { AppearanceProvider } from "@/lib/appearance";
 import { AuthProvider } from "@/lib/auth";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -39,8 +39,9 @@ export default function RootLayout({
         >
           <AppearanceProvider>
             <TooltipProvider delay={200}>
-              <AuthProvider>{children}</AuthProvider>
-              <Toaster richColors closeButton position="top-right" />
+              <Toaster>
+                <AuthProvider>{children}</AuthProvider>
+              </Toaster>
             </TooltipProvider>
           </AppearanceProvider>
         </ThemeProvider>

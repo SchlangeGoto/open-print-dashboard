@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Archive, Check, Package, Pencil, Plus, Trash2, Zap } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -396,11 +397,12 @@ export default function SpoolsPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="purchased">Purchased</FieldLabel>
-                <Input
+                <DatePicker
                   id="purchased"
-                  type="date"
                   value={form.purchased_at}
-                  onChange={(e) => setForm({ ...form, purchased_at: e.target.value })}
+                  onChange={(purchased_at) =>
+                    setForm({ ...form, purchased_at })
+                  }
                 />
               </Field>
             </div>

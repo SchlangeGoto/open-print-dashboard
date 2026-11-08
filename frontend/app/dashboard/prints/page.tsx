@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ChevronDown, ChevronUp, ChevronsUpDown, History, Trash2 } from "lucide-react";
 
 import { api } from "@/lib/api";

@@ -42,7 +42,7 @@ export default function SettingsScreen() {
     `Build: ${build.buildTag}`,
     `Runtime: ${build.runtime}`,
     `Execution environment: ${build.executionEnvironment}`,
-    `Platform: ${build.platform}`,
+    `Platform: ${build.platform} ${build.osVersion}`,
     `Expo Go: ${build.expoGoVersion ?? "—"}`,
     `Expo SDK: ${build.sdkVersion ?? "—"}`,
     `Metro host: ${build.metroHost ?? "—"}`,
@@ -258,6 +258,10 @@ export default function SettingsScreen() {
 
           <View style={styles.diagnostics}>
             <DiagnosticRow label="Version" value={`v${version}`} />
+            <DiagnosticRow
+              label="Platform"
+              value={`${build.platform} ${build.osVersion}`}
+            />
             <DiagnosticRow label="Runtime" value={build.runtime} />
             <DiagnosticRow
               label="Native scanner"

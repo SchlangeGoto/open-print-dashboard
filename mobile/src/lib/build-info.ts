@@ -11,6 +11,7 @@ export const APP_BUILD_TAG = "native-scanner-4";
 export interface BuildInfo {
   buildTag: string;
   platform: string;
+  osVersion: string;
   runtime: string;
   executionEnvironment: string;
   expoGoVersion: string | null;
@@ -35,6 +36,7 @@ export function getBuildInfo(): BuildInfo {
   return {
     buildTag: APP_BUILD_TAG,
     platform: Platform.OS,
+    osVersion: String(Platform.Version),
     runtime,
     executionEnvironment: String(Constants.executionEnvironment),
     expoGoVersion: Constants.expoVersion,

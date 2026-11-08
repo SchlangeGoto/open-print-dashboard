@@ -21,6 +21,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -40,6 +47,7 @@ import {
   getStatusLabel,
   getStatusVariant,
 } from "@/lib/utils";
+import FilamentModal from "@/components/modals/FilamentModal";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 
 type Filter = "all" | "printing" | "completed" | "failed";
@@ -79,6 +87,8 @@ export default function PrintsPage() {
   const [sortKey, setSortKey] = useState<SortKey>("finished_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedPrint, setSelectedPrint] = useState<any>(null);
+  const [selectedFilament, setSelectedFilament] = useState<any>(null);
+  const [filamentFilter, setFilamentFilter] = useState<string>("all");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   async function load() {
@@ -119,11 +129,38 @@ export default function PrintsPage() {
     [prints],
   );
 
+  const usedFilaments = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const print of prints) {
+      const filament = getPrintFilament(print, spools, filaments);
+      if (filament) map.set(filament.id, filament);
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      String(a.color_name).localeCompare(String(b.color_name)),
+    );
+  }, [prints, spools, filaments]);
+
+  const filamentOptions = useMemo(
+    () => [
+      { value: "all", label: "All filaments" },
+      ...usedFilaments.map((filament) => ({
+        value: String(filament.id),
+        label: `${filament.color_name} · ${filament.material}`,
+      })),
+    ],
+    [usedFilaments],
+  );
+
   const filtered = useMemo(() => {
     let list = [...prints];
     if (filter !== "all") {
       const s = FILTERS.find((f) => f.key === filter)?.status;
       list = list.filter((p) => p.status === s);
+    }
+    if (filamentFilter !== "all") {
+      list = list.filter(
+        (p) => getPrintFilament(p, spools, filaments)?.id === filamentFilter,
+      );
     }
     list.sort((a, b) => {
       const av = a[sortKey] ?? "";
@@ -131,7 +168,7 @@ export default function PrintsPage() {
       return sortDir === "asc" ? (av > bv ? 1 : -1) : av < bv ? 1 : -1;
     });
     return list;
-  }, [prints, filter, sortKey, sortDir]);
+  }, [prints, filter, filamentFilter, spools, filaments, sortKey, sortDir]);
 
   async function handleDelete(id: string) {
     try {
@@ -169,25 +206,53 @@ export default function PrintsPage() {
         <p className="mt-0.5 text-xs text-muted-foreground">{prints.length} total jobs</p>
       </div>
 
-      <ToggleGroup
-        value={[filter]}
-        onValueChange={(value) => {
-          if (value[0]) setFilter(value[0] as Filter);
-        }}
-        variant="outline"
-        size="sm"
-        spacing={0}
-        className="flex-wrap"
-      >
-        {FILTERS.map((f) => (
-          <ToggleGroupItem key={f.key} value={f.key}>
-            {f.label}
-            <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
-              {counts[f.key]}
-            </span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ToggleGroup
+          value={[filter]}
+          onValueChange={(value) => {
+            if (value[0]) setFilter(value[0] as Filter);
+          }}
+          variant="outline"
+          size="sm"
+          spacing={0}
+          className="flex-wrap"
+        >
+          {FILTERS.map((f) => (
+            <ToggleGroupItem key={f.key} value={f.key}>
+              {f.label}
+              <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+                {counts[f.key]}
+              </span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+
+        <Select
+          value={filamentFilter}
+          onValueChange={(value) => setFilamentFilter(value ?? "all")}
+          items={filamentOptions}
+        >
+          <SelectTrigger
+            size="sm"
+            className="min-w-[190px]"
+            aria-label="Filter by filament"
+          >
+            <SelectValue placeholder="All filaments" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All filaments</SelectItem>
+            {usedFilaments.map((filament) => (
+              <SelectItem key={filament.id} value={String(filament.id)}>
+                <span
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: filament.color_hex ?? "#9ca3af" }}
+                />
+                {filament.color_name} · {filament.material}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -237,7 +302,14 @@ export default function PrintsPage() {
                         {(() => {
                           const filament = getPrintFilament(p, spools, filaments);
                           return filament ? (
-                            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <button
+                              type="button"
+                              className="mt-0.5 flex max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedFilament(filament);
+                              }}
+                            >
                               <span
                                 className="size-2 shrink-0 rounded-full ring-1 ring-foreground/10"
                                 style={{ backgroundColor: filament.color_hex ?? "#9ca3af" }}
@@ -245,7 +317,7 @@ export default function PrintsPage() {
                               <span className="truncate">
                                 {filament.color_name} · {filament.material}
                               </span>
-                            </span>
+                            </button>
                           ) : (
                             <span className="mt-0.5 block text-[11px] text-muted-foreground">
                               Filament not recorded
@@ -323,7 +395,21 @@ export default function PrintsPage() {
         <PrintJobModal
           print={selectedPrint}
           filament={getPrintFilament(selectedPrint, spools, filaments)}
+          onFilamentClick={(filament) => {
+            setSelectedPrint(null);
+            setSelectedFilament(filament);
+          }}
           onClose={() => setSelectedPrint(null)}
+        />
+      ) : null}
+
+      {selectedFilament ? (
+        <FilamentModal
+          filament={selectedFilament}
+          spools={spools.filter(
+            (spool) => spool.filament_id === selectedFilament.id,
+          )}
+          onClose={() => setSelectedFilament(null)}
         />
       ) : null}
     </div>

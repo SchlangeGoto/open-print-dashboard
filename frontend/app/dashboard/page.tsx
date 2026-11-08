@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
+import FilamentModal from "@/components/modals/FilamentModal";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import PrinterModal from "@/components/modals/PrinterModal";
 import PrinterSettingsModal from "@/components/modals/PrinterSettingsModal";
@@ -43,6 +44,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPrint, setSelectedPrint] = useState<any>(null);
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
+  const [selectedFilament, setSelectedFilament] = useState<any>(null);
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPrinter, setSettingsPrinter] = useState<Printer | null>(null);
@@ -480,6 +482,10 @@ export default function DashboardPage() {
         <PrintJobModal
           print={selectedPrint}
           filament={getPrintFilament(selectedPrint, spools, filaments)}
+          onFilamentClick={(filament) => {
+            setSelectedPrint(null);
+            setSelectedFilament(filament);
+          }}
           onClose={() => setSelectedPrint(null)}
         />
       ) : null}
@@ -490,6 +496,15 @@ export default function DashboardPage() {
             (filament) => filament.id === selectedSpool.filament_id,
           )}
           onClose={() => setSelectedSpool(null)}
+        />
+      ) : null}
+      {selectedFilament ? (
+        <FilamentModal
+          filament={selectedFilament}
+          spools={spools.filter(
+            (spool) => spool.filament_id === selectedFilament.id,
+          )}
+          onClose={() => setSelectedFilament(null)}
         />
       ) : null}
       {selectedPrinter ? (

@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrinterModal from "@/components/modals/PrinterModal";
 import PrinterSettingsModal from "@/components/modals/PrinterSettingsModal";
+import FilamentModal from "@/components/modals/FilamentModal";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import SpoolModal from "@/components/modals/SpoolModal";
 
@@ -34,6 +35,7 @@ export default function PrintersPage() {
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
   const [selectedPrint, setSelectedPrint] = useState<any | null>(null);
   const [selectedSpool, setSelectedSpool] = useState<any | null>(null);
+  const [selectedFilament, setSelectedFilament] = useState<any | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPrinter, setSettingsPrinter] = useState<Printer | null>(null);
 
@@ -381,6 +383,10 @@ export default function PrintersPage() {
         <PrintJobModal
           print={selectedPrint}
           filament={getPrintFilament(selectedPrint, spools, filaments)}
+          onFilamentClick={(filament) => {
+            setSelectedPrint(null);
+            setSelectedFilament(filament);
+          }}
           onClose={() => setSelectedPrint(null)}
         />
       ) : null}
@@ -392,6 +398,16 @@ export default function PrintersPage() {
             (filament) => filament.id === selectedSpool.filament_id,
           )}
           onClose={() => setSelectedSpool(null)}
+        />
+      ) : null}
+
+      {selectedFilament ? (
+        <FilamentModal
+          filament={selectedFilament}
+          spools={spools.filter(
+            (spool) => spool.filament_id === selectedFilament.id,
+          )}
+          onClose={() => setSelectedFilament(null)}
         />
       ) : null}
     </div>

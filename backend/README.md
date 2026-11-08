@@ -38,8 +38,23 @@ All endpoints live under `/api/v1`.
 
 ## Authentication
 
-Email + password, JWT bearer tokens. `POST /api/v1/login/access-token` returns a token;
-protected routes expect `Authorization: Bearer <token>`.
+Email + password with short-lived JWT access tokens and rotating opaque refresh
+tokens.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/v1/login/access-token` | Returns `access_token`, `refresh_token`, `token_type`, `expires_in` |
+| `POST /api/v1/login/refresh` | Rotates the refresh token and returns a new pair |
+| `POST /api/v1/login/logout` | Revokes the supplied refresh token |
+
+Protected routes expect `Authorization: Bearer <access_token>`.
+
+- Access tokens default to 60 minutes (`ACCESS_TOKEN_EXPIRE_MINUTES`).
+- Refresh tokens default to 90 days (`REFRESH_TOKEN_EXPIRE_DAYS`).
+- Refresh tokens are stored only as SHA-256 hashes.
+- Refresh tokens are single-use. Reusing a rotated or revoked token revokes
+  every active session for that user.
+- Password reset and password changes revoke all refresh tokens.
 
 The first account is created by the setup wizard via `POST /api/v1/users/signup`
 (only allowed while no account exists). Alternatively set `FIRST_SUPERUSER` and

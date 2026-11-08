@@ -127,9 +127,9 @@ def login_access_token(
 def refresh_access_token(session: SessionDep, body: RefreshTokenRequest) -> Token:
     """Rotate a refresh token and issue a new access token.
 
-    Refresh tokens are single-use. Reusing an already rotated token outside a
-    short retry window revokes every session for that user, which limits the
-    damage from a stolen token.
+    Refresh tokens are single-use. Reusing any already rotated or revoked
+    token revokes every active session for that user, which limits the damage
+    from a stolen token.
     """
     token_hash = security.hash_refresh_token(body.refresh_token)
     stored = session.exec(
@@ -148,12 +148,6 @@ def refresh_access_token(session: SessionDep, body: RefreshTokenRequest) -> Toke
         raise _refresh_error("Refresh token expired")
 
     if stored.revoked_at is not None:
-        revoked_at = _as_utc(stored.revoked_at)
-        grace = timedelta(seconds=settings.REFRESH_TOKEN_REUSE_GRACE_SECONDS)
-        if now - revoked_at <= grace:
-            # A racing tab or a retried request. Reject the old token but do
-            # not punish the other active sessions.
-            raise _refresh_error("Refresh token already rotated")
         _revoke_all_refresh_tokens(session, stored.user_id, now)
         session.commit()
         raise _refresh_error("Refresh token reuse detected")
@@ -236,7 +230,6 @@ def reset_password(session: SessionDep, body: NewPassword) -> Message:
         db_user=user,
         user_in=UserUpdate(password=body.new_password),
     )
-    crud.revoke_user_refresh_tokens(session=session, user_id=user.id)
     return Message(message="Password updated successfully")
 
 

@@ -26,9 +26,6 @@ class Settings(BaseSettings):
     # the session is active.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 90
-    # A just-rotated token may be retried by a racing tab without treating it
-    # as a stolen token. After this window, reuse revokes every session.
-    REFRESH_TOKEN_REUSE_GRACE_SECONDS: int = 30
     FRONTEND_HOST: str = "http://localhost:3000"
     FASTAPI_ENV: Literal["development"] | None = None
 

@@ -87,7 +87,7 @@ async function withRefreshLock<T>(callback: () => Promise<T>): Promise<T> {
   return callback();
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+async function refreshAccessToken(force = false): Promise<string | null> {
   if (typeof window === "undefined") return null;
   if (refreshPromise) return refreshPromise;
 
@@ -96,30 +96,48 @@ async function refreshAccessToken(): Promise<string | null> {
     if (epoch !== tokenEpoch) return null;
 
     // Another tab may have refreshed while this one waited for the lock.
-    if (accessTokenIsFresh()) return getAccessToken();
+    if (!force && accessTokenIsFresh()) return getAccessToken();
 
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
-      clearTokens();
-      notifySessionExpired();
+      if (hasStoredSession()) {
+        clearTokens();
+        notifySessionExpired();
+      }
       return null;
     }
 
-    const res = await fetch(`${API_ROOT}/login/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_ROOT}/login/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+    } catch {
+      // Keep the session on a temporary network failure.
+      return null;
+    }
 
     if (epoch !== tokenEpoch) return null;
 
     if (!res.ok) {
-      clearTokens();
-      notifySessionExpired();
+      // 400/401/403 mean the refresh token itself is no longer valid.
+      // 5xx/429 are transient and must not destroy a valid session.
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        clearTokens();
+        notifySessionExpired();
+      }
       return null;
     }
 
-    const tokens = (await res.json()) as TokenResponse;
+    let tokens: TokenResponse;
+    try {
+      tokens = (await res.json()) as TokenResponse;
+    } catch {
+      // A truncated response is a server problem, not a revoked session.
+      return null;
+    }
     if (epoch !== tokenEpoch) return null;
     storeTokens(tokens);
     return tokens.access_token;
@@ -143,8 +161,14 @@ async function fetchWithAuth(
 
   const res = await fetch(url, { ...options, headers });
 
-  if (res.status === 401 && retry) {
-    const newToken = await refreshAccessToken();
+  // Only refresh for this app's own token challenge. Other 401s (for example
+  // an unlinked Bambu Cloud account) must not sign the user out.
+  const isAuthChallenge =
+    res.status === 401 &&
+    res.headers.get("www-authenticate")?.toLowerCase().includes("bearer");
+
+  if (isAuthChallenge && retry) {
+    const newToken = await refreshAccessToken(true);
     if (newToken) {
       const retryHeaders = new Headers(options.headers);
       retryHeaders.set("Authorization", `Bearer ${newToken}`);

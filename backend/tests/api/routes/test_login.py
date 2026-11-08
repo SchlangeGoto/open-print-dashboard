@@ -1,8 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
@@ -57,56 +56,77 @@ def test_refresh_token_rotates(client: TestClient) -> None:
     assert r.status_code == 200
 
 
-def test_refresh_token_reuse_is_detected(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tokens = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
+def test_refresh_token_reuse_revokes_all_sessions(client: TestClient) -> None:
+    first = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
+    second = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
+
     r = client.post(
         f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
+        json={"refresh_token": first["refresh_token"]},
     )
+    assert r.status_code == 200
     rotated = r.json()
 
-    monkeypatch.setattr(settings, "REFRESH_TOKEN_REUSE_GRACE_SECONDS", 0)
+    # Replaying the already-rotated token triggers reuse detection.
     r = client.post(
         f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
+        json={"refresh_token": first["refresh_token"]},
     )
     assert r.status_code == 401
     assert "reuse" in r.json()["detail"].lower()
 
-    # Reuse detection revokes the rotation chain, so the latest token is dead.
-    r = client.post(
-        f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": rotated["refresh_token"]},
-    )
-    assert r.status_code == 401
+    # Every session, including the latest rotation and the second login, dies.
+    for token in (rotated["refresh_token"], second["refresh_token"]):
+        r = client.post(
+            f"{settings.API_V1_STR}/login/refresh",
+            json={"refresh_token": token},
+        )
+        assert r.status_code == 401
 
 
-def test_refresh_token_reuse_within_grace_keeps_session(
-    client: TestClient,
-) -> None:
-    tokens = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
-    r = client.post(
-        f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
-    )
-    rotated = r.json()
-
-    # An immediate retry of the old token is rejected but must not kill the
-    # rotated session.
-    r = client.post(
-        f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
-    )
-    assert r.status_code == 401
-    assert "already rotated" in r.json()["detail"].lower()
+def test_logout_keeps_other_sessions_alive(client: TestClient) -> None:
+    first = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
+    second = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
 
     r = client.post(
-        f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": rotated["refresh_token"]},
+        f"{settings.API_V1_STR}/login/logout",
+        json={"refresh_token": first["refresh_token"]},
     )
     assert r.status_code == 200
+
+    r = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": second["refresh_token"]},
+    )
+    assert r.status_code == 200
+
+
+def test_refresh_tokens_are_stored_hashed(
+    client: TestClient, db: Session
+) -> None:
+    tokens = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
+    user = crud.get_user_by_email(session=db, email=TEST_SUPERUSER_EMAIL)
+    assert user
+
+    stored = db.exec(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.token_hash == hash_refresh_token(tokens["refresh_token"]),
+        )
+    ).first()
+    assert stored
+    assert stored.token_hash != tokens["refresh_token"]
+
+
+def test_invalid_access_token_returns_401_challenge(
+    client: TestClient,
+) -> None:
+    r = client.get(
+        f"{settings.API_V1_STR}/users/me",
+        headers={"Authorization": "Bearer not-a-real-token"},
+    )
+    assert r.status_code == 401
+    assert r.headers["www-authenticate"] == "Bearer"
 
 
 def test_refresh_token_after_logout(client: TestClient) -> None:
@@ -244,6 +264,66 @@ def test_reset_password_revokes_refresh_tokens(
     r = client.post(
         f"{settings.API_V1_STR}/reset-password/",
         json={"new_password": new_password, "token": token},
+    )
+    assert r.status_code == 200
+
+    r = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert r.status_code == 401
+
+
+def test_admin_password_change_revokes_refresh_tokens(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    email = random_email()
+    password = random_lower_string()
+    new_password = random_lower_string()
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=email, password=password, full_name="Test User"
+        ),
+    )
+    tokens = login(client, email, password)
+
+    r = client.patch(
+        f"{settings.API_V1_STR}/users/{user.id}",
+        headers=superuser_token_headers,
+        json={"password": new_password},
+    )
+    assert r.status_code == 200
+
+    r = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert r.status_code == 401
+    login(client, email, new_password)
+
+
+def test_self_password_change_revokes_refresh_tokens(
+    client: TestClient, db: Session
+) -> None:
+    email = random_email()
+    password = random_lower_string()
+    new_password = random_lower_string()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=email, password=password, full_name="Test User"
+        ),
+    )
+    tokens = login(client, email, password)
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    r = client.patch(
+        f"{settings.API_V1_STR}/users/me/password",
+        headers=headers,
+        json={"current_password": password, "new_password": new_password},
     )
     assert r.status_code == 200
 

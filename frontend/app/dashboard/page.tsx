@@ -157,7 +157,6 @@ export default function DashboardPage() {
               <BarChart
                 accessibilityLayer
                 data={filamentChartData}
-                barSize={36}
                 margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
               >
                 <XAxis

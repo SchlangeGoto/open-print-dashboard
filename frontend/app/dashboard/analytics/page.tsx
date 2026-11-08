@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -333,7 +335,7 @@ function UsageBarChart({ data, label }: { data: UsageDatum[]; label: string }) {
             />
           }
         />
-        <Bar dataKey="value" name={label} radius={[0, 4, 4, 0]} barSize={22}>
+        <Bar dataKey="value" name={label} radius={5}>
           {data.map((entry) => (
             <Cell
               key={entry.name}
@@ -765,20 +767,32 @@ export default function AnalyticsPage() {
               config={activityChartConfig}
               className="h-[220px] w-full"
             >
-              <BarChart
+              <AreaChart
                 accessibilityLayer
                 data={activityData}
-                barSize={
-                  range === "30d"
-                    ? 8
-                    : range === "7d"
-                      ? 24
-                      : range === "12m"
-                        ? 18
-                        : 24
-                }
-                margin={{ top: 4, right: 20, left: 0, bottom: 0 }}
+                margin={{ top: 8, right: 20, left: 0, bottom: 0 }}
               >
+                <defs>
+                  <linearGradient
+                    id={`activity-fill-${metric}`}
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="5%"
+                      stopColor={`var(--color-${metric})`}
+                      stopOpacity={0.8}
+                    />
+                    <stop
+                      offset="95%"
+                      stopColor={`var(--color-${metric})`}
+                      stopOpacity={0.1}
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
@@ -800,24 +814,28 @@ export default function AnalyticsPage() {
                     formatMetricValue(Number(value), metric, true)
                   }
                 />
-                <CartesianGrid vertical={false} />
                 <ChartTooltip
                   cursor={false}
                   content={
                     <ChartTooltipContent
+                      indicator="line"
                       formatter={(value) =>
                         formatMetricValue(Number(value), metric)
                       }
                     />
                   }
                 />
-                <Bar
+                <Area
                   dataKey={metric}
-                  fill={`var(--color-${metric})`}
-                  radius={[3, 3, 0, 0]}
                   name={METRIC_LABELS[metric]}
+                  type="natural"
+                  stroke={`var(--color-${metric})`}
+                  strokeWidth={2}
+                  fill={`url(#activity-fill-${metric})`}
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
-              </BarChart>
+              </AreaChart>
             </ChartContainer>
           )}
         </CardContent>

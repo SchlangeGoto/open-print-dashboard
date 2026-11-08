@@ -28,6 +28,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Props {
   printer?: Printer | null;
@@ -200,7 +201,7 @@ export default function PrinterSettingsModal({
               onClick={handleReconnect}
               disabled={reconnecting}
             >
-              <RefreshCw className={reconnecting ? "animate-spin" : undefined} />
+              {reconnecting ? <Spinner /> : <RefreshCw />}
               Reconnect printer
             </Button>
           ) : null}

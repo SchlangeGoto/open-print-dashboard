@@ -30,6 +30,7 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -411,6 +412,16 @@ export default function SpoolsPage() {
                 placeholder="04:A2:3F:…"
                 value={form.nfc_uid}
                 onChange={(e) => setForm({ ...form, nfc_uid: e.target.value })}
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="spool-notes">Notes</FieldLabel>
+              <Textarea
+                id="spool-notes"
+                placeholder="Optional notes…"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </Field>
 

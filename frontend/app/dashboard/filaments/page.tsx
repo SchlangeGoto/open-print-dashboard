@@ -30,6 +30,7 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -383,6 +384,16 @@ export default function FilamentsPage() {
                 placeholder="GFL99"
                 value={form.bambu_info_idx}
                 onChange={(e) => setForm({ ...form, bambu_info_idx: e.target.value })}
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="filament-notes">Notes</FieldLabel>
+              <Textarea
+                id="filament-notes"
+                placeholder="Optional notes…"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </Field>
 

@@ -11,6 +11,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/lib/auth";
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
@@ -20,7 +21,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-background">
         <div className="flex items-center gap-3 text-muted-foreground">
-          <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <Spinner className="text-primary" />
           <span className="text-sm">Loading...</span>
         </div>
       </div>

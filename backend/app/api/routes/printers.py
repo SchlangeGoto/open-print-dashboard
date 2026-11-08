@@ -25,7 +25,7 @@ router = APIRouter(
 )
 
 
-def _cloud_devices() -> list[dict]:
+def _cloud_devices() -> list[dict[str, Any]]:
     try:
         return printer_service.cloud_client.get_devices()
     except Exception as exc:  # noqa: BLE001
@@ -33,36 +33,48 @@ def _cloud_devices() -> list[dict]:
         return []
 
 
-def _cloud_statuses() -> dict[str, dict]:
+def _cloud_statuses() -> dict[str, dict[str, Any]]:
     try:
         statuses = printer_service.cloud_client.get_cloud_print_status()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not load cloud printer status: %s", exc)
         return {}
     return {
-        str(status.get("dev_id")): status
-        for status in statuses
-        if status.get("dev_id")
+        str(status.get("dev_id")): status for status in statuses if status.get("dev_id")
     }
 
 
 def _serialize_printers(
     *,
     printer: Printer | None = None,
-    cloud_device: dict | None = None,
-    status: dict | None = None,
-    statuses: dict[str, dict] | None = None,
-    cloud_statuses: dict[str, dict] | None = None,
+    cloud_device: dict[str, Any] | None = None,
+    status: dict[str, Any] | None = None,
+    statuses: dict[str, dict[str, Any]] | None = None,
+    cloud_statuses: dict[str, dict[str, Any]] | None = None,
 ) -> PrinterPublic:
-    serial = printer.serial if printer else str(cloud_device.get("dev_id"))
-    status = status or (statuses or {}).get(serial) or (cloud_statuses or {}).get(serial)
+    if printer is not None:
+        serial = printer.serial
+    elif cloud_device is not None:
+        serial = str(cloud_device.get("dev_id"))
+    else:
+        raise ValueError("A local or cloud printer is required")
+
+    status = (
+        status or (statuses or {}).get(serial) or (cloud_statuses or {}).get(serial)
+    )
     connected = bool(status and status.get("connected"))
     cloud_online = bool(cloud_device and cloud_device.get("online"))
     online = connected or cloud_online or bool(status and status.get("gcode_state"))
 
     return PrinterPublic(
         id=printer.id if printer else None,
-        name=printer.name if printer else str(cloud_device.get("name") or serial),
+        name=(
+            printer.name
+            if printer
+            else str(cloud_device.get("name") or serial)
+            if cloud_device
+            else serial
+        ),
         serial=serial,
         model=cloud_device.get("dev_model_name") if cloud_device else None,
         ip=printer.ip if printer else None,

@@ -32,9 +32,7 @@ def _unload_other_spools(
     *, session: SessionDep, printer_id: uuid.UUID, keep_id: uuid.UUID
 ) -> None:
     others = session.exec(
-        select(Spool).where(
-            Spool.printer_id == printer_id, col(Spool.id) != keep_id
-        )
+        select(Spool).where(Spool.printer_id == printer_id, col(Spool.id) != keep_id)
     ).all()
     for spool in others:
         spool.active = False
@@ -54,9 +52,7 @@ def read_spools(session: SessionDep, filament_id: uuid.UUID | None = None) -> An
 
 
 @router.get("/active", response_model=SpoolPublic)
-def read_active_spool(
-    session: SessionDep, printer_id: uuid.UUID | None = None
-) -> Any:
+def read_active_spool(session: SessionDep, printer_id: uuid.UUID | None = None) -> Any:
     """Return a loaded spool, optionally scoped to one printer."""
     query = select(Spool).where(col(Spool.active).is_(True))
     if printer_id:

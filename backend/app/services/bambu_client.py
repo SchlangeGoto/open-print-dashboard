@@ -290,9 +290,7 @@ class BambuClient:
         ).first()
         if not printer:
             return None
-        return session.exec(
-            select(Spool).where(Spool.printer_id == printer.id)
-        ).first()
+        return session.exec(select(Spool).where(Spool.printer_id == printer.id)).first()
 
     def _save_print_job_init(self) -> None:
         """Fetch cloud data and save a PrintJob when a print starts."""

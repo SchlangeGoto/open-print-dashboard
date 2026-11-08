@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
@@ -300,7 +301,7 @@ class PrinterPublic(SQLModel):
     access_code: str | None = None
     online: bool = False
     configured: bool = False
-    status: dict | None = None
+    status: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

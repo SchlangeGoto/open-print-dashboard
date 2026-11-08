@@ -27,6 +27,7 @@ import { ColorDot } from "@/components/ui/color-dot";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/lib/auth";
+import { APP_BUILD_TAG } from "@/lib/build-info";
 import { formatError, formatWeight } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
@@ -600,6 +601,11 @@ export default function ScanScreen() {
           Known Bambu boxes are created automatically. For other brands, the app
           asks for the colour and material once.
         </AppText>
+
+        <AppText variant="caption" faint style={styles.buildTag}>
+          Scanner: {useEmbeddedScanner ? "in-app camera" : "native system"} ·
+          build {APP_BUILD_TAG}
+        </AppText>
       </ScrollView>
     </Screen>
   );
@@ -770,5 +776,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     paddingHorizontal: spacing.md,
+  },
+  buildTag: {
+    textAlign: "center",
+    fontFamily: "monospace",
+    fontSize: 10,
   },
 });

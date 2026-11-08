@@ -4,9 +4,11 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
+  DevSettings,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   View,
 } from "react-native";
@@ -19,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { testServerConnection } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { getBuildInfo } from "@/lib/build-info";
 import { formatError, getInitials } from "@/lib/format";
 import { spacing, useTheme } from "@/lib/theme";
 
@@ -33,6 +36,18 @@ export default function SettingsScreen() {
   >(null);
 
   const version = Constants.expoConfig?.version ?? "0.1.0";
+  const build = getBuildInfo();
+  const diagnostics = [
+    `Open Print Dashboard ${version}`,
+    `Build: ${build.buildTag}`,
+    `Runtime: ${build.runtime}`,
+    `Execution environment: ${build.executionEnvironment}`,
+    `Platform: ${build.platform}`,
+    `Expo Go: ${build.expoGoVersion ?? "—"}`,
+    `Expo SDK: ${build.sdkVersion ?? "—"}`,
+    `Metro host: ${build.metroHost ?? "—"}`,
+    `Native scanner: ${build.nativeScannerAvailable ? "available" : "unavailable"}`,
+  ].join("\n");
 
   async function handleTestConnection() {
     if (!serverUrl) return;
@@ -46,6 +61,10 @@ export default function SettingsScreen() {
     } finally {
       setTesting(false);
     }
+  }
+
+  function handleShareDiagnostics() {
+    void Share.share({ message: diagnostics });
   }
 
   function handleLogout() {
@@ -211,6 +230,70 @@ export default function SettingsScreen() {
         </Card>
 
         <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitle}>
+              <View
+                style={[
+                  styles.iconWrap,
+                  { backgroundColor: `${theme.colors.accent}18` },
+                ]}
+              >
+                <Ionicons
+                  name="construct-outline"
+                  size={18}
+                  color={theme.colors.accent}
+                />
+              </View>
+              <AppText variant="heading">App & build</AppText>
+            </View>
+            <AppText variant="mono" color={theme.colors.accent} selectable>
+              {build.buildTag}
+            </AppText>
+          </View>
+
+          <AppText variant="caption" muted style={styles.bodyText}>
+            If this tag is not the latest one, the phone is still running an old
+            JS bundle. Share the diagnostics if you need a second pair of eyes.
+          </AppText>
+
+          <View style={styles.diagnostics}>
+            <DiagnosticRow label="Version" value={`v${version}`} />
+            <DiagnosticRow label="Runtime" value={build.runtime} />
+            <DiagnosticRow
+              label="Native scanner"
+              value={
+                build.nativeScannerAvailable ? "Available" : "Unavailable"
+              }
+              valueColor={
+                build.nativeScannerAvailable
+                  ? theme.colors.success
+                  : theme.colors.warning
+              }
+            />
+            <DiagnosticRow
+              label="Metro host"
+              value={build.metroHost ?? "Not connected"}
+            />
+            <DiagnosticRow label="SDK" value={build.sdkVersion ?? "—"} />
+          </View>
+
+          <AppButton
+            title="Share diagnostics"
+            variant="secondary"
+            size="sm"
+            onPress={handleShareDiagnostics}
+          />
+          {__DEV__ ? (
+            <AppButton
+              title="Reload JS"
+              variant="ghost"
+              size="sm"
+              onPress={() => DevSettings.reload()}
+            />
+          ) : null}
+        </Card>
+
+        <Card style={styles.section}>
           <View style={styles.sectionTitle}>
             <View
               style={[
@@ -256,6 +339,31 @@ export default function SettingsScreen() {
   );
 }
 
+function DiagnosticRow({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
+  return (
+    <View style={styles.diagnosticRow}>
+      <AppText variant="caption" muted>
+        {label}
+      </AppText>
+      <AppText
+        variant="caption"
+        color={valueColor}
+        style={styles.diagnosticValue}
+      >
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
@@ -296,6 +404,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+  },
+  diagnostics: {
+    gap: spacing.sm,
+  },
+  diagnosticRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  diagnosticValue: {
+    flexShrink: 1,
+    textAlign: "right",
+    fontFamily: "monospace",
   },
   testRow: {
     flexDirection: "row",

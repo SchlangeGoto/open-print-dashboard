@@ -41,8 +41,9 @@ export default function ScanScreen() {
   const requested = useRef(false);
   const scanLock = useRef(false);
   const focusedRef = useRef(false);
+  const resultRef = useRef<BarcodeScanResult | null>(null);
   const [focused, setFocused] = useState(false);
-  const [scanning, setScanning] = useState(true);
+  const [previewReady, setPreviewReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [torch, setTorch] = useState(false);
   const [manual, setManual] = useState("");
@@ -67,9 +68,10 @@ export default function ScanScreen() {
       setFocused(true);
       return () => {
         focusedRef.current = false;
+        resultRef.current = null;
         setFocused(false);
+        setPreviewReady(false);
         setTorch(false);
-        setScanning(true);
         setResult(null);
         setError(null);
         setManual("");
@@ -79,18 +81,20 @@ export default function ScanScreen() {
 
   async function handleCode(raw: string) {
     const code = raw.trim();
-    if (!code || busy || scanLock.current) return;
+    if (!code || scanLock.current) return;
 
     // State updates are async; the ref is the synchronous guard against
     // multiple decoded frames creating duplicate spools.
     scanLock.current = true;
+    resultRef.current = null;
+    setResult(null);
     setBusy(true);
     setError(null);
-    setScanning(false);
 
     try {
       const scan = await api.scanBarcode(code);
       if (!focusedRef.current) return;
+      resultRef.current = scan;
       setResult(scan);
       void Haptics.notificationAsync(
         scan.found
@@ -100,7 +104,6 @@ export default function ScanScreen() {
     } catch (err) {
       if (!focusedRef.current) return;
       setError(formatError(err));
-      setScanning(true);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       scanLock.current = false;
@@ -109,18 +112,22 @@ export default function ScanScreen() {
   }
 
   function handleBarcodeScanned(scan: BarcodeScanningResult) {
-    if (!scanning || busy || result || scanLock.current) return;
+    if (!focusedRef.current || scanLock.current) return;
+    // Keep the camera live after a result: a different box scans immediately.
+    // The same code is ignored until "Scan next" so one box cannot create
+    // duplicate spools frame after frame.
+    if (resultRef.current?.code === scan.data) return;
     void handleCode(scan.data);
   }
 
   function resetScan() {
+    resultRef.current = null;
     setResult(null);
     setError(null);
     setManual("");
-    setScanning(true);
   }
 
-  const cameraHeight = Math.min(Math.max(width * 0.62, 250), 360);
+  const cameraHeight = Math.min(Math.max(width * 0.78, 300), 420);
   const cameraActive = focused && Boolean(permission?.granted);
 
   return (
@@ -168,9 +175,8 @@ export default function ScanScreen() {
               facing="back"
               enableTorch={torch}
               barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
-              onBarcodeScanned={
-                scanning && !result && !busy ? handleBarcodeScanned : undefined
-              }
+              onBarcodeScanned={handleBarcodeScanned}
+              onCameraReady={() => setPreviewReady(true)}
             />
           ) : (
             <View style={styles.cameraFallback}>
@@ -204,22 +210,41 @@ export default function ScanScreen() {
             </View>
           )}
 
-          {cameraActive ? (
-            <>
-              <View style={styles.scanFrame}>
-                <View style={[styles.corner, styles.cornerTopLeft]} />
-                <View style={[styles.corner, styles.cornerTopRight]} />
-                <View style={[styles.corner, styles.cornerBottomLeft]} />
-                <View style={[styles.corner, styles.cornerBottomRight]} />
-              </View>
-              <View style={styles.cameraHint}>
-                <AppText variant="caption" color="rgba(255,255,255,0.9)">
-                  {busy
-                    ? "Looking up barcode…"
-                    : "Point the camera at an EAN barcode"}
-                </AppText>
-              </View>
-            </>
+          {cameraActive && previewReady && !busy ? (
+            <View style={styles.cameraHint}>
+              {result ? (
+                <Pressable
+                  accessibilityRole="button"
+                  style={styles.scanNextButton}
+                  onPress={resetScan}
+                >
+                  <Ionicons name="scan" size={17} color="#fff" />
+                  <AppText variant="label" color="#fff">
+                    Scan next barcode
+                  </AppText>
+                </Pressable>
+              ) : (
+                <View style={styles.hintPill}>
+                  <Ionicons name="scan-outline" size={14} color="#fff" />
+                  <AppText
+                    variant="caption"
+                    color="rgba(255,255,255,0.92)"
+                    style={styles.hintText}
+                  >
+                    Scanning automatically — hold the product barcode in view
+                  </AppText>
+                </View>
+              )}
+            </View>
+          ) : null}
+
+          {cameraActive && !previewReady ? (
+            <View style={styles.startingOverlay}>
+              <ActivityIndicator color="#fff" />
+              <AppText color="#fff" variant="caption">
+                Starting camera…
+              </AppText>
+            </View>
           ) : null}
 
           {busy ? (
@@ -444,53 +469,45 @@ const styles = StyleSheet.create({
   center: {
     textAlign: "center",
   },
-  scanFrame: {
-    position: "absolute",
-    left: "12%",
-    right: "12%",
-    top: "22%",
-    bottom: "22%",
-  },
-  corner: {
-    position: "absolute",
-    width: 28,
-    height: 28,
-    borderColor: "rgba(255,255,255,0.9)",
-  },
-  cornerTopLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderTopLeftRadius: 10,
-  },
-  cornerTopRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderTopRightRadius: 10,
-  },
-  cornerBottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomLeftRadius: 10,
-  },
-  cornerBottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderBottomRightRadius: 10,
-  },
   cameraHint: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: spacing.md,
+    right: spacing.md,
     bottom: spacing.md,
     alignItems: "center",
+  },
+  hintPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: "rgba(0,0,0,0.62)",
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    maxWidth: "100%",
+  },
+  hintText: {
+    flexShrink: 1,
+  },
+  scanNextButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: "rgba(45,212,191,0.92)",
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  startingOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
   },
   busyOverlay: {
     position: "absolute",

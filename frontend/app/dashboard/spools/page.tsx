@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Archive, Check, Package, Pencil, Plus, Trash2, Zap } from "lucide-react";
 
-import { api } from "@/lib/api";
+import { api, type Printer } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,16 +42,19 @@ import {
 } from "@/components/ui/select";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import { formatDate, formatWeight, stockColor } from "@/lib/utils";
+import LoadSpoolModal from "@/components/modals/LoadSpoolModal";
 import SpoolModal from "@/components/modals/SpoolModal";
 
 export default function SpoolsPage() {
   const [spools, setSpools] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
+  const [printers, setPrinters] = useState<Printer[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
+  const [loadingSpool, setLoadingSpool] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -66,9 +69,14 @@ export default function SpoolsPage() {
 
   async function load() {
     try {
-      const [sp, fil] = await Promise.all([api.getSpools(), api.getFilaments()]);
+      const [sp, fil, devices] = await Promise.all([
+        api.getSpools(),
+        api.getFilaments(),
+        api.getPrinters().catch(() => []),
+      ]);
       setSpools(sp);
       setFilaments(fil);
+      setPrinters(devices);
     } finally {
       setLoading(false);
     }
@@ -137,16 +145,6 @@ export default function SpoolsPage() {
       toast.error(err.message || "Failed to save");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleActivate(id: string) {
-    try {
-      await api.activateSpool(id);
-      toast.success("Spool loaded");
-      load();
-    } catch (err: any) {
-      toast.error(err.message);
     }
   }
 
@@ -275,6 +273,13 @@ export default function SpoolsPage() {
                     <p className="text-xs text-muted-foreground">
                       {fil ? `${fil.brand} · ${fil.material}` : "No filament"}
                     </p>
+                    {s.printer_id ? (
+                      <p className="mt-1 text-[10px] text-primary">
+                        Loaded on{" "}
+                        {printers.find((printer) => printer.id === s.printer_id)
+                          ?.name ?? "printer"}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -300,19 +305,17 @@ export default function SpoolsPage() {
                     </span>
                   </div>
 
-                  {!s.active ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleActivate(s.id);
-                      }}
-                    >
-                      <Zap /> Load Spool
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLoadingSpool(s);
+                    }}
+                  >
+                    <Zap /> {s.active ? "Move Spool" : "Load Spool"}
+                  </Button>
                 </CardContent>
               </Card>
             );
@@ -451,11 +454,20 @@ export default function SpoolsPage() {
           spool={selectedSpool}
           filament={getFilament(selectedSpool.filament_id)}
           onClose={() => setSelectedSpool(null)}
-          onActivate={async () => {
-            await api.activateSpool(selectedSpool.id);
+          onRequestLoad={(spool) => {
             setSelectedSpool(null);
-            load();
+            setLoadingSpool(spool);
           }}
+        />
+      ) : null}
+
+      {loadingSpool ? (
+        <LoadSpoolModal
+          spool={loadingSpool}
+          filament={getFilament(loadingSpool.filament_id)}
+          printers={printers}
+          onClose={() => setLoadingSpool(null)}
+          onLoaded={load}
         />
       ) : null}
     </div>

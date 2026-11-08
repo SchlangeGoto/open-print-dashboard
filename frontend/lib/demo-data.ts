@@ -29,6 +29,7 @@ type DemoSpool = {
   remaining_g: number;
   nfc_uid: string | null;
   active: boolean;
+  printer_id?: string | null;
   price_per_kg: number;
   purchased_at: string;
   created_at: string;
@@ -305,7 +306,8 @@ export const DEMO_SPOOLS: DemoSpool[] = [
     total_weight_g: 1000,
     remaining_g: 820,
     nfc_uid: "04:A2:3F:2B",
-    active: false,
+    active: true,
+    printer_id: "0000000a-0000-4000-8000-000000000002",
     price_per_kg: 24.99,
     purchased_at: isoDaysAgo(250, 12, 0),
     created_at: isoDaysAgo(250, 12, 0),
@@ -332,6 +334,7 @@ export const DEMO_SPOOLS: DemoSpool[] = [
     remaining_g: 380,
     nfc_uid: "04:B1:2A:FF",
     active: true,
+    printer_id: "0000000a-0000-4000-8000-000000000001",
     price_per_kg: 24.99,
     purchased_at: isoDaysAgo(220, 12, 0),
     created_at: isoDaysAgo(220, 12, 0),

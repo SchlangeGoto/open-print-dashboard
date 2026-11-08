@@ -215,8 +215,11 @@ const apiImpl = {
     request<any>(`/spools/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteSpool: (id: string) =>
     request<{ message: string }>(`/spools/${id}`, { method: "DELETE" }),
-  activateSpool: (id: string) =>
-    request<any>(`/spools/${id}/activate`, { method: "PUT" }),
+  activateSpool: (id: string, printerId: string) =>
+    request<any>(`/spools/${id}/activate`, {
+      method: "PUT",
+      body: JSON.stringify({ printer_id: printerId }),
+    }),
   scanNfc: (uid: string) =>
     request<any>("/spools/scan", { method: "POST", body: JSON.stringify({ uid }) }),
   assignNfc: (uid: string, spoolId: string) =>

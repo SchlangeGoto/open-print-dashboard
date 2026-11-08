@@ -6,7 +6,12 @@ import { BarChart, Bar, XAxis, YAxis, Cell } from "recharts";
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
-import { chartColor, formatEstimatedEnd, isPrintingStatus } from "@/lib/utils";
+import {
+  chartColor,
+  formatEstimatedEnd,
+  formatWeight,
+  isPrintingStatus,
+} from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,6 +24,7 @@ import { CoverImage } from "@/components/ui/CoverImage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import PrinterModal from "@/components/modals/PrinterModal";
 
@@ -282,6 +288,21 @@ export default function DashboardPage() {
                 activePrints.find((p) => p.device_id === dev.serial) ?? null;
               const remaining =
                 deviceStatus?.mc_remaining_time ?? printerPrint?.mc_remaining_time;
+              const loadedSpool = dev.id
+                ? spools.find((spool) => spool.printer_id === dev.id)
+                : null;
+              const loadedFilament = loadedSpool
+                ? filaments.find(
+                    (filament) => filament.id === loadedSpool.filament_id,
+                  )
+                : null;
+              const loadedPct =
+                loadedSpool && loadedSpool.total_weight_g > 0
+                  ? Math.round(
+                      (loadedSpool.remaining_g / loadedSpool.total_weight_g) *
+                        100,
+                    )
+                  : 0;
 
               return (
                 <Card
@@ -383,6 +404,42 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       </button>
+                    ) : null}
+
+                    {loadedSpool && loadedFilament ? (
+                      <div className="rounded-xl border bg-muted/30 p-3">
+                        <div className="flex items-center gap-3">
+                          <SpoolIndicator
+                            remaining={loadedSpool.remaining_g}
+                            total={loadedSpool.total_weight_g}
+                            color={loadedFilament.color_hex}
+                            size={48}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Loaded spool
+                            </p>
+                            <p className="truncate text-sm font-medium">
+                              {loadedFilament.color_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {loadedFilament.brand} ·{" "}
+                              {loadedFilament.material} ·{" "}
+                              {formatWeight(loadedSpool.remaining_g)}
+                            </p>
+                            <Progress
+                              value={loadedPct}
+                              className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                              style={
+                                {
+                                  "--spool-color":
+                                    loadedFilament.color_hex ?? "#9ca3af",
+                                } as React.CSSProperties
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
                     ) : null}
 
                   </CardContent>

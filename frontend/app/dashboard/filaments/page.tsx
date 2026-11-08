@@ -432,7 +432,6 @@ export default function FilamentsPage() {
           filament={selectedFilament}
           spools={spoolsByFilament[selectedFilament.id] ?? []}
           onClose={() => setSelectedFilament(null)}
-          onRefresh={load}
         />
       ) : null}
     </div>

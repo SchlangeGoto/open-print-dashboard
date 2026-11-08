@@ -352,6 +352,7 @@ export const demoApi: ApiShape = {
       ...data,
       id: newId(),
       active: false,
+      printer_id: null,
       last_used_at: data.last_used_at ?? null,
       created_at: new Date().toISOString(),
     };
@@ -384,13 +385,22 @@ export const demoApi: ApiShape = {
     return delay({ message: "Spool deleted (demo mode)" }, 120);
   },
 
-  activateSpool: (spoolId) => {
+  activateSpool: (spoolId, printerId) => {
     const now = new Date().toISOString();
-    const spools = getSpoolsRaw().map((spool) => ({
-      ...spool,
-      active: spool.id === spoolId,
-      last_used_at: spool.id === spoolId ? now : spool.last_used_at,
-    }));
+    const spools = getSpoolsRaw().map((spool) => {
+      if (spool.id === spoolId) {
+        return {
+          ...spool,
+          active: true,
+          printer_id: printerId,
+          last_used_at: now,
+        };
+      }
+      if (spool.printer_id === printerId) {
+        return { ...spool, active: false, printer_id: null };
+      }
+      return spool;
+    });
     save("spools", spools);
     return delay(
       spools.find((spool) => spool.id === spoolId) ?? { id: spoolId },

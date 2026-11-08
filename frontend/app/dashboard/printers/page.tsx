@@ -11,13 +11,14 @@ import {
 } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
-import { isPrintingStatus } from "@/lib/utils";
+import { formatWeight, isPrintingStatus } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrinterModal from "@/components/modals/PrinterModal";
 import PrinterSettingsModal from "@/components/modals/PrinterSettingsModal";
 import PrintJobModal from "@/components/modals/PrintJobModal";
@@ -25,6 +26,8 @@ import PrintJobModal from "@/components/modals/PrintJobModal";
 export default function PrintersPage() {
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [prints, setPrints] = useState<any[]>([]);
+  const [spools, setSpools] = useState<any[]>([]);
+  const [filaments, setFilaments] = useState<any[]>([]);
   const [firmware, setFirmware] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
@@ -34,12 +37,16 @@ export default function PrintersPage() {
 
   async function load() {
     try {
-      const [devices, jobs] = await Promise.all([
+      const [devices, jobs, spoolList, filamentList] = await Promise.all([
         api.getPrinters().catch(() => []),
         api.getPrintJobs().catch(() => []),
+        api.getSpools().catch(() => []),
+        api.getFilaments().catch(() => []),
       ]);
       setPrinters(devices);
       setPrints(jobs);
+      setSpools(spoolList);
+      setFilaments(filamentList);
 
       const firmwareMap: Record<string, any> = {};
       await Promise.all(
@@ -127,6 +134,20 @@ export default function PrintersPage() {
             const pct = status?.mc_percent ?? activePrint?.mc_percent ?? 0;
             const remaining =
               status?.mc_remaining_time ?? activePrint?.mc_remaining_time;
+            const loadedSpool = printer.id
+              ? spools.find((spool) => spool.printer_id === printer.id)
+              : null;
+            const loadedFilament = loadedSpool
+              ? filaments.find(
+                  (filament) => filament.id === loadedSpool.filament_id,
+                )
+              : null;
+            const loadedPct =
+              loadedSpool && loadedSpool.total_weight_g > 0
+                ? Math.round(
+                    (loadedSpool.remaining_g / loadedSpool.total_weight_g) * 100,
+                  )
+                : 0;
 
             return (
               <Card
@@ -236,6 +257,41 @@ export default function PrintersPage() {
                         <span>{remaining ? `${remaining} min left` : ""}</span>
                       </div>
                     </button>
+                  ) : null}
+
+                  {loadedSpool && loadedFilament ? (
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <div className="flex items-center gap-3">
+                        <SpoolIndicator
+                          remaining={loadedSpool.remaining_g}
+                          total={loadedSpool.total_weight_g}
+                          color={loadedFilament.color_hex}
+                          size={48}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Loaded spool
+                          </p>
+                          <p className="truncate text-sm font-medium">
+                            {loadedFilament.color_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {loadedFilament.brand} · {loadedFilament.material} ·{" "}
+                            {formatWeight(loadedSpool.remaining_g)}
+                          </p>
+                          <Progress
+                            value={loadedPct}
+                            className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                            style={
+                              {
+                                "--spool-color":
+                                  loadedFilament.color_hex ?? "#9ca3af",
+                              } as React.CSSProperties
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
                   ) : null}
 
                   {!printer.configured ? (

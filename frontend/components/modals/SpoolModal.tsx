@@ -21,9 +21,16 @@ interface Props {
   filament?: any;
   onClose: () => void;
   onActivate?: () => Promise<void>;
+  onRequestLoad?: (spool: any) => void;
 }
 
-export default function SpoolModal({ spool, filament, onClose, onActivate }: Props) {
+export default function SpoolModal({
+  spool,
+  filament,
+  onClose,
+  onActivate,
+  onRequestLoad,
+}: Props) {
   const pct = spool
     ? Math.round((spool.remaining_g / spool.total_weight_g) * 100)
     : 0;
@@ -110,8 +117,13 @@ export default function SpoolModal({ spool, filament, onClose, onActivate }: Pro
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
-          {!spool?.active && onActivate ? (
-            <Button className="flex-1" onClick={handleActivate}>
+          {!spool?.active && (onRequestLoad || onActivate) ? (
+            <Button
+              className="flex-1"
+              onClick={() =>
+                onRequestLoad ? onRequestLoad(spool) : handleActivate()
+              }
+            >
               <Zap /> Load Spool
             </Button>
           ) : null}

@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
 
-import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -20,28 +18,15 @@ interface Props {
   filament: any;
   spools?: any[];
   onClose: () => void;
-  onRefresh?: () => void;
 }
 
 export default function FilamentModal({
   filament,
   spools = [],
   onClose,
-  onRefresh,
 }: Props) {
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
   const totalRemaining = spools.reduce((sum, s) => sum + s.remaining_g, 0);
-
-  async function handleActivate(spoolId: string) {
-    try {
-      await api.activateSpool(spoolId);
-      toast.success("Spool activated");
-      onRefresh?.();
-      setSelectedSpool(null);
-    } catch {
-      toast.error("Failed to activate spool");
-    }
-  }
 
   const stats = [
     { label: "In Stock", value: formatWeight(totalRemaining) },
@@ -138,7 +123,6 @@ export default function FilamentModal({
           spool={selectedSpool}
           filament={filament}
           onClose={() => setSelectedSpool(null)}
-          onActivate={() => handleActivate(selectedSpool.id)}
         />
       ) : null}
     </>

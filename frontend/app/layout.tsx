@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
 import { AppearanceProvider } from "@/lib/appearance";
 import { AuthProvider } from "@/lib/auth";
+import { ServiceWorkerRegistration } from "@/components/layout/ServiceWorkerRegistration";
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -21,6 +22,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Open Print Dashboard",
   description: "Bambu Lab 3D Printer Dashboard",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -44,6 +51,7 @@ export default function RootLayout({
               </Toaster>
             </TooltipProvider>
           </AppearanceProvider>
+          <ServiceWorkerRegistration />
         </ThemeProvider>
       </body>
     </html>

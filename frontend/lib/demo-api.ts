@@ -2,6 +2,7 @@ import type { ApiShape } from "./api";
 import { DEMO_USER, demoStorageKey } from "./demo";
 import {
   DEMO_BAMBU_PROFILE,
+  DEMO_BARCODES,
   DEMO_CLOUD_STATUS,
   DEMO_FILAMENTS,
   DEMO_FIRMWARE,
@@ -55,6 +56,55 @@ function getFilamentsRaw(): any[] {
 
 function getSpoolsRaw(): any[] {
   return load("spools", DEMO_SPOOLS as any[]);
+}
+
+function getBarcodeMap(): Record<string, string> {
+  return load("barcode-map", {});
+}
+
+function ensureCatalogFilament(catalog: any): any {
+  const filaments = getFilamentsRaw();
+  const existing = filaments.find(
+    (filament) =>
+      filament.bambu_info_idx === catalog.bambu_info_idx &&
+      filament.color_hex === catalog.color_hex,
+  );
+  if (existing) return existing;
+
+  const filament = {
+    ...catalog,
+    id: newId(),
+    created_at: new Date().toISOString(),
+  };
+  save("filaments", [...filaments, filament]);
+  return filament;
+}
+
+function createBarcodeSpool(
+  code: string,
+  filament: any,
+  totalWeightG?: number,
+): any {
+  const weight = totalWeightG ?? filament.spool_weight_g ?? 1000;
+  const spool = {
+    id: newId(),
+    filament_id: filament.id,
+    total_weight_g: weight,
+    remaining_g: weight,
+    nfc_uid: null,
+    tag_uid: null,
+    barcode: code,
+    source: "barcode",
+    active: false,
+    printer_id: null,
+    price_per_kg: null,
+    purchased_at: null,
+    last_used_at: null,
+    notes: null,
+    created_at: new Date().toISOString(),
+  };
+  save("spools", [...getSpoolsRaw(), spool]);
+  return spool;
 }
 
 function getPrintsRaw(): any[] {
@@ -427,6 +477,62 @@ export const demoApi: ApiShape = {
     });
     save("spools", spools);
     return delay({ ok: true, spool: assigned });
+  },
+
+  scanBarcode: (code) => {
+    const catalog = DEMO_BARCODES[code] ?? null;
+    const map = getBarcodeMap();
+    let filament = map[code]
+      ? getFilamentsRaw().find((item) => item.id === map[code])
+      : null;
+
+    if (!filament && catalog) {
+      filament = ensureCatalogFilament(catalog);
+      save("barcode-map", { ...map, [code]: filament.id });
+    }
+
+    if (!filament) {
+      return delay({
+        found: false,
+        code,
+        filament: null,
+        spool: null,
+        suggested_filament: null,
+      });
+    }
+
+    return delay({
+      found: true,
+      code,
+      filament,
+      spool: createBarcodeSpool(code, filament),
+      suggested_filament: null,
+    });
+  },
+
+  confirmBarcode: (code, filamentData, totalWeightG) => {
+    const map = getBarcodeMap();
+    let filament = map[code]
+      ? getFilamentsRaw().find((item) => item.id === map[code])
+      : null;
+
+    if (!filament) {
+      filament = {
+        ...filamentData,
+        id: newId(),
+        created_at: new Date().toISOString(),
+      };
+      save("filaments", [...getFilamentsRaw(), filament]);
+      save("barcode-map", { ...map, [code]: filament.id });
+    }
+
+    return delay({
+      found: true,
+      code,
+      filament,
+      spool: createBarcodeSpool(code, filament, totalWeightG),
+      suggested_filament: null,
+    });
   },
 
   // ── Health ────────────────────────────────────────────────────────────────

@@ -28,6 +28,9 @@ type DemoSpool = {
   total_weight_g: number;
   remaining_g: number;
   nfc_uid: string | null;
+  tag_uid?: string | null;
+  barcode?: string | null;
+  source?: string | null;
   active: boolean;
   printer_id?: string | null;
   price_per_kg: number;
@@ -472,6 +475,35 @@ export const DEMO_SPOOLS: DemoSpool[] = [
     notes: "Empty",
   },
 ];
+
+export const DEMO_BARCODES: Record<string, any> = {
+  "6975337032380": {
+    sku: "A01-A2-1.75-1000-SPL",
+    brand: "Bambu Lab",
+    material: "PLA",
+    color_name: "Mandarin Orange",
+    color_hex: "#F99963",
+    bambu_info_idx: "GFA01",
+    spool_weight_g: 1000,
+    nozzle_temp_min: 190,
+    nozzle_temp_max: 230,
+    bed_temp: 45,
+    notes: "Bambu PLA Matte · product 11300",
+  },
+  "6975337031376": {
+    sku: "A01-R1-1.75-1000-SPL",
+    brand: "Bambu Lab",
+    material: "PLA",
+    color_name: "Scarlet Red",
+    color_hex: "#DE4343",
+    bambu_info_idx: "GFA01",
+    spool_weight_g: 1000,
+    nozzle_temp_min: 190,
+    nozzle_temp_max: 230,
+    bed_temp: 45,
+    notes: "Bambu PLA Matte · product 11200",
+  },
+};
 
 function spoolPrice(spoolId: string): number {
   return DEMO_SPOOLS.find((spool) => spool.id === spoolId)?.price_per_kg ?? 24.99;

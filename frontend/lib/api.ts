@@ -71,6 +71,14 @@ export interface Printer {
   updated_at: string | null;
 }
 
+export interface BarcodeScanResult {
+  found: boolean;
+  code: string;
+  filament: any | null;
+  spool: any | null;
+  suggested_filament: any | null;
+}
+
 export interface PrinterInput {
   name: string;
   serial: string;
@@ -242,6 +250,20 @@ const apiImpl = {
     request<any>("/spools/scan/assign", {
       method: "POST",
       body: JSON.stringify({ uid, spool_id: spoolId }),
+    }),
+  scanBarcode: (code: string) =>
+    request<BarcodeScanResult>("/spools/scan/barcode", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  confirmBarcode: (code: string, filament: any, totalWeightG?: number) =>
+    request<BarcodeScanResult>("/spools/scan/barcode/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        code,
+        filament,
+        total_weight_g: totalWeightG ?? filament.spool_weight_g ?? 1000,
+      }),
     }),
 
   // Health

@@ -1,8 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "@/lib/toast";
-import { Archive, Check, Package, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import {
+  Archive,
+  Check,
+  Package,
+  Pencil,
+  Plus,
+  ScanLine,
+  Trash2,
+  Zap,
+} from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -188,9 +198,19 @@ export default function SpoolsPage() {
             {spools.length} spools tracked
           </p>
         </div>
-        <Button size="sm" onClick={openCreate} disabled={filaments.length === 0}>
-          <Plus /> Add Spool
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/dashboard/scan" />}
+          >
+            <ScanLine /> Scan Barcode
+          </Button>
+          <Button size="sm" onClick={openCreate} disabled={filaments.length === 0}>
+            <Plus /> Add Spool
+          </Button>
+        </div>
       </div>
 
       {filaments.length === 0 ? (

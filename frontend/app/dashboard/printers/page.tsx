@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
-import { formatWeight, isPrintingStatus } from "@/lib/utils";
+import { formatWeight, getPrintFilament, isPrintingStatus } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -380,6 +380,7 @@ export default function PrintersPage() {
       {selectedPrint ? (
         <PrintJobModal
           print={selectedPrint}
+          filament={getPrintFilament(selectedPrint, spools, filaments)}
           onClose={() => setSelectedPrint(null)}
         />
       ) : null}

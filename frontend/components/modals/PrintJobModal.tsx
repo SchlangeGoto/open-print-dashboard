@@ -22,10 +22,11 @@ import {
 
 interface Props {
   print: any;
+  filament?: any | null;
   onClose: () => void;
 }
 
-export default function PrintJobModal({ print, onClose }: Props) {
+export default function PrintJobModal({ print, filament, onClose }: Props) {
   const stats = [
     { icon: Layers, label: "Weight Used", value: formatWeight(print.weight) },
     { icon: Clock, label: "Duration", value: formatDuration(print.duration_seconds) },
@@ -71,6 +72,36 @@ export default function PrintJobModal({ print, onClose }: Props) {
             </DialogDescription>
           ) : null}
         </DialogHeader>
+
+        {filament ? (
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+            <span
+              className="size-9 shrink-0 rounded-full ring-1 ring-foreground/10"
+              style={{ backgroundColor: filament.color_hex ?? "#9ca3af" }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="mb-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <Layers className="size-3" /> Filament
+              </div>
+              <p className="truncate text-sm font-medium">{filament.color_name}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {[filament.brand, filament.material].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-lg border border-dashed bg-muted/20 p-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Layers className="size-4" />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Filament</p>
+              <p className="text-sm text-muted-foreground">
+                Not recorded for this print
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           {stats.map(({ icon: Icon, label, value }) => (

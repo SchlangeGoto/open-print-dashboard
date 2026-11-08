@@ -36,6 +36,7 @@ import {
   formatDateTime,
   formatDuration,
   formatWeight,
+  getPrintFilament,
   getStatusLabel,
   getStatusVariant,
 } from "@/lib/utils";
@@ -71,6 +72,8 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 
 export default function PrintsPage() {
   const [prints, setPrints] = useState<any[]>([]);
+  const [spools, setSpools] = useState<any[]>([]);
+  const [filaments, setFilaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("finished_at");
@@ -80,7 +83,14 @@ export default function PrintsPage() {
 
   async function load() {
     try {
-      setPrints(await api.getPrintJobs());
+      const [jobs, spoolList, filamentList] = await Promise.all([
+        api.getPrintJobs(),
+        api.getSpools().catch(() => []),
+        api.getFilaments().catch(() => []),
+      ]);
+      setPrints(jobs);
+      setSpools(spoolList);
+      setFilaments(filamentList);
     } finally {
       setLoading(false);
     }
@@ -222,7 +232,27 @@ export default function PrintsPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <CoverImage cover={p.cover} alt={p.title} className="size-9 shrink-0 rounded-lg" />
-                      <span className="max-w-[200px] truncate font-medium">{p.title}</span>
+                      <div className="min-w-0">
+                        <span className="block max-w-[200px] truncate font-medium">{p.title}</span>
+                        {(() => {
+                          const filament = getPrintFilament(p, spools, filaments);
+                          return filament ? (
+                            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <span
+                                className="size-2 shrink-0 rounded-full ring-1 ring-foreground/10"
+                                style={{ backgroundColor: filament.color_hex ?? "#9ca3af" }}
+                              />
+                              <span className="truncate">
+                                {filament.color_name} · {filament.material}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                              Filament not recorded
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -290,7 +320,11 @@ export default function PrintsPage() {
       </AlertDialog>
 
       {selectedPrint ? (
-        <PrintJobModal print={selectedPrint} onClose={() => setSelectedPrint(null)} />
+        <PrintJobModal
+          print={selectedPrint}
+          filament={getPrintFilament(selectedPrint, spools, filaments)}
+          onClose={() => setSelectedPrint(null)}
+        />
       ) : null}
     </div>
   );

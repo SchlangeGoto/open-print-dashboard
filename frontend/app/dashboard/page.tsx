@@ -9,6 +9,7 @@ import {
   chartColor,
   formatEstimatedEnd,
   formatWeight,
+  getPrintFilament,
   isPrintingStatus,
 } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -476,7 +477,11 @@ export default function DashboardPage() {
       </div>
 
       {selectedPrint ? (
-        <PrintJobModal print={selectedPrint} onClose={() => setSelectedPrint(null)} />
+        <PrintJobModal
+          print={selectedPrint}
+          filament={getPrintFilament(selectedPrint, spools, filaments)}
+          onClose={() => setSelectedPrint(null)}
+        />
       ) : null}
       {selectedSpool ? (
         <SpoolModal

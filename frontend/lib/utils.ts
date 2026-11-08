@@ -103,3 +103,17 @@ export function chartColor(color?: string | null): string {
 
   return `#${lighten(r)}${lighten(g)}${lighten(b)}`;
 }
+
+/**
+ * Resolve the filament a print job was printed with through its spool.
+ */
+export function getPrintFilament(
+  print: { spool_id?: string | null } | null | undefined,
+  spools: any[],
+  filaments: any[],
+): any | null {
+  if (!print?.spool_id) return null;
+  const spool = spools.find((item) => item.id === print.spool_id);
+  if (!spool?.filament_id) return null;
+  return filaments.find((item) => item.id === spool.filament_id) ?? null;
+}

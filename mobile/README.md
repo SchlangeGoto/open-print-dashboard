@@ -12,8 +12,10 @@ refresh-token auth.
 - Filament inventory with search, remaining weight, and loaded-printer state
 - Spool details and one-tap loading into a printer
 - Native barcode scanning with `expo-camera`
-  - Known Bambu barcode → creates a filament/spool automatically
+  - Known Bambu EAN/UPC barcode → creates a filament/spool automatically
   - Unknown barcode → one-time filament form, then remembered
+  - Bambu's square box QR is a short link without filament data, so it is
+    intentionally ignored; scan the striped barcode instead
 - Printer overview with online state and loaded spool
 - Automatic access-token refresh, including offline-friendly session handling
 - Light and dark themes

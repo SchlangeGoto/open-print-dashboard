@@ -31,59 +31,7 @@ import { formatError, formatWeight } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
 
-// Bambu Handy adds filament by scanning the QR on the box, not only the EAN.
-// Keep the retail types too so either label works.
-const BARCODE_TYPES: BarcodeType[] = [
-  "ean13",
-  "ean8",
-  "upc_a",
-  "upc_e",
-  "qr",
-  "code128",
-  "code39",
-  "itf14",
-  "datamatrix",
-  "aztec",
-];
-
-interface LastScan {
-  type: string;
-  raw: string;
-  normalized: string;
-}
-
-/**
- * Bambu's QR can contain a GTIN, a SKU (A01-A2-1.75-1000-SPL), a variant
- * (A01-A2), a 5-digit filament code, or a URL around one of those. Extract the
- * useful identifier before sending it to the backend.
- */
-function normalizeScannedData(raw: string): string {
-  const value = raw.trim();
-  if (!value) return "";
-
-  if (/^\d{8,14}$/.test(value)) return value;
-
-  const gtin = value.match(/(?:^|\D)(\d{12,14})(?:\D|$)/);
-  if (gtin) return gtin[1];
-
-  const sku = value.match(
-    /\b([A-Z]\d{2}-[A-Z0-9]{1,4}(?:-\d+(?:\.\d+)?-\d+-[A-Z]+)?)\b/i,
-  );
-  if (sku) {
-    const identifier = sku[1].toUpperCase();
-    // A bare variant ID is enough for the backend once we add the standard
-    // diameter/weight suffix.
-    if (/^[A-Z]\d{2}-[A-Z0-9]{1,4}$/.test(identifier)) {
-      return `${identifier}-1.75-1000-SPL`;
-    }
-    return identifier;
-  }
-
-  const filamentCode = value.match(/\b(\d{5})\b/);
-  if (filamentCode) return filamentCode[1];
-
-  return value;
-}
+const BARCODE_TYPES: BarcodeType[] = ["ean13", "ean8", "upc_a", "upc_e"];
 
 export default function ScanScreen() {
   const { api } = useAuth();
@@ -101,7 +49,6 @@ export default function ScanScreen() {
   const [torch, setTorch] = useState(false);
   const [manual, setManual] = useState("");
   const [result, setResult] = useState<BarcodeScanResult | null>(null);
-  const [lastScan, setLastScan] = useState<LastScan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -127,7 +74,6 @@ export default function ScanScreen() {
         setPreviewReady(false);
         setTorch(false);
         setResult(null);
-        setLastScan(null);
         setError(null);
         setManual("");
       };
@@ -135,7 +81,7 @@ export default function ScanScreen() {
   );
 
   async function handleCode(raw: string) {
-    const code = normalizeScannedData(typeof raw === "string" ? raw : "");
+    const code = typeof raw === "string" ? raw.trim() : "";
     if (!code || scanLock.current) return;
 
     // State updates are async; the ref is the synchronous guard against
@@ -170,17 +116,11 @@ export default function ScanScreen() {
     if (!focusedRef.current || scanLock.current) return;
     const data = typeof scan.data === "string" ? scan.data : "";
     if (!data) return;
-
-    const normalized = normalizeScannedData(data);
-    if (!normalized) return;
-
     // Keep the camera live after a result: a different box scans immediately.
     // The same code is ignored until "Scan next" so one box cannot create
     // duplicate spools frame after frame.
-    if (resultRef.current?.code === normalized) return;
-
-    setLastScan({ type: scan.type, raw: data, normalized });
-    void handleCode(normalized).catch((err) => {
+    if (resultRef.current?.code === data) return;
+    void handleCode(data).catch((err) => {
       if (focusedRef.current) {
         setError(formatError(err));
       }
@@ -190,7 +130,6 @@ export default function ScanScreen() {
   function resetScan() {
     resultRef.current = null;
     setResult(null);
-    setLastScan(null);
     setError(null);
     setManual("");
   }
@@ -352,11 +291,6 @@ export default function ScanScreen() {
 
         {result ? (
           <Card style={styles.resultCard}>
-            {lastScan ? (
-              <AppText variant="caption" faint numberOfLines={3}>
-                Camera read {lastScan.type}: {lastScan.raw}
-              </AppText>
-            ) : null}
             {result.found && result.filament ? (
               <>
                 <View style={styles.resultHeader}>
@@ -505,12 +439,14 @@ export default function ScanScreen() {
         </Card>
 
         <AppText variant="caption" faint style={styles.tip}>
-          Known Bambu boxes are created automatically. For other brands, the app
-          asks for the colour and material once.
+          Scan the striped EAN/UPC barcode on the box. The square Bambu QR is
+          just a short link and does not contain the filament data. Known boxes
+          are created automatically; other brands ask for colour and material
+          once.
         </AppText>
 
         <AppText variant="caption" faint style={styles.buildTag}>
-          Scanner: in-app camera · build {APP_BUILD_TAG}
+          Scanner: in-app barcode · build {APP_BUILD_TAG}
         </AppText>
       </ScrollView>
     </Screen>

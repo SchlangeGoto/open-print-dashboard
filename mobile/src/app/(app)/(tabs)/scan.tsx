@@ -383,7 +383,7 @@ export default function ScanScreen() {
               and closes automatically after one barcode.
             </AppText>
             <AppButton
-              title="Open scanner"
+              title={result ? "Scan another barcode" : "Open scanner"}
               onPress={openSystemScanner}
               icon={
                 <Ionicons
@@ -393,6 +393,22 @@ export default function ScanScreen() {
                 />
               }
             />
+            {permission && !permission.granted ? (
+              <AppButton
+                title={
+                  permission.canAskAgain
+                    ? "Allow camera"
+                    : "Open device settings"
+                }
+                variant="secondary"
+                size="sm"
+                onPress={() =>
+                  permission.canAskAgain
+                    ? requestPermission()
+                    : Linking.openSettings()
+                }
+              />
+            ) : null}
             <AppText variant="caption" faint style={styles.center}>
               The system scanner has its own torch and zoom controls.
             </AppText>

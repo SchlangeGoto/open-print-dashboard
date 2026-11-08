@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Zap } from "lucide-react";
+import { Check, Pencil, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
-import { formatCurrency, formatDate, formatWeight, stockColor } from "@/lib/utils";
+import { formatCurrency, formatDate, formatWeight } from "@/lib/utils";
 
 interface Props {
   spool: any;
@@ -22,6 +22,7 @@ interface Props {
   onClose: () => void;
   onActivate?: () => Promise<void>;
   onRequestLoad?: (spool: any) => void;
+  onEdit?: (spool: any) => void;
 }
 
 export default function SpoolModal({
@@ -30,6 +31,7 @@ export default function SpoolModal({
   onClose,
   onActivate,
   onRequestLoad,
+  onEdit,
 }: Props) {
   const pct = spool
     ? Math.round((spool.remaining_g / spool.total_weight_g) * 100)
@@ -100,7 +102,7 @@ export default function SpoolModal({
               className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
               style={
                 {
-                  "--spool-color": stockColor(pct, filament?.color_hex),
+                  "--spool-color": filament?.color_hex ?? "#9ca3af",
                 } as React.CSSProperties
               }
             />
@@ -131,6 +133,11 @@ export default function SpoolModal({
             <div className="flex flex-1 items-center justify-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
               <Check className="size-4" /> Currently loaded
             </div>
+          ) : null}
+          {onEdit ? (
+            <Button variant="outline" onClick={() => onEdit(spool)}>
+              <Pencil /> Edit
+            </Button>
           ) : null}
           <Button variant="outline" onClick={onClose}>
             Close

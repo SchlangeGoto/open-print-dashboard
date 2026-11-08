@@ -41,7 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
-import { formatDate, formatWeight, stockColor } from "@/lib/utils";
+import { formatDate, formatWeight } from "@/lib/utils";
 import LoadSpoolModal from "@/components/modals/LoadSpoolModal";
 import SpoolModal from "@/components/modals/SpoolModal";
 
@@ -104,8 +104,7 @@ export default function SpoolsPage() {
     setFormOpen(true);
   }
 
-  function openEdit(s: any, e: React.MouseEvent) {
-    e.stopPropagation();
+  function beginEdit(s: any) {
     setForm({
       filament_id: String(s.filament_id ?? ""),
       total_weight_g: s.total_weight_g,
@@ -116,7 +115,13 @@ export default function SpoolsPage() {
       notes: s.notes ?? "",
     });
     setEditingId(s.id);
+    setSelectedSpool(null);
     setFormOpen(true);
+  }
+
+  function openEdit(s: any, e: React.MouseEvent) {
+    e.stopPropagation();
+    beginEdit(s);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -292,7 +297,7 @@ export default function SpoolsPage() {
                       className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                       style={
                         {
-                          "--spool-color": stockColor(pct, fil?.color_hex),
+                          "--spool-color": fil?.color_hex ?? "#9ca3af",
                         } as React.CSSProperties
                       }
                     />
@@ -458,6 +463,7 @@ export default function SpoolsPage() {
             setSelectedSpool(null);
             setLoadingSpool(spool);
           }}
+          onEdit={beginEdit}
         />
       ) : null}
 

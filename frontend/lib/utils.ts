@@ -75,12 +75,7 @@ export function getStatusVariant(
   }
 }
 
-export function stockColor(percent: number, fallback = "#3b82f6"): string {
-  if (percent <= 10) return "#ef4444";
-  if (percent <= 30) return "#f59e0b";
-  if (percent >= 70) return "#22c55e";
-  return fallback;
-}
+
 
 /**
  * Chart bars always use the filament color. Very dark colors are lightened

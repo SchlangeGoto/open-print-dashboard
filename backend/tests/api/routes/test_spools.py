@@ -1,6 +1,23 @@
+import uuid
+
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.models import Printer
+
+
+def _create_printer(db: Session) -> Printer:
+    printer = Printer(
+        name="Test printer",
+        serial=f"test-{uuid.uuid4().hex}",
+        ip="127.0.0.1",
+        access_code="00000000",
+    )
+    db.add(printer)
+    db.commit()
+    db.refresh(printer)
+    return printer
 
 
 def _create_filament(client: TestClient, headers: dict[str, str]) -> str:
@@ -16,9 +33,10 @@ def _create_filament(client: TestClient, headers: dict[str, str]) -> str:
 
 
 def test_create_and_activate_spool(
-    client: TestClient, superuser_token_headers: dict[str, str]
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     filament_id = _create_filament(client, superuser_token_headers)
+    printer = _create_printer(db)
     data = {
         "filament_id": filament_id,
         "total_weight_g": 1000,
@@ -37,21 +55,26 @@ def test_create_and_activate_spool(
     r = client.put(
         f"{settings.API_V1_STR}/spools/{spool['id']}/activate",
         headers=superuser_token_headers,
+        json={"printer_id": str(printer.id)},
     )
     assert r.status_code == 200
     assert r.json()["active"] is True
+    assert r.json()["printer_id"] == str(printer.id)
 
     r = client.get(
-        f"{settings.API_V1_STR}/spools/active", headers=superuser_token_headers
+        f"{settings.API_V1_STR}/spools/active",
+        headers=superuser_token_headers,
+        params={"printer_id": str(printer.id)},
     )
     assert r.status_code == 200
     assert r.json()["id"] == spool["id"]
 
 
-def test_only_one_active_spool(
-    client: TestClient, superuser_token_headers: dict[str, str]
+def test_only_one_active_spool_per_printer(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     filament_id = _create_filament(client, superuser_token_headers)
+    printer = _create_printer(db)
     base = {"filament_id": filament_id, "total_weight_g": 1000, "remaining_g": 1000}
     first = client.post(
         f"{settings.API_V1_STR}/spools/", headers=superuser_token_headers, json=base
@@ -60,16 +83,26 @@ def test_only_one_active_spool(
         f"{settings.API_V1_STR}/spools/", headers=superuser_token_headers, json=base
     ).json()
 
-    client.put(
-        f"{settings.API_V1_STR}/spools/{first['id']}/activate",
-        headers=superuser_token_headers,
-    )
-    client.put(
-        f"{settings.API_V1_STR}/spools/{second['id']}/activate",
-        headers=superuser_token_headers,
-    )
+    for spool in (first, second):
+        r = client.put(
+            f"{settings.API_V1_STR}/spools/{spool['id']}/activate",
+            headers=superuser_token_headers,
+            json={"printer_id": str(printer.id)},
+        )
+        assert r.status_code == 200
 
     active = client.get(
-        f"{settings.API_V1_STR}/spools/active", headers=superuser_token_headers
+        f"{settings.API_V1_STR}/spools/active",
+        headers=superuser_token_headers,
+        params={"printer_id": str(printer.id)},
     ).json()
     assert active["id"] == second["id"]
+
+    spools = client.get(
+        f"{settings.API_V1_STR}/spools/", headers=superuser_token_headers
+    ).json()["data"]
+    by_id = {spool["id"]: spool for spool in spools}
+    assert by_id[first["id"]]["active"] is False
+    assert by_id[first["id"]]["printer_id"] is None
+    assert by_id[second["id"]]["active"] is True
+    assert by_id[second["id"]]["printer_id"] == str(printer.id)

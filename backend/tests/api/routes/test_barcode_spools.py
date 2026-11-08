@@ -67,5 +67,6 @@ def test_scan_imported_catalog_barcode(
     data = r.json()
     assert data["found"] is True
     assert data["filament"]["color_name"] == "Jade White"
+    assert data["filament"]["color_hex"] == "#FFFFFF"
     assert data["filament"]["material"] == "PLA"
     assert data["spool"]["barcode"] == "6975337030164"

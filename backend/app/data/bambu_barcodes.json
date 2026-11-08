@@ -2,7 +2,8 @@
   "_meta": {
     "source": "https://docs.google.com/spreadsheets/d/1Sd5G7rxpmxu3dANn1IJRvPyXcLwF7me2FMyZ0vcHboY/edit",
     "snapshot": "2026-11-08",
-    "count": 273
+    "count": 260,
+    "hex_source": "https://www.dropbox.com/scl/fi/d6l3ylm58pr4tvpvd4ao0/Bambu-Filament-HEX-Colors.xlsx?rlkey=ncod1d51sw4espndqcv885hcw"
   },
   "barcodes": {
     "6975337030041": {
@@ -11,7 +12,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Ivory White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -21,8 +22,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Matte",
-      "color_name": "Ash Grey",
-      "color_hex": null,
+      "color_name": "Ash Gray",
+      "color_hex": "#9B9EA0",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -33,7 +34,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Mandarin Orange",
-      "color_hex": null,
+      "color_hex": "#F99963",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -44,7 +45,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Sakura Pink",
-      "color_hex": null,
+      "color_hex": "#E8AFCF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -55,7 +56,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Marine Blue",
-      "color_hex": null,
+      "color_hex": "#0078BF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -66,7 +67,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Lemon Yellow",
-      "color_hex": null,
+      "color_hex": "#F7D959",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -77,7 +78,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Charcoal",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -88,7 +89,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Grass Green",
-      "color_hex": null,
+      "color_hex": "#61C680",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -99,7 +100,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Latte Brown",
-      "color_hex": null,
+      "color_hex": "#D3B7A7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -110,7 +111,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Scarlet Red",
-      "color_hex": null,
+      "color_hex": "#DE4343",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -121,7 +122,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Ice Blue",
-      "color_hex": null,
+      "color_hex": "#A3D8E1",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -132,7 +133,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Lilac purple",
-      "color_hex": null,
+      "color_hex": "#AE96D4",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -143,7 +144,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Jade White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -154,7 +155,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Orange",
-      "color_hex": null,
+      "color_hex": "#FF6A13",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -165,7 +166,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#0A2989",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -176,7 +177,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#8E9089",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -187,7 +188,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Beige",
-      "color_hex": null,
+      "color_hex": "#F7E6DE",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -198,7 +199,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Silver",
-      "color_hex": null,
+      "color_hex": "#A6A9AA",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -209,7 +210,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#F4EE2A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -219,8 +220,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Blue Grey",
-      "color_hex": null,
+      "color_name": "Blue Gray",
+      "color_hex": "#5B6579",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -231,7 +232,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Pink",
-      "color_hex": null,
+      "color_hex": "#F55A74",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -242,7 +243,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#00AE42",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -253,7 +254,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Brown",
-      "color_hex": null,
+      "color_hex": "#9D432C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -264,7 +265,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#C12E1F",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -274,8 +275,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Metal",
-      "color_name": "Space Grey",
-      "color_hex": null,
+      "color_name": "Space Gray",
+      "color_hex": "#565451",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA02",
       "refill": false
@@ -286,7 +287,7 @@
       "material": "PLA",
       "series": "PLA Metal",
       "color_name": "Iridium Gold Metallic",
-      "color_hex": null,
+      "color_hex": "#B39B84",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA02",
       "refill": false
@@ -297,7 +298,7 @@
       "material": "PLA",
       "series": "PLA Metal",
       "color_name": "Rose Gold",
-      "color_hex": null,
+      "color_hex": "#BA9594",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA02",
       "refill": false
@@ -308,7 +309,7 @@
       "material": "PLA",
       "series": "PLA Metal",
       "color_name": "Cobalt Blue Metallic",
-      "color_hex": null,
+      "color_hex": "#39699E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA02",
       "refill": false
@@ -319,7 +320,7 @@
       "material": "PLA",
       "series": "PLA Metal",
       "color_name": "Oxide Green Metallic",
-      "color_hex": null,
+      "color_hex": "#1D7C6A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA02",
       "refill": false
@@ -330,7 +331,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -341,7 +342,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -352,7 +353,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#D32941",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -363,7 +364,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#F4EE2A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -374,7 +375,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#0A2CA5",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -385,7 +386,7 @@
       "material": "TPU",
       "series": "TPU 95A",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#101820",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -396,7 +397,7 @@
       "material": "TPU",
       "series": "TPU 95A",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -407,7 +408,7 @@
       "material": "Support",
       "series": "Support W",
       "color_name": "Natural",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 750.0,
       "bambu_info_idx": null,
       "refill": false
@@ -418,7 +419,7 @@
       "material": "Support",
       "series": "Support G",
       "color_name": "Natural",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 750.0,
       "bambu_info_idx": null,
       "refill": false
@@ -429,7 +430,7 @@
       "material": "PA",
       "series": "PA-CF",
       "color_name": "Natural",
-      "color_hex": null,
+      "color_hex": "#D7D7D7",
       "spool_weight_g": 500.0,
       "bambu_info_idx": "GFN03",
       "refill": false
@@ -440,7 +441,7 @@
       "material": "PC",
       "series": "PC",
       "color_name": "Clear Black",
-      "color_hex": null,
+      "color_hex": "#5A5161",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFC00",
       "refill": false
@@ -451,7 +452,7 @@
       "material": "PC",
       "series": "PC",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFC00",
       "refill": false
@@ -462,7 +463,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Orange",
-      "color_hex": null,
+      "color_hex": "#FF6A13",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -473,7 +474,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Orange 01",
-      "color_hex": null,
+      "color_hex": "#FF6A13",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -484,7 +485,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Ash White",
-      "color_hex": null,
+      "color_hex": "#E5E4E2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -495,7 +496,7 @@
       "material": "TPU",
       "series": "TPU 95A",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#101820",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -506,7 +507,7 @@
       "material": "TPU",
       "series": "TPU 95A",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -517,7 +518,7 @@
       "material": "Support",
       "series": "Support for PLA",
       "color_name": "Natural",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 500.0,
       "bambu_info_idx": null,
       "refill": false
@@ -528,7 +529,7 @@
       "material": "Support",
       "series": "Support for PA/PET",
       "color_name": "Natural",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 500.0,
       "bambu_info_idx": null,
       "refill": false
@@ -539,7 +540,7 @@
       "material": "PC",
       "series": "PC",
       "color_name": "Clear Black",
-      "color_hex": null,
+      "color_hex": "#5A5161",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFC00",
       "refill": false
@@ -550,7 +551,7 @@
       "material": "PC",
       "series": "PC",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFC00",
       "refill": false
@@ -561,7 +562,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -572,7 +573,7 @@
       "material": "PLA",
       "series": "PLA Sparkle",
       "color_name": "Onyx Black Sparkle",
-      "color_hex": null,
+      "color_hex": "#2D2B28",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA08",
       "refill": false
@@ -594,7 +595,7 @@
       "material": "PLA",
       "series": "PLA Tough",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -605,7 +606,7 @@
       "material": "PLA",
       "series": "PLA Tough",
       "color_name": "Pine Green",
-      "color_hex": null,
+      "color_hex": "#034638",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -616,7 +617,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Natural",
-      "color_hex": null,
+      "color_hex": "#F5F5DC",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -627,7 +628,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#8E9089",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -649,7 +650,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Grass Green",
-      "color_hex": null,
+      "color_hex": "#61C680",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -660,7 +661,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Lava Gray",
-      "color_hex": null,
+      "color_hex": "#4d5054",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -671,7 +672,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Jeans Blue",
-      "color_hex": null,
+      "color_hex": "#6e88bc",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -682,7 +683,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#0A2989",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -693,7 +694,7 @@
       "material": "PLA",
       "series": "PLA Tough",
       "color_name": "Silver",
-      "color_hex": null,
+      "color_hex": "#A6A9AA",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -704,7 +705,7 @@
       "material": "PLA",
       "series": "PLA Tough",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#FCE300",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -715,7 +716,7 @@
       "material": "PLA",
       "series": "PLA Tough",
       "color_name": "Light Blue",
-      "color_hex": null,
+      "color_hex": "#61B0FF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -726,7 +727,7 @@
       "material": "PLA",
       "series": "PLA Aero",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA11",
       "refill": false
@@ -737,7 +738,7 @@
       "material": "PLA",
       "series": "PLA Aero",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA11",
       "refill": false
@@ -748,7 +749,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Gold",
-      "color_hex": null,
+      "color_hex": "#E5B03D",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -759,7 +760,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Silver",
-      "color_hex": null,
+      "color_hex": "#EAECEB",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -770,7 +771,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Copper",
-      "color_hex": null,
+      "color_hex": "#5E4B3C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -781,7 +782,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#001489",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -792,7 +793,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#D6001C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -803,7 +804,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#009639",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -814,7 +815,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#ADB1B2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -825,7 +826,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#EDF0F2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -836,7 +837,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Transparent",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -847,7 +848,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Blue Gray",
-      "color_hex": null,
+      "color_hex": "#2E4F66",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -858,7 +859,7 @@
       "material": "PETG",
       "series": "PETG Basic",
       "color_name": "Orange",
-      "color_hex": null,
+      "color_hex": "#FF671F",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG00",
       "refill": false
@@ -869,7 +870,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -880,7 +881,7 @@
       "material": "ASA",
       "series": "ASA",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#E02928",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB01",
       "refill": false
@@ -890,8 +891,8 @@
       "brand": "Bambu Lab",
       "material": "TPU",
       "series": "TPU 95A",
-      "color_name": "High Speed ​​",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -901,8 +902,8 @@
       "brand": "Bambu Lab",
       "material": "TPU",
       "series": "TPU 95A",
-      "color_name": "High Speed ​​",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -912,8 +913,8 @@
       "brand": "Bambu Lab",
       "material": "TPU",
       "series": "TPU 95A",
-      "color_name": "High Speed ​​",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -923,8 +924,8 @@
       "brand": "Bambu Lab",
       "material": "TPU",
       "series": "TPU 95A",
-      "color_name": "High Speed ​​",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -935,7 +936,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Bambu Green",
-      "color_hex": null,
+      "color_hex": "#00AE42",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -946,7 +947,7 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Titan Gray",
-      "color_hex": null,
+      "color_hex": "#565656",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
       "refill": false
@@ -957,7 +958,7 @@
       "material": "PPA",
       "series": "PPA-CF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFN06",
       "refill": false
@@ -968,7 +969,7 @@
       "material": "PPA",
       "series": "PPA-CF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 500.0,
       "bambu_info_idx": "GFN06",
       "refill": false
@@ -979,7 +980,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Beige",
-      "color_hex": null,
+      "color_hex": "#F7E6DE",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -990,7 +991,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Olive",
-      "color_hex": null,
+      "color_hex": "#789D4A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -1001,7 +1002,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Azure",
-      "color_hex": null,
+      "color_hex": "#489FDF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -1012,7 +1013,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Tangerine Yellow",
-      "color_hex": null,
+      "color_hex": "#FFC72C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -1023,7 +1024,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#4CE4A0",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1034,7 +1035,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1045,7 +1046,7 @@
       "material": "PLA",
       "series": "PLA Dynamic",
       "color_name": "Heat Color Changing Purple to Pink",
-      "color_hex": null,
+      "color_hex": "#9B59B6",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA13",
       "refill": false
@@ -1056,7 +1057,7 @@
       "material": "PLA",
       "series": "PLA Dynamic",
       "color_name": "UV Color Changing White to Coral",
-      "color_hex": null,
+      "color_hex": "#F88379",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA13",
       "refill": false
@@ -1067,7 +1068,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Black Yellow",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1078,7 +1079,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Gilded Rose",
-      "color_hex": null,
+      "color_hex": "#FF9425",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1089,7 +1090,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Midnight Blaze",
-      "color_hex": null,
+      "color_hex": "#0047BB",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1100,7 +1101,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Neon City",
-      "color_hex": null,
+      "color_hex": "#0047BB",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1111,7 +1112,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Blue Hawaii",
-      "color_hex": null,
+      "color_hex": "#60A4E8",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1121,8 +1122,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Jade White (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Jade White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1132,8 +1133,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Black (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Black",
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1143,8 +1144,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Silver (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Silver",
+      "color_hex": "#A6A9AA",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1154,8 +1155,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Red (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Red",
+      "color_hex": "#C12E1F",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1165,8 +1166,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Blue (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Blue",
+      "color_hex": "#0A2989",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1176,8 +1177,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Bronze (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Bronze",
+      "color_hex": "#847D48",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1187,8 +1188,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Gold (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Gold",
+      "color_hex": "#E4BD68",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1198,8 +1199,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Purple (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Purple",
+      "color_hex": "#5E43B7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1209,8 +1210,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Magenta (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Magenta",
+      "color_hex": "#EC008C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1220,8 +1221,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Cyan (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Cyan",
+      "color_hex": "#0086D6",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1231,8 +1232,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Tough",
-      "color_name": "Lavender Blue (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Lavender Blue",
+      "color_hex": "#B8ACD6",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -1242,8 +1243,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Tough",
-      "color_name": "Gray (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Gray",
+      "color_hex": "#ADB1B2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -1253,8 +1254,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Tough",
-      "color_name": "Pine Green (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Pine Green",
+      "color_hex": "#034638",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -1264,8 +1265,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Tough",
-      "color_name": "Black (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Black",
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -1275,8 +1276,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Tough",
-      "color_name": "Vermilion Red (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Vermilion Red",
+      "color_hex": "#D6001C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -1286,8 +1287,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Tough",
-      "color_name": "White (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA09",
       "refill": false
@@ -1297,8 +1298,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Silk",
-      "color_name": "Gold (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Gold",
+      "color_hex": "#E5B03D",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1308,8 +1309,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Silk",
-      "color_name": "Silver (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Silver",
+      "color_hex": "#EAECEB",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1319,8 +1320,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Silk",
-      "color_name": "Copper (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Copper",
+      "color_hex": "#5E4B3C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1330,8 +1331,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Silk",
-      "color_name": "Blue (Exclusively for Amazon Japan)",
-      "color_hex": null,
+      "color_name": "Blue",
+      "color_hex": "#147BD1",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -1342,7 +1343,7 @@
       "material": "PLA",
       "series": "PLA Glow",
       "color_name": "Glow Green",
-      "color_hex": null,
+      "color_hex": "#A1FFAC",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA12",
       "refill": false
@@ -1352,8 +1353,8 @@
       "brand": "Bambu Lab",
       "material": "PLA",
       "series": "PLA Basic",
-      "color_name": "Blue (Amazon Japan Exclusive)",
-      "color_hex": null,
+      "color_name": "Blue",
+      "color_hex": "#0A2989",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1363,8 +1364,8 @@
       "brand": "Bambu Lab",
       "material": "TPU",
       "series": "TPU 95A",
-      "color_name": "HF Red",
-      "color_hex": null,
+      "color_name": "Red",
+      "color_hex": "#C8102E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
       "refill": false
@@ -1374,32 +1375,10 @@
       "brand": "Bambu Lab",
       "material": "TPU",
       "series": "TPU 95A",
-      "color_name": "HF White",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU01",
-      "refill": false
-    },
-    "6975337034940": {
-      "description": "Bambu Lab Bambu PLA Basic (2 Pack) 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Basic",
-      "color_name": "(2 Pack)",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA00",
-      "refill": false
-    },
-    "6975337034957": {
-      "description": "Bambu Lab Bambu PLA Basic (2 Pack) - Jade White&Jade White 2 千克",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Basic",
-      "color_name": "(2 Pack) Jade White&Jade White",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA00",
       "refill": false
     },
     "6975337035046": {
@@ -1408,7 +1387,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Mistletoe Green",
-      "color_hex": null,
+      "color_hex": "#3F8E43",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1419,7 +1398,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Mistletoe Green",
-      "color_hex": null,
+      "color_hex": "#3F8E43",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1430,7 +1409,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Bambu Green",
-      "color_hex": null,
+      "color_hex": "#00AE42",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1441,7 +1420,7 @@
       "material": "PLA",
       "series": "PLA Sparkle",
       "color_name": "Classic Gold Sparkle",
-      "color_hex": null,
+      "color_hex": "#CEA629",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA08",
       "refill": false
@@ -1452,7 +1431,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Gray",
-      "color_hex": null,
+      "color_hex": "#8E8E8E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1463,7 +1442,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Light Blue",
-      "color_hex": null,
+      "color_hex": "#61B0FF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1474,7 +1453,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Olive",
-      "color_hex": null,
+      "color_hex": "#748C45",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1485,7 +1464,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Brown",
-      "color_hex": null,
+      "color_hex": "#C9A381",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1496,7 +1475,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Teal",
-      "color_hex": null,
+      "color_hex": "#77EDD7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1507,7 +1486,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Orange",
-      "color_hex": null,
+      "color_hex": "#FF911A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1518,7 +1497,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Pink",
-      "color_hex": null,
+      "color_hex": "#F9C1BD",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1529,7 +1508,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Purple",
-      "color_hex": null,
+      "color_hex": "#D6ABFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1540,7 +1519,7 @@
       "material": "PLA",
       "series": "PLA Galaxy",
       "color_name": "Nebulae",
-      "color_hex": null,
+      "color_hex": "#424379",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA15",
       "refill": false
@@ -1551,7 +1530,7 @@
       "material": "PLA",
       "series": "PLA Galaxy",
       "color_name": "Brown",
-      "color_hex": null,
+      "color_hex": "#684A43",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA15",
       "refill": false
@@ -1562,7 +1541,7 @@
       "material": "PLA",
       "series": "PLA Galaxy",
       "color_name": "Purple",
-      "color_hex": null,
+      "color_hex": "#594177",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA15",
       "refill": false
@@ -1573,7 +1552,7 @@
       "material": "PLA",
       "series": "PLA Galaxy",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#3B665E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA15",
       "refill": false
@@ -1584,7 +1563,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Pink Citrus",
-      "color_hex": null,
+      "color_hex": "#F78F77",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1595,7 +1574,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Mint Lime",
-      "color_hex": null,
+      "color_hex": "#B6FF43",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1606,7 +1585,7 @@
       "material": "PVA",
       "series": "PVA",
       "color_name": "Clear",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 500.0,
       "bambu_info_idx": null,
       "refill": false
@@ -1616,8 +1595,8 @@
       "brand": "Bambu Lab",
       "material": "ASA",
       "series": "ASA",
-      "color_name": "Aero White",
-      "color_hex": null,
+      "color_name": "White",
+      "color_hex": "#FFFAF2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB01",
       "refill": false
@@ -1628,7 +1607,7 @@
       "material": "PA",
       "series": "PA6-GF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFN08",
       "refill": false
@@ -1639,7 +1618,7 @@
       "material": "PA",
       "series": "PA6-GF",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#FFCE00",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFN08",
       "refill": false
@@ -1650,7 +1629,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#61BF36",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1661,7 +1640,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#C6C6C6",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1672,7 +1651,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#FFE133",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1683,7 +1662,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#E83100",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1694,7 +1673,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1705,7 +1684,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1716,7 +1695,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Dark Brown",
-      "color_hex": null,
+      "color_hex": "#7D6556",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -1727,7 +1706,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Dark Red",
-      "color_hex": null,
+      "color_hex": "#BB3D43",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -1738,7 +1717,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Dark Green",
-      "color_hex": null,
+      "color_hex": "#68724D",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -1749,7 +1728,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Dark Blue",
-      "color_hex": null,
+      "color_hex": "#042F56",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -1760,7 +1739,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Gold",
-      "color_hex": null,
+      "color_hex": "#E4BD68",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1771,7 +1750,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Bronze",
-      "color_hex": null,
+      "color_hex": "#847D48",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1782,7 +1761,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Purple",
-      "color_hex": null,
+      "color_hex": "#5E43B7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1793,7 +1772,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Cyan",
-      "color_hex": null,
+      "color_hex": "#0086D6",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1804,7 +1783,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Magenta",
-      "color_hex": null,
+      "color_hex": "#EC008C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -1815,7 +1794,7 @@
       "material": "ABS",
       "series": "ABS-GF",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#0C3B95",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB50",
       "refill": false
@@ -1826,7 +1805,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Clear",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1837,7 +1816,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Clear",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1848,7 +1827,7 @@
       "material": "Support",
       "series": "Support for ABS",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -1859,7 +1838,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Desert Tan",
-      "color_hex": null,
+      "color_hex": "#E8DBB7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -1870,7 +1849,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1881,7 +1860,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#ADB1B2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1892,7 +1871,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1903,7 +1882,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#FFD00B",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1914,7 +1893,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#EB3A3A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1925,7 +1904,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#00AE42",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1936,7 +1915,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#002E96",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -1947,7 +1926,7 @@
       "material": "PPS",
       "series": "PPS-CF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFT02",
       "refill": false
@@ -1958,7 +1937,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Desert Tan",
-      "color_hex": null,
+      "color_hex": "#E8DBB7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -1969,7 +1948,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Teal",
-      "color_hex": null,
+      "color_hex": "#77EDD7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1980,7 +1959,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Purple",
-      "color_hex": null,
+      "color_hex": "#D6ABFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -1991,7 +1970,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Purple",
-      "color_hex": null,
+      "color_hex": "#D6ABFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2002,7 +1981,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Light Blue",
-      "color_hex": null,
+      "color_hex": "#61B0FF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2013,7 +1992,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Brown",
-      "color_hex": null,
+      "color_hex": "#C9A381",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2024,7 +2003,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Clear",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2035,7 +2014,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Pink",
-      "color_hex": null,
+      "color_hex": "#F9C1BD",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2046,7 +2025,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Olive",
-      "color_hex": null,
+      "color_hex": "#748C45",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2057,7 +2036,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Gray",
-      "color_hex": null,
+      "color_hex": "#8E8E8E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2068,7 +2047,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Lemon Yellow",
-      "color_hex": null,
+      "color_hex": "#F7D959",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2079,7 +2058,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Grass Green",
-      "color_hex": null,
+      "color_hex": "#61C680",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2090,7 +2069,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Ice Blue",
-      "color_hex": null,
+      "color_hex": "#A3D8E1",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2101,7 +2080,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Marine Blue",
-      "color_hex": null,
+      "color_hex": "#0078BF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2112,7 +2091,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Ash Gray",
-      "color_hex": null,
+      "color_hex": "#9B9EA0",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2123,7 +2102,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Mandarin Orange",
-      "color_hex": null,
+      "color_hex": "#F99963",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2134,7 +2113,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Ice Blue",
-      "color_hex": null,
+      "color_hex": "#A3D8E1",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2145,7 +2124,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Grass Green",
-      "color_hex": null,
+      "color_hex": "#61C680",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2156,7 +2135,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Marine Blue",
-      "color_hex": null,
+      "color_hex": "#0078BF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2167,7 +2146,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Ash Gray",
-      "color_hex": null,
+      "color_hex": "#9B9EA0",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2178,7 +2157,7 @@
       "material": "PLA",
       "series": "PLA Matte",
       "color_name": "Lemon Yellow",
-      "color_hex": null,
+      "color_hex": "#F7D959",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA01",
       "refill": false
@@ -2189,7 +2168,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Red",
-      "color_hex": null,
+      "color_hex": "#EB3A3A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2200,7 +2179,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Yellow",
-      "color_hex": null,
+      "color_hex": "#FFD00B",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2211,7 +2190,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2222,7 +2201,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Green",
-      "color_hex": null,
+      "color_hex": "#00AE42",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2233,7 +2212,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#002E96",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2244,7 +2223,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Orange",
-      "color_hex": null,
+      "color_hex": "#F75403",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2255,7 +2234,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#ADB1B2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2266,20 +2245,9 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
-      "refill": false
-    },
-    "6975337038641": {
-      "description": "Bambu Lab Bambu PLA Basic CMYK - Cyan&Magenta&Yellow&Jade White - SPL 6 千克",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Basic",
-      "color_name": "CMYK Cyan&Magenta&Yellow&Jade White SPL",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA00",
       "refill": false
     },
     "6975337038696": {
@@ -2288,108 +2256,9 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
-      "refill": false
-    },
-    "6975337038702": {
-      "description": "Bambu Lab Bambu PETG-CF (2 Pack) 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PETG",
-      "series": "PETG-CF",
-      "color_name": "(2 Pack)",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFG50",
-      "refill": false
-    },
-    "6975337038719": {
-      "description": "Bambu Lab Bambu PLA-CF (2 Pack) - Black & Black 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA-CF",
-      "color_name": "(2 Pack) Black & Black",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA50",
-      "refill": false
-    },
-    "6975337038726": {
-      "description": "Bambu Lab Bambu PETG HF (2 Pack) - White & White 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PETG",
-      "series": "PETG HF",
-      "color_name": "(2 Pack) White & White",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFG02",
-      "refill": false
-    },
-    "6975337038733": {
-      "description": "Bambu Lab Bambu PETG HF (2 Pack) - Black & Black 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PETG",
-      "series": "PETG HF",
-      "color_name": "(2 Pack) Black & Black",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFG02",
-      "refill": false
-    },
-    "6975337038740": {
-      "description": "Bambu Lab Bambu PLA matte (2 Pack) - Ash Gray & Ash Gray 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Matte",
-      "color_name": "(2 Pack) Ash Gray & Ash Gray",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA01",
-      "refill": false
-    },
-    "6975337038757": {
-      "description": "Bambu Lab Bambu PLA matte (2 Pack) - Marine Blue&Marine Blue 2 千克",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Matte",
-      "color_name": "(2 Pack) Marine Blue&Marine Blue",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA01",
-      "refill": false
-    },
-    "6975337038764": {
-      "description": "Bambu Lab Bambu PLA matte (2 Pack) - Scarlet Red & Scarlet Red 2 kg",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Matte",
-      "color_name": "(2 Pack) Scarlet Red & Scarlet Red",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA01",
-      "refill": false
-    },
-    "6975337038771": {
-      "description": "Bambu Lab Bambu PLA matte (2 Pack) - Ivory White&Ivory White 2 千克",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Matte",
-      "color_name": "(2 Pack) Ivory White&Ivory White",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA01",
-      "refill": false
-    },
-    "6975337038788": {
-      "description": "Bambu Lab Bambu PLA matte (2 Pack) - Charcoal&Charcoal 2 千克",
-      "brand": "Bambu Lab",
-      "material": "PLA",
-      "series": "PLA Matte",
-      "color_name": "(2 Pack) Charcoal&Charcoal",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFA01",
       "refill": false
     },
     "6975337038887": {
@@ -2398,7 +2267,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Gold",
-      "color_hex": null,
+      "color_hex": "#E5B03D",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -2409,7 +2278,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Silver",
-      "color_hex": null,
+      "color_hex": "#EAECEB",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -2420,7 +2289,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Copper",
-      "color_hex": null,
+      "color_hex": "#5E4B3C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -2431,7 +2300,7 @@
       "material": "PLA",
       "series": "PLA Silk",
       "color_name": "Blue",
-      "color_hex": null,
+      "color_hex": "#147BD1",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA05",
       "refill": false
@@ -2442,7 +2311,7 @@
       "material": "PLA",
       "series": "PLA Aero",
       "color_name": "Gray",
-      "color_hex": null,
+      "color_hex": "#8E9089",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA11",
       "refill": false
@@ -2453,7 +2322,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Dark Gray",
-      "color_hex": null,
+      "color_hex": "#545454",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -2464,7 +2333,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Light Gray",
-      "color_hex": null,
+      "color_hex": "#D1D3D5",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -2475,7 +2344,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Brown",
-      "color_hex": null,
+      "color_hex": "#C9A381",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2486,7 +2355,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Gray",
-      "color_hex": null,
+      "color_hex": "#8E8E8E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2497,7 +2366,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Olive",
-      "color_hex": null,
+      "color_hex": "#748C45",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2508,7 +2377,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Pink",
-      "color_hex": null,
+      "color_hex": "#F9C1BD",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2519,7 +2388,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Light Blue",
-      "color_hex": null,
+      "color_hex": "#61B0FF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2530,7 +2399,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Purple",
-      "color_hex": null,
+      "color_hex": "#D6ABFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2541,7 +2410,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Orange",
-      "color_hex": null,
+      "color_hex": "#FF911A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2552,7 +2421,7 @@
       "material": "PETG",
       "series": "PETG Translucent",
       "color_name": "Translucent Teal",
-      "color_hex": null,
+      "color_hex": "#77EDD7",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG01",
       "refill": false
@@ -2563,7 +2432,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Dark Gray",
-      "color_hex": null,
+      "color_hex": "#545454",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -2574,7 +2443,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Light Gray",
-      "color_hex": null,
+      "color_hex": "#D1D3D5",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -2585,7 +2454,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Bambu Green",
-      "color_hex": null,
+      "color_hex": "#00AE42",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2596,7 +2465,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Silver",
-      "color_hex": null,
+      "color_hex": "#87909A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2607,7 +2476,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Orange",
-      "color_hex": null,
+      "color_hex": "#FF6A13",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2618,7 +2487,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Navy Blue",
-      "color_hex": null,
+      "color_hex": "#0C2340",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2629,7 +2498,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Azure",
-      "color_hex": null,
+      "color_hex": "#489FDF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2640,7 +2509,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Olive",
-      "color_hex": null,
+      "color_hex": "#789D4A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2651,7 +2520,7 @@
       "material": "ABS",
       "series": "ABS",
       "color_name": "Tangerine Yellow",
-      "color_hex": null,
+      "color_hex": "#FFC72C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB00",
       "refill": false
@@ -2662,7 +2531,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Lava Gray",
-      "color_hex": null,
+      "color_hex": "#4d5054",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -2673,7 +2542,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Iris Purple",
-      "color_hex": null,
+      "color_hex": "#69398E",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -2684,7 +2553,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Jeans Blue",
-      "color_hex": null,
+      "color_hex": "#6e88bc",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -2695,7 +2564,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Burgundy Red",
-      "color_hex": null,
+      "color_hex": "#951e23",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -2706,7 +2575,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Matcha Green",
-      "color_hex": null,
+      "color_hex": "#5c9748",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -2717,7 +2586,7 @@
       "material": "PLA",
       "series": "PLA-CF",
       "color_name": "Royal Blue",
-      "color_hex": null,
+      "color_hex": "#2842AD",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA50",
       "refill": false
@@ -2728,7 +2597,7 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Titan Gray",
-      "color_hex": null,
+      "color_hex": "#565656",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
       "refill": false
@@ -2739,7 +2608,7 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Violet Purple",
-      "color_hex": null,
+      "color_hex": "#583061",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
       "refill": false
@@ -2750,7 +2619,7 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Indigo Blue",
-      "color_hex": null,
+      "color_hex": "#324585",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
       "refill": false
@@ -2761,7 +2630,7 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Malachite Green",
-      "color_hex": null,
+      "color_hex": "#16b08e",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
       "refill": false
@@ -2772,7 +2641,7 @@
       "material": "PETG",
       "series": "PETG-CF",
       "color_name": "Brick Red",
-      "color_hex": null,
+      "color_hex": "#9f332a",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG50",
       "refill": false
@@ -2783,7 +2652,7 @@
       "material": "PPA",
       "series": "PPA-CF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 750.0,
       "bambu_info_idx": "GFN06",
       "refill": false
@@ -2794,7 +2663,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Ash White",
-      "color_hex": null,
+      "color_hex": "#E5E4E2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -2805,7 +2674,7 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Ash White",
-      "color_hex": null,
+      "color_hex": "#E5E4E2",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
       "refill": false
@@ -2816,7 +2685,7 @@
       "material": "PLA",
       "series": "PLA Wood",
       "color_name": "Ochre Yellow",
-      "color_hex": null,
+      "color_hex": "#C98935",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -2827,7 +2696,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Lake Blue",
-      "color_hex": null,
+      "color_hex": "#1F79E5",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2838,7 +2707,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Lime Green",
-      "color_hex": null,
+      "color_hex": "#6EE53C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2849,7 +2718,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Cream",
-      "color_hex": null,
+      "color_hex": "#F9DFB9",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2859,8 +2728,8 @@
       "brand": "Bambu Lab",
       "material": "PETG",
       "series": "PETG HF",
-      "color_name": "Dark Grey",
-      "color_hex": null,
+      "color_name": "Dark Gray",
+      "color_hex": "#515151",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2871,7 +2740,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Peanut Brown",
-      "color_hex": null,
+      "color_hex": "#875718",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2882,7 +2751,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Forest Green",
-      "color_hex": null,
+      "color_hex": "#39541A",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false
@@ -2893,7 +2762,7 @@
       "material": "PLA",
       "series": "PLA Wood",
       "color_name": "Clay Brown",
-      "color_hex": null,
+      "color_hex": "#995F11",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -2904,7 +2773,7 @@
       "material": "PLA",
       "series": "PLA Wood",
       "color_name": "White Oak",
-      "color_hex": null,
+      "color_hex": "#D6CCA3",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -2915,7 +2784,7 @@
       "material": "PLA",
       "series": "PLA Wood",
       "color_name": "Classic Birch",
-      "color_hex": null,
+      "color_hex": "#918669",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -2926,7 +2795,7 @@
       "material": "PLA",
       "series": "PLA Wood",
       "color_name": "Black Walnut",
-      "color_hex": null,
+      "color_hex": "#4F3F24",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -2937,7 +2806,7 @@
       "material": "PLA",
       "series": "PLA Wood",
       "color_name": "Rosewood",
-      "color_hex": null,
+      "color_hex": "#4C241C",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": null,
       "refill": false
@@ -2948,7 +2817,7 @@
       "material": "ASA",
       "series": "ASA-CF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFB51",
       "refill": false
@@ -2959,7 +2828,7 @@
       "material": "TPU",
       "series": "TPU for AMS",
       "color_name": "White",
-      "color_hex": null,
+      "color_hex": "#FFFFFF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU02",
       "refill": false
@@ -2970,7 +2839,7 @@
       "material": "TPU",
       "series": "TPU for AMS",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFU02",
       "refill": false
@@ -2981,20 +2850,9 @@
       "material": "PLA",
       "series": "PLA Basic",
       "color_name": "Blueberry Bubblegum",
-      "color_hex": null,
+      "color_hex": "#6FCAEF",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFA00",
-      "refill": false
-    },
-    "6977252425773": {
-      "description": "PC4-M6 Pneumatic Connector for PTFE Tube (5PCS) FC001",
-      "brand": "Bambu Lab",
-      "material": "PC",
-      "series": "PC",
-      "color_name": "4 M6 Pneumatic Connector for PTFE Tube (5PCS) FC001",
-      "color_hex": null,
-      "spool_weight_g": 1000.0,
-      "bambu_info_idx": "GFC00",
       "refill": false
     },
     "6977252427951": {
@@ -3003,7 +2861,7 @@
       "material": "PETG",
       "series": "PETG HF",
       "color_name": "Black",
-      "color_hex": null,
+      "color_hex": "#000000",
       "spool_weight_g": 1000.0,
       "bambu_info_idx": "GFG02",
       "refill": false

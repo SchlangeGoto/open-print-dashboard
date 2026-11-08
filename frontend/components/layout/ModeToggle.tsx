@@ -5,6 +5,11 @@ import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function ModeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -15,13 +20,22 @@ export function ModeToggle() {
   const isDark = !mounted || resolvedTheme !== "light";
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-    >
-      {isDark ? <Sun /> : <Moon />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+          />
+        }
+      >
+        {isDark ? <Sun /> : <Moon />}
+      </TooltipTrigger>
+      <TooltipContent>
+        {isDark ? "Switch to light mode" : "Switch to dark mode"}
+      </TooltipContent>
+    </Tooltip>
   );
 }

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpoolIndicator } from "@/components/ui/SpoolIndicator";
 import PrinterModal from "@/components/modals/PrinterModal";
@@ -321,7 +322,9 @@ export default function PrintersPage() {
                     </div>
                   ) : null}
 
-                  <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                  <Separator />
+
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"

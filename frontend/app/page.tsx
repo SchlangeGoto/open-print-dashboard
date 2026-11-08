@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Disc3, FlaskConical } from "lucide-react";
+import { AlertCircle, FlaskConical } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isDemoActive } from "@/lib/demo";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -67,7 +68,7 @@ export default function Home() {
     return (
       <main className="flex min-h-svh items-center justify-center bg-background">
         <div className="flex items-center gap-3 text-muted-foreground">
-          <Disc3 className="size-5 animate-spin text-primary" />
+          <Spinner className="size-5 text-primary" />
           <span className="text-sm">Loading...</span>
         </div>
       </main>

@@ -13,11 +13,15 @@ from app.models import (
     AppSetting,
     Filament,
     FilamentStats,
+    Printer,
+    PrinterCreate,
+    PrinterUpdate,
     PrintJob,
     Spool,
     User,
     UserCreate,
     UserUpdate,
+    get_datetime_utc,
 )
 
 
@@ -104,20 +108,47 @@ def set_setting(*, session: Session, key: str, value: str) -> AppSetting:
     return setting
 
 
-def get_printer_config(*, session: Session) -> dict[str, str | None]:
-    return {
-        "ip": get_setting_value(session=session, key="printer_ip"),
-        "serial": get_setting_value(session=session, key="printer_serial"),
-        "access_code": get_setting_value(session=session, key="printer_access_code"),
-    }
+# ────────────────────────────────────────────────────────────
+# Printers
+# ────────────────────────────────────────────────────────────
+def get_printers(*, session: Session) -> list[Printer]:
+    return list(session.exec(select(Printer).order_by(col(Printer.created_at))).all())
 
 
-def save_printer_config(
-    *, session: Session, ip: str, serial: str, access_code: str
-) -> None:
-    set_setting(session=session, key="printer_ip", value=ip)
-    set_setting(session=session, key="printer_serial", value=serial)
-    set_setting(session=session, key="printer_access_code", value=access_code)
+def get_printer(*, session: Session, printer_id: uuid.UUID) -> Printer | None:
+    return session.get(Printer, printer_id)
+
+
+def get_printer_by_serial(*, session: Session, serial: str) -> Printer | None:
+    return session.exec(select(Printer).where(Printer.serial == serial)).first()
+
+
+def count_printers(*, session: Session) -> int:
+    return session.exec(select(func.count()).select_from(Printer)).one()
+
+
+def create_printer(*, session: Session, printer_in: PrinterCreate) -> Printer:
+    printer = Printer.model_validate(printer_in)
+    session.add(printer)
+    session.commit()
+    session.refresh(printer)
+    return printer
+
+
+def update_printer(
+    *, session: Session, printer: Printer, printer_in: PrinterUpdate
+) -> Printer:
+    printer.sqlmodel_update(printer_in.model_dump(exclude_unset=True))
+    printer.updated_at = get_datetime_utc()
+    session.add(printer)
+    session.commit()
+    session.refresh(printer)
+    return printer
+
+
+def delete_printer(*, session: Session, printer: Printer) -> None:
+    session.delete(printer)
+    session.commit()
 
 
 # ────────────────────────────────────────────────────────────

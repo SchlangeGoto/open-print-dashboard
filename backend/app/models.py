@@ -257,6 +257,47 @@ class PrinterConfig(SQLModel):
 
 
 # ────────────────────────────────────────────────────────────
+# Printers
+# ────────────────────────────────────────────────────────────
+class PrinterBase(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    serial: str = Field(min_length=1, max_length=100)
+    ip: str = Field(min_length=1, max_length=100)
+    access_code: str = Field(min_length=1, max_length=100)
+
+
+class PrinterCreate(PrinterBase):
+    pass
+
+
+class PrinterUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    ip: str | None = Field(default=None, min_length=1, max_length=100)
+    access_code: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class Printer(PrinterBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    serial: str = Field(unique=True, index=True, max_length=100)
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    updated_at: datetime | None = Field(default_factory=get_datetime_utc)
+
+
+class PrinterPublic(SQLModel):
+    id: uuid.UUID | None = None
+    name: str
+    serial: str
+    model: str | None = None
+    ip: str | None = None
+    access_code: str | None = None
+    online: bool = False
+    configured: bool = False
+    status: dict | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+# ────────────────────────────────────────────────────────────
 # Helper payloads
 # ────────────────────────────────────────────────────────────
 class SetupStatus(SQLModel):

@@ -503,4 +503,4 @@ class BambuClient:
         """Return the latest known printer status."""
         if not self._current_status:
             return {"connected": self._connected, "status": "no_data"}
-        return self._current_status
+        return {**self._current_status, "connected": self._connected}

@@ -11,6 +11,7 @@ from app.main import app
 from app.models import (
     AppSetting,
     Filament,
+    Printer,
     PrintJob,
     Spool,
     User,
@@ -42,6 +43,7 @@ def db() -> Generator[Session]:
         yield session
         session.execute(delete(PrintJob))
         session.execute(delete(Spool))
+        session.execute(delete(Printer))
         session.execute(delete(Filament))
         session.execute(delete(AppSetting))
         session.execute(delete(User))

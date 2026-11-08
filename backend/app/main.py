@@ -45,7 +45,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await wait_for_db()
     printer_service.configure_and_connect()
     yield
-    printer_service.client.disconnect()
+    printer_service.disconnect()
 
 
 app = FastAPI(

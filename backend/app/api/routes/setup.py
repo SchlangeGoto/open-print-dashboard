@@ -21,9 +21,7 @@ def get_setup_status(session: SessionDep) -> Any:
     bambu_logged_in = (
         crud.get_setting(session=session, key="bambu_cloud_token") is not None
     )
-    printer_configured = (
-        crud.get_setting_value(session=session, key="printer_ip") is not None
-    )
+    printer_configured = crud.count_printers(session=session) > 0
     return SetupStatus(
         user_created=user_created,
         bambu_logged_in=bambu_logged_in,

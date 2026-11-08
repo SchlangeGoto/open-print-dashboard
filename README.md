@@ -23,10 +23,10 @@
 
 ```
 
-### Your 3D printer, fully visible. No cloud required.
+### Your 3D printer, fully visible. On your own hardware.
 
 **OpenPrintDashboard** is a beautiful, self-hosted dashboard for Bambu Lab 3D printers.
-Live status, filament inventory, print history, cost tracking — all in one place, all yours.
+Live status from anywhere through Bambu Cloud, filament inventory, print history and cost tracking — all in one place, all yours.
 
 <br />
 
@@ -41,12 +41,16 @@ Live status, filament inventory, print history, cost tracking — all in one pla
 ## ✨ Features
 
 ### 🖨️ Live Printer Status
-Real-time data streamed directly from your printer over your local network via MQTT — no polling, no lag.
+Real-time data streamed through Bambu Cloud MQTT by default, or directly from your printer over the local network — no polling, no lag.
 - Nozzle & bed temperature (current + target)
 - Print progress bar, layer count, and time remaining
 - Cooling fan speed and print speed level
 - Online / offline detection
 - Auto-reconnects after network blips
+- Monitor from anywhere; no local IP or access code needed for cloud printers
+
+> OpenPrintDashboard is a monitoring and inventory dashboard. It does not start,
+> pause or stop prints. Use Bambu Handy or Bambu Studio for print control.
 
 ### 📊 Print History & Analytics
 Every print is automatically captured and logged when it completes.
@@ -81,7 +85,7 @@ Track individual spools from purchase to empty.
 | Frontend | Next.js · React · TypeScript · Tailwind CSS · shadcn/ui |
 | Backend | FastAPI · Python 3.13 · SQLModel · Pydantic · Alembic |
 | Database | PostgreSQL 16 |
-| Protocol | MQTT (local LAN, TLS) · Bambu Cloud REST API |
+| Protocol | MQTT (Bambu Cloud or local LAN, TLS) · Bambu Cloud REST API |
 | Email | SMTP (Mailpit in local development) |
 | Deployment | Docker · Docker Compose |
 
@@ -96,8 +100,8 @@ The backend structure follows the [full-stack-fastapi-template](https://github.c
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
   (with BuildKit — included in current Docker Engine and Docker Desktop; the image builds use BuildKit cache mounts)
-- Your Bambu Lab printer on the same local network
-- Your printer's **IP address**, **serial number**, and **access code** (see [finding these values](#finding-printer-credentials))
+- A Bambu Lab account with your printer bound to it (Bambu Handy or Bambu Studio)
+- Optional: your printer's **IP address**, **serial number**, and **access code** if you want to use a local LAN connection instead of Bambu Cloud
 
 ### 1. Clone the repository
 
@@ -135,20 +139,40 @@ You'll be guided through:
 <br><br>
 
 ```
-Step 1: Create Account  →  Step 2: Bambu Lab Login  →  Step 3: Printer Setup
-    (local admin)            (cloud sync + history)       (LAN connection)
+Step 1: Create Account  →  Step 2: Bambu Lab Login  →  Step 3: Choose Printer
+    (local admin)            (cloud sync + history)       (from your account)
 ```
 
 If Mailpit is running, the new-account email is captured at **http://localhost:8025**.
 
-> **Note:** After completing the printer setup the backend reconnects to your printer via MQTT.
-> First data usually arrives within a few seconds.
+> **Note:** Printers bound to your Bambu Lab account appear automatically. The
+> backend connects to Bambu Cloud MQTT, so first data usually arrives within a
+> few seconds and monitoring works from anywhere. A local LAN connection remains
+> available as an optional fallback.
 
 ---
 
 ## ⚙️ Configuration
 
-### Finding Printer Credentials
+### Cloud vs LAN
+
+**Bambu Cloud (default).** Log in with your Bambu Lab account during setup and
+pick a printer. The backend talks to Bambu Cloud MQTT, so the printer does not
+need to be on the same network as the server and no IP address or access code is
+required. Live status, AMS detection, print history and filament deduction work
+the same way as with a local connection.
+
+**LAN (optional).** Add a printer by IP address, serial number and access code if
+you want a direct local connection. This is useful for LAN-only setups. Current
+Bambu firmware may require **LAN-only mode with Developer Mode enabled** for
+third-party local access. A LAN printer is only reachable while the server and
+the printer are on the same network.
+
+The dashboard is read-only: start, pause and stop prints in Bambu Handy or Bambu
+Studio. Bambu's Authorization Control System blocks third-party print starts in
+cloud mode.
+
+### Finding LAN credentials (optional)
 
 | Value | Where to find it |
 |-------|-----------------|
@@ -208,7 +232,7 @@ OpenPrintDashboard/
 │   │   │   ├── main.py         # API router
 │   │   │   └── routes/         # login, users, filaments, spools, prints, ...
 │   │   ├── core/               # Config, database engine, security, encryption
-│   │   ├── services/           # BambuClient (MQTT), BambuCloudClient, PrinterService
+│   │   ├── services/           # BambuClient (MQTT: cloud + LAN), BambuCloudClient, PrinterService
 │   │   ├── alembic/            # Database migrations
 │   │   ├── models.py           # SQLModel models
 │   │   ├── crud.py             # Database access helpers
@@ -251,6 +275,7 @@ GNU AGPLv3 — See [LICENSE](LICENSE) for details.
 ## 🙏 Acknowledgements
 
 - MQTT commands adapted from [ha-bambulab](https://github.com/greghesp/ha-bambulab) by greghesp
+- Cloud MQTT credentials follow the [OpenBambuAPI](https://github.com/Doridian/OpenBambuAPI) documentation
 - Built on top of the unofficial Bambu Lab cloud and MQTT APIs
 - Backend structure inspired by the [full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template)
 

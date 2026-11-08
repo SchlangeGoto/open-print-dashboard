@@ -6,8 +6,13 @@ Keep this catalog small and data-driven; unknown barcodes go through the
 create-filament confirmation flow instead of guessing.
 """
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+_CATALOG_PATH = Path(__file__).resolve().parent.parent / "data/bambu_barcodes.json"
 
 BAMBU_BARCODES: dict[str, dict[str, Any]] = {
     # PLA Matte - Mandarin Orange (11300)
@@ -44,6 +49,22 @@ BAMBU_COLOR_NAMES: dict[str, str] = {
     "#f99963": "Mandarin Orange",
     "#de4343": "Scarlet Red",
 }
+BAMBU_COLOR_HEX = {name.lower(): color for color, name in BAMBU_COLOR_NAMES.items()}
+
+MATERIAL_DEFAULTS: dict[str, tuple[int | None, int | None, int | None]] = {
+    "PLA": (190, 230, 45),
+    "PETG": (220, 260, 70),
+    "ABS": (240, 270, 90),
+    "ASA": (240, 270, 90),
+    "TPU": (200, 250, 35),
+    "PC": (250, 270, 90),
+    "PA": (250, 280, 80),
+    "PPS": (300, 340, 110),
+    "PPA": (280, 320, 100),
+    "PVA": (190, 220, 45),
+    "HIPS": (230, 250, 90),
+    "Support": (190, 230, 45),
+}
 
 BAMBU_SERIES: dict[str, str] = {
     "A00": "PLA Basic",
@@ -67,9 +88,41 @@ _SKU_RE = re.compile(
 )
 
 
+@lru_cache(maxsize=1)
+def _catalog() -> dict[str, dict[str, Any]]:
+    try:
+        payload = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload.get("barcodes", {})
+
+
 def lookup_barcode(code: str) -> dict[str, Any] | None:
     """Return catalog data for a known Bambu packaging barcode."""
-    return BAMBU_BARCODES.get(code.strip())
+    cleaned = code.strip()
+    entry = _catalog().get(cleaned)
+    override = BAMBU_BARCODES.get(cleaned)
+    if not entry and not override:
+        return None
+
+    data = dict(entry or {})
+    if override:
+        data.update(override)
+
+    material = str(data.get("material") or "PLA")
+    defaults = MATERIAL_DEFAULTS.get(material, (None, None, None))
+    data["brand"] = data.get("brand") or "Bambu Lab"
+    data["material"] = data.get("material") or material
+    data["color_name"] = data.get("color_name") or "Natural"
+    data["color_hex"] = data.get("color_hex") or BAMBU_COLOR_HEX.get(
+        data["color_name"].lower(), "#9ca3af"
+    )
+    data["spool_weight_g"] = data.get("spool_weight_g") or 1000
+    data["nozzle_temp_min"] = data.get("nozzle_temp_min") or defaults[0]
+    data["nozzle_temp_max"] = data.get("nozzle_temp_max") or defaults[1]
+    data["bed_temp"] = data.get("bed_temp") or defaults[2]
+    data["notes"] = data.get("notes") or f"Bambu {data.get('series') or material}"
+    return data
 
 
 def parse_bambu_sku(sku: str | None) -> dict[str, Any] | None:

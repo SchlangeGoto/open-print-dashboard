@@ -36,8 +36,9 @@ export default function PrinterModal({
   onPrintClick,
 }: Props) {
   const liveStatus = status ?? printer.status;
-  const isConnected =
-    printer.configured && liveStatus?.status !== "no_data";
+  const isConnected = Boolean(
+    printer.configured && liveStatus && liveStatus.status !== "no_data",
+  );
   const isPrinting = isPrintingStatus(liveStatus) || Boolean(activePrint);
   const pct = liveStatus?.mc_percent ?? activePrint?.mc_percent ?? 0;
   const remaining =

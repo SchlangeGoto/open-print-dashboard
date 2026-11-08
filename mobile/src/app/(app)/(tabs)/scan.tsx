@@ -80,7 +80,7 @@ export default function ScanScreen() {
   );
 
   async function handleCode(raw: string) {
-    const code = raw.trim();
+    const code = typeof raw === "string" ? raw.trim() : "";
     if (!code || scanLock.current) return;
 
     // State updates are async; the ref is the synchronous guard against
@@ -113,11 +113,17 @@ export default function ScanScreen() {
 
   function handleBarcodeScanned(scan: BarcodeScanningResult) {
     if (!focusedRef.current || scanLock.current) return;
+    const data = typeof scan.data === "string" ? scan.data : "";
+    if (!data) return;
     // Keep the camera live after a result: a different box scans immediately.
     // The same code is ignored until "Scan next" so one box cannot create
     // duplicate spools frame after frame.
-    if (resultRef.current?.code === scan.data) return;
-    void handleCode(scan.data);
+    if (resultRef.current?.code === data) return;
+    void handleCode(data).catch((err) => {
+      if (focusedRef.current) {
+        setError(formatError(err));
+      }
+    });
   }
 
   function resetScan() {

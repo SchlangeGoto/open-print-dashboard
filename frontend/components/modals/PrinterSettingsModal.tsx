@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw, Save, Trash2 } from "lucide-react";
+import { Cloud, Network, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 
 import { api, type Printer } from "@/lib/api";
@@ -42,6 +42,7 @@ export default function PrinterSettingsModal({
   onSaved,
 }: Props) {
   const isEdit = Boolean(printer?.id);
+  const isCloud = isEdit && printer?.connection_mode === "cloud";
   const [form, setForm] = useState({
     name: printer?.name ?? "",
     serial: printer?.serial ?? "",
@@ -57,14 +58,22 @@ export default function PrinterSettingsModal({
     setSaving(true);
     try {
       if (isEdit && printer?.id) {
-        await api.updatePrinter(printer.id, {
-          name: form.name,
-          ip: form.ip,
-          access_code: form.access_code,
-        });
+        await api.updatePrinter(
+          printer.id,
+          isCloud
+            ? { name: form.name }
+            : {
+                name: form.name,
+                ip: form.ip,
+                access_code: form.access_code,
+              },
+        );
         toast.success("Printer settings saved");
       } else {
-        await api.createPrinter(form);
+        await api.createPrinter({
+          ...form,
+          connection_mode: "lan",
+        });
         toast.success("Printer added");
       }
       await onSaved();
@@ -108,11 +117,13 @@ export default function PrinterSettingsModal({
       <Dialog open onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Printer settings" : "Add printer"}</DialogTitle>
+            <DialogTitle>{isEdit ? "Printer settings" : "Add LAN printer"}</DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? "Update the local connection details for this printer."
-                : "Add a printer using its local network details."}
+              {isCloud
+                ? "This printer is monitored through Bambu Cloud. No local IP or access code is needed."
+                : isEdit
+                  ? "Update the local connection details for this printer."
+                  : "Printers on your Bambu account appear in the list automatically. Use this form for a printer on your local network."}
             </DialogDescription>
           </DialogHeader>
 
@@ -145,29 +156,51 @@ export default function PrinterSettingsModal({
               </Field>
             </div>
 
-            <Field>
-              <FieldLabel htmlFor="printer-ip">Printer IP</FieldLabel>
-              <Input
-                id="printer-ip"
-                placeholder="192.168.0.100"
-                value={form.ip}
-                onChange={(event) => setForm({ ...form, ip: event.target.value })}
-                required
-              />
-            </Field>
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+              {isCloud ? (
+                <>
+                  <Cloud className="size-4 shrink-0" />
+                  Bambu Cloud connection
+                </>
+              ) : (
+                <>
+                  <Network className="size-4 shrink-0" />
+                  LAN connection · the printer must be reachable from this server
+                </>
+              )}
+            </div>
 
-            <Field>
-              <FieldLabel htmlFor="printer-access-code">Access code</FieldLabel>
-              <Input
-                id="printer-access-code"
-                placeholder="12345678"
-                value={form.access_code}
-                onChange={(event) =>
-                  setForm({ ...form, access_code: event.target.value })
-                }
-                required
-              />
-            </Field>
+            {!isCloud ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="printer-ip">Printer IP</FieldLabel>
+                  <Input
+                    id="printer-ip"
+                    placeholder="192.168.0.100"
+                    value={form.ip}
+                    onChange={(event) =>
+                      setForm({ ...form, ip: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="printer-access-code">
+                    Access code
+                  </FieldLabel>
+                  <Input
+                    id="printer-access-code"
+                    placeholder="12345678"
+                    value={form.access_code}
+                    onChange={(event) =>
+                      setForm({ ...form, access_code: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+              </>
+            ) : null}
 
             <DialogFooter className="gap-2 sm:justify-between">
               {isEdit ? (
@@ -187,7 +220,7 @@ export default function PrinterSettingsModal({
                   Cancel
                 </Button>
                 <LoadingButton type="submit" loading={saving}>
-                  <Save /> {isEdit ? "Save" : "Add printer"}
+                  <Save /> {isEdit ? "Save" : "Add LAN printer"}
                 </LoadingButton>
               </div>
             </DialogFooter>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Cloud,
   Eye,
   Plus,
   Printer as PrinterIcon,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
+import { toast } from "@/lib/toast";
 import { formatWeight, getPrintFilament, isPrintingStatus } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +82,22 @@ export default function PrintersPage() {
     setSettingsOpen(true);
   }
 
+  async function addCloudPrinter(printer: Printer) {
+    try {
+      await api.createPrinter({
+        name: printer.name,
+        serial: printer.serial,
+        connection_mode: "cloud",
+      });
+      toast.success("Printer added");
+      await load();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add printer",
+      );
+    }
+  }
+
   function activePrintFor(serial: string) {
     return prints.find(
       (print) => print.status === 4 && print.device_id === serial,
@@ -123,7 +141,7 @@ export default function PrintersPage() {
             <RefreshCw /> Refresh
           </Button>
           <Button size="sm" onClick={() => openSettings(null)}>
-            <Plus /> Add printer
+            <Plus /> Add LAN printer
           </Button>
         </div>
       </div>
@@ -132,10 +150,10 @@ export default function PrintersPage() {
         <EmptyState
           icon={PrinterIcon}
           title="No printers"
-          description="Add a printer with its local IP address and access code."
+          description="Printers on your Bambu Lab account appear here. You can also connect one on your local network."
           action={
             <Button onClick={() => openSettings(null)}>
-              <Plus /> Add printer
+              <Plus /> Add LAN printer
             </Button>
           }
         />
@@ -166,17 +184,24 @@ export default function PrintersPage() {
             return (
               <Card
                 key={printer.serial}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedPrinter(printer)}
+                role={printer.configured ? "button" : undefined}
+                tabIndex={printer.configured ? 0 : undefined}
+                onClick={() => {
+                  if (printer.configured) setSelectedPrinter(printer);
+                }}
                 onKeyDown={(event) => {
+                  if (!printer.configured) return;
                   if (event.target !== event.currentTarget) return;
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     setSelectedPrinter(printer);
                   }
                 }}
-                className="cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                className={
+                  printer.configured
+                    ? "cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                    : undefined
+                }
               >
                 <CardContent className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -317,34 +342,51 @@ export default function PrintersPage() {
 
                   {!printer.configured ? (
                     <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-                      Add the local network details to start monitoring this
-                      printer.
+                      <span className="mb-1 flex items-center gap-1.5 font-medium text-foreground">
+                        <Cloud className="size-3.5" /> Available on your Bambu
+                        account
+                      </span>
+                      Add it to the dashboard to start monitoring.
                     </div>
                   ) : null}
 
                   <Separator />
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedPrinter(printer);
-                      }}
-                    >
-                      <Eye /> Details
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openSettings(printer);
-                      }}
-                    >
-                      <Settings2 /> Settings
-                    </Button>
+                    {printer.configured ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedPrinter(printer);
+                          }}
+                        >
+                          <Eye /> Details
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openSettings(printer);
+                          }}
+                        >
+                          <Settings2 /> Settings
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          addCloudPrinter(printer);
+                        }}
+                      >
+                        <Plus /> Add to dashboard
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -31,7 +31,7 @@ function initials(name: string): string {
 }
 
 export function UserMenu() {
-  const { username, logout } = useAuth();
+  const { username, demo, logout } = useAuth();
   const { isMobile } = useSidebar();
 
   if (!username) return null;
@@ -53,7 +53,7 @@ export function UserMenu() {
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{username}</span>
               <span className="truncate text-xs text-muted-foreground">
-                Signed in
+                {demo ? "Demo session" : "Signed in"}
               </span>
             </div>
             <ChevronsUpDown className="ml-auto size-4" />

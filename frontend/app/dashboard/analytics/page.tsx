@@ -213,7 +213,7 @@ export default function AnalyticsPage() {
               accessibilityLayer
               data={activityData}
               barSize={period === "monthly" ? 8 : 24}
-              margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
             >
               <XAxis
                 dataKey="label"
@@ -247,7 +247,7 @@ export default function AnalyticsPage() {
                 accessibilityLayer
                 data={materialData}
                 barSize={36}
-                margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
               >
                 <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis

@@ -3,19 +3,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Disc3 } from "lucide-react";
+import { AlertCircle, Disc3, FlaskConical } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isDemoActive } from "@/lib/demo";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
 
 export default function Home() {
   const router = useRouter();
-  const { username, isLoading, login } = useAuth();
+  const { username, isLoading, login, demoAvailable, enterDemo } = useAuth();
   const [checking, setChecking] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
 
@@ -35,7 +37,7 @@ export default function Home() {
     api
       .getSetupStatus()
       .then((data) => {
-        if (!data.user_created) {
+        if (!data.user_created && !isDemoActive()) {
           setNeedsSetup(true);
           router.push("/setup");
         }
@@ -120,6 +122,29 @@ export default function Home() {
           Sign in
         </LoadingButton>
       </form>
+
+      {demoAvailable ? (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              or
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={enterDemo}
+          >
+            <FlaskConical /> Open demo dashboard
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Development only — mock data, no backend required.
+          </p>
+        </div>
+      ) : null}
     </AuthLayout>
   );
 }

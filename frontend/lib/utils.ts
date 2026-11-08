@@ -59,54 +59,6 @@ export function formatEstimatedEnd(minutes: number | null | undefined): string {
   });
 }
 
-function statusDeviceId(status: any): string | null {
-  return (
-    status?.dev_id ??
-    status?.device_id ??
-    status?.serial ??
-    status?.sn ??
-    status?.id ??
-    null
-  );
-}
-
-function normalizePrinterStatus(status: any) {
-  if (!status) return status;
-  const printStatus = status.print_status;
-  const gcodeState =
-    status.gcode_state ??
-    (typeof printStatus === "string"
-      ? printStatus
-      : (printStatus?.gcode_state ?? printStatus?.status));
-  return { ...status, gcode_state: gcodeState };
-}
-
-/**
- * Build a `dev_id -> status` map from the cloud status list and the local
- * MQTT status. The local status is authoritative for the configured printer.
- */
-export function buildPrinterStatusMap(
-  cloudStatuses: any[] | null | undefined,
-  localStatus: any | null | undefined,
-  localSerial?: string | null,
-): Record<string, any> {
-  const map: Record<string, any> = {};
-
-  for (const status of cloudStatuses ?? []) {
-    const id = statusDeviceId(status);
-    if (id) map[id] = normalizePrinterStatus(status);
-  }
-
-  if (localStatus && localSerial) {
-    map[localSerial] = normalizePrinterStatus({
-      ...(map[localSerial] ?? {}),
-      ...localStatus,
-    });
-  }
-
-  return map;
-}
-
 export function isPrintingStatus(status: any): boolean {
   const state = status?.gcode_state ?? status?.print_status;
   return typeof state === "string" && state.toUpperCase() === "RUNNING";
@@ -131,15 +83,14 @@ export function stockColor(percent: number, fallback = "#3b82f6"): string {
 }
 
 /**
- * Keep chart bars readable when the filament itself is very dark. Stock
- * status colors are left alone; only the actual filament color is lightened.
+ * Chart bars always use the filament color. Very dark colors are lightened
+ * just enough to stay visible on the dark chart background.
  */
-export function chartColor(percent: number, color?: string | null): string {
-  const base = stockColor(percent, color ?? undefined);
-  if (!color || percent <= 30 || percent >= 70) return base;
+export function chartColor(color?: string | null): string {
+  if (!color) return "var(--chart-1)";
 
   const match = /^#([0-9a-f]{6})$/i.exec(color);
-  if (!match) return base;
+  if (!match) return color;
 
   const value = Number.parseInt(match[1], 16);
   const r = (value >> 16) & 255;
@@ -147,7 +98,7 @@ export function chartColor(percent: number, color?: string | null): string {
   const b = value & 255;
   const luminance = (0.2126 * r + 0.587 * g + 0.114 * b) / 255;
 
-  if (luminance >= 0.2) return base;
+  if (luminance >= 0.2) return color;
 
   const mix = 0.4;
   const lighten = (channel: number) =>

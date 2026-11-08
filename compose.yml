@@ -72,6 +72,9 @@ services:
       - backend
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Demo mode is opt-in for the full-stack setup so it talks to the real
+      # backend. Local `npm run dev` enables demo mode by default.
+      - NEXT_PUBLIC_DEMO_MODE=${NEXT_PUBLIC_DEMO_MODE:-false}
     ports:
       - "3000:3000"
     volumes:

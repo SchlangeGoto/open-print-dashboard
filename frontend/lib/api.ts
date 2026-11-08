@@ -1,3 +1,5 @@
+import { DEMO_AVAILABLE, isDemoActive } from "@/lib/demo";
+
 const API_ROOT = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1`;
 
 function getToken(): string | null {
@@ -55,10 +57,31 @@ export interface SetupStatus {
   setup_complete: boolean;
 }
 
-export interface PrinterConfig {
+export interface Printer {
+  id: string | null;
+  name: string;
+  serial: string;
+  model: string | null;
   ip: string | null;
-  serial: string | null;
   access_code: string | null;
+  online: boolean;
+  configured: boolean;
+  status: any | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PrinterInput {
+  name: string;
+  serial: string;
+  ip: string;
+  access_code: string;
+}
+
+export interface PrinterUpdateInput {
+  name?: string;
+  ip?: string;
+  access_code?: string;
 }
 
 interface ListResponse<T> {
@@ -66,7 +89,7 @@ interface ListResponse<T> {
   count: number;
 }
 
-export const api = {
+const apiImpl = {
   // Setup / auth
   getSetupStatus: () => request<SetupStatus>("/setup/status"),
 
@@ -126,15 +149,21 @@ export const api = {
 
   // Settings
   getSettings: () => request<{ key: string; value: string }[]>("/settings/"),
-  getPrinterConfig: () => request<PrinterConfig>("/settings/printer"),
-  savePrinterConfig: (config: PrinterConfig) =>
-    request<PrinterConfig>("/settings/printer", {
-      method: "PUT",
-      body: JSON.stringify(config),
-    }),
 
   // Printers
-  getPrinters: () => request<any[]>("/printers/"),
+  getPrinters: () => request<Printer[]>("/printers/"),
+  createPrinter: (data: PrinterInput) =>
+    request<Printer>("/printers/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updatePrinter: (id: string, data: PrinterUpdateInput) =>
+    request<Printer>(`/printers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deletePrinter: (id: string) =>
+    request<{ message: string }>(`/printers/${id}`, { method: "DELETE" }),
   getPrinterStatus: () => request<any>("/printers/status"),
   getCloudStatus: () => request<any[]>("/printers/cloud/status"),
   getTasks: (limit = 20) => request<any[]>(`/printers/tasks?limit=${limit}`),
@@ -143,8 +172,10 @@ export const api = {
   getFirmware: (serial: string) => request<any>(`/printers/${serial}/firmware`),
   getProjects: () => request<any[]>("/printers/projects"),
   getMessages: () => request<any[]>("/printers/messages"),
-  reconnectPrinter: () =>
-    request<{ message: string }>("/printers/reconnect", { method: "POST" }),
+  reconnectPrinter: (id: string) =>
+    request<{ message: string }>(`/printers/${id}/reconnect`, {
+      method: "POST",
+    }),
 
   // Print Jobs
   getPrintJobs: async () =>
@@ -197,5 +228,48 @@ export const api = {
   // Health
   health: () => request<boolean>("/utils/health-check/"),
 };
+
+export type ApiShape = typeof apiImpl;
+
+/**
+ * In development, route every API call through the mock implementation while
+ * demo mode is active. The demo module is imported lazily so it is only loaded
+ * when it is actually used.
+ */
+function createApi(): ApiShape {
+  if (!DEMO_AVAILABLE) return apiImpl;
+
+  return new Proxy(apiImpl, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+
+      if (
+        typeof property !== "string" ||
+        typeof value !== "function" ||
+        !isDemoActive()
+      ) {
+        return value;
+      }
+
+      return (...args: unknown[]) =>
+        import("./demo-api").then(({ demoApi }) => {
+          const demoMethod = (
+            demoApi as unknown as Record<
+              string,
+              (...demoArgs: unknown[]) => unknown
+            >
+          )[property];
+
+          if (!demoMethod) {
+            return (value as (...realArgs: unknown[]) => unknown)(...args);
+          }
+
+          return demoMethod(...args);
+        });
+    },
+  });
+}
+
+export const api = createApi();
 
 export { API_ROOT };

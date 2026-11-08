@@ -41,6 +41,26 @@ Open <http://localhost:3000>.
 
 The frontend talks to the backend at `http://localhost:8000` (override with `NEXT_PUBLIC_API_URL`).
 
+### Demo Mode (development only)
+
+`npm run dev` starts with demo mode enabled, so the dashboard opens with
+realistic mock data and **no backend, account, or printer is required**. Demo
+mode is only active in development and cannot be enabled in production builds.
+
+- The **Demo data** menu in the dashboard header resets local demo edits or
+  exits demo mode to show the real login/setup flow.
+- The login and setup screens have an **Open demo dashboard** button to jump
+  back in.
+- To work against the real backend without demo data, set
+  `NEXT_PUBLIC_DEMO_MODE=false` in `frontend/.env.local` (or run
+  `NEXT_PUBLIC_DEMO_MODE=false npm run dev`).
+- Changes made in demo mode (adding filaments/spools, deleting prints, ...)
+  are stored in `localStorage` and can be reset from the demo menu.
+
+Docker Compose sets `NEXT_PUBLIC_DEMO_MODE=false` by default so the full-stack
+development setup uses the real backend. Set `NEXT_PUBLIC_DEMO_MODE=true` in the
+root `.env` to preview the demo data in Docker instead.
+
 The UI is built with [shadcn/ui](https://ui.shadcn.com) components in
 `frontend/components/ui`. To add a new component:
 

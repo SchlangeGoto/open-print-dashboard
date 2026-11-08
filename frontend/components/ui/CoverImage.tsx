@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { cn } from "cn";
 import { API_ROOT } from "@/lib/api";
 
@@ -16,9 +17,10 @@ interface CoverImageProps {
 export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const isLocalCover = Boolean(cover?.startsWith("/"));
 
   useEffect(() => {
-    if (!cover) {
+    if (!cover || cover.startsWith("/")) {
       setObjectUrl(null);
       setFailed(false);
       return;
@@ -56,7 +58,28 @@ export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageP
     };
   }, [cover]);
 
-  if (!cover || failed || !objectUrl) {
+  if (!cover || failed) {
+    return <div className={cn("bg-muted", className)} aria-hidden="true" />;
+  }
+
+  // Demo mode uses bundled cover images from /public instead of the backend.
+  if (isLocalCover) {
+    return (
+      <div className={cn("relative overflow-hidden bg-muted", className)}>
+        <Image
+          src={cover}
+          alt={alt}
+          fill
+          unoptimized
+          sizes="(max-width: 768px) 33vw, 200px"
+          className={fit === "contain" ? "object-contain" : "object-cover"}
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  if (!objectUrl) {
     return <div className={cn("bg-muted", className)} aria-hidden="true" />;
   }
 

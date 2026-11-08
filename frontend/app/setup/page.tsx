@@ -10,6 +10,7 @@ import {
   Cloud,
   Disc3,
   ExternalLink,
+  FlaskConical,
   Info,
   Printer,
   User,
@@ -17,6 +18,7 @@ import {
 
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isDemoActive } from "@/lib/demo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +42,7 @@ const steps = [
 
 export default function SetupPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, demoAvailable, enterDemo } = useAuth();
   const [step, setStep] = useState<SetupStep>("account");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,6 +67,10 @@ export default function SetupPage() {
     api
       .getSetupStatus()
       .then((status) => {
+        if (isDemoActive()) {
+          router.push("/dashboard");
+          return;
+        }
         if (status.setup_complete) {
           router.push("/");
         } else if (status.user_created && !status.bambu_logged_in) {
@@ -153,9 +159,10 @@ export default function SetupPage() {
     setError("");
     setBusy(true);
     try {
-      await api.savePrinterConfig({
-        ip: printerIp,
+      await api.createPrinter({
+        name: printerSerial,
         serial: printerSerial,
+        ip: printerIp,
         access_code: printerAccessCode,
       });
       setStep("done");
@@ -482,11 +489,26 @@ export default function SetupPage() {
               <p className="mb-6 text-sm text-muted-foreground">
                 Your dashboard is ready to go.
               </p>
-              <Button size="lg" render={<Link href="/dashboard" />}>
+              <Button
+                size="lg"
+                nativeButton={false}
+                render={<Link href="/dashboard" />}
+              >
                 Go to Dashboard <ChevronRight />
               </Button>
             </CardContent>
           </Card>
+        ) : null}
+
+        {demoAvailable ? (
+          <div className="mt-6 text-center">
+            <Button variant="ghost" size="sm" onClick={enterDemo}>
+              <FlaskConical /> Skip setup and open demo dashboard
+            </Button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Development only — mock data, no backend required.
+            </p>
+          </div>
         ) : null}
       </div>
     </main>

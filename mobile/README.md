@@ -36,6 +36,38 @@ npm start
 Then scan the QR code with Expo Go, or press `a` for an Android emulator / `i`
 for the iOS simulator.
 
+If the QR code points at a VPN address instead of your Wi-Fi address, use:
+
+```bash
+npm run start:lan
+```
+
+### Phone can't open the Expo QR code
+
+“Something went wrong” in Expo Go before the app loads usually means the phone
+cannot reach Metro. Stop the old Expo server, then start with the LAN address
+forced:
+
+```bash
+npm run start:lan
+```
+
+or, with a known address:
+
+```bash
+REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.10 npx expo start -c
+```
+
+Then check:
+
+- the phone and computer are on the same Wi-Fi, with no VPN blocking LAN traffic
+- the phone browser can open `http://<lan-ip>:8081`
+- the computer firewall allows TCP `8081` (Metro) and `8000` (backend)
+- as a last resort, `npx expo start -c --tunnel`
+
+Settings → App & build shows the loaded build tag (`in-app-scanner-fix`), so a
+stale bundle is visible.
+
 ```bash
 npm run typecheck
 npm run lint

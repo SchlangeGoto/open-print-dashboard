@@ -180,6 +180,22 @@ const apiImpl = {
   // Print Jobs
   getPrintJobs: async () =>
     (await request<ListResponse<any>>("/prints/")).data,
+  getAllPrintJobs: async () => {
+    const pageSize = 500;
+    const jobs: any[] = [];
+    let skip = 0;
+
+    while (true) {
+      const page = await request<ListResponse<any>>(
+        `/prints/?skip=${skip}&limit=${pageSize}`,
+      );
+      jobs.push(...page.data);
+      if (jobs.length >= page.count || page.data.length === 0) break;
+      skip += pageSize;
+    }
+
+    return jobs;
+  },
   getActivePrints: async () =>
     (await request<ListResponse<any>>("/prints/active")).data,
   getPrint: (id: string) => request<any>(`/prints/${id}`),

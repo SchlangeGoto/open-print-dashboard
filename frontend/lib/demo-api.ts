@@ -217,6 +217,8 @@ export const demoApi: ApiShape = {
   // ── Print Jobs ────────────────────────────────────────────────────────────
   getPrintJobs: () => delay(sortedPrints()),
 
+  getAllPrintJobs: () => delay(sortedPrints()),
+
   getActivePrints: () =>
     delay(sortedPrints().filter((print) => print.status === 4)),
 

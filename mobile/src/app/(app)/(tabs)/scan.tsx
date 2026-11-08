@@ -31,7 +31,28 @@ import { formatError, formatWeight } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
 
-const BARCODE_TYPES: BarcodeType[] = ["ean13", "ean8", "upc_a", "upc_e"];
+// Linear formats only. Bambu boxes may use Code128 for the product code, while
+// the square QR is just a short link and is intentionally ignored.
+const BARCODE_TYPES: BarcodeType[] = [
+  "ean13",
+  "ean8",
+  "upc_a",
+  "upc_e",
+  "code128",
+  "code39",
+  "code93",
+  "itf14",
+  "codabar",
+];
+
+/** ITF-14 carton codes often wrap an EAN-13 with a leading packaging zero. */
+function normalizeBarcode(raw: string): string {
+  const value = raw.trim();
+  if (/^\d{14}$/.test(value) && value.startsWith("0")) {
+    return value.slice(1);
+  }
+  return value;
+}
 
 export default function ScanScreen() {
   const { api } = useAuth();
@@ -81,7 +102,7 @@ export default function ScanScreen() {
   );
 
   async function handleCode(raw: string) {
-    const code = typeof raw === "string" ? raw.trim() : "";
+    const code = normalizeBarcode(typeof raw === "string" ? raw : "");
     if (!code || scanLock.current) return;
 
     // State updates are async; the ref is the synchronous guard against
@@ -116,11 +137,12 @@ export default function ScanScreen() {
     if (!focusedRef.current || scanLock.current) return;
     const data = typeof scan.data === "string" ? scan.data : "";
     if (!data) return;
+    const normalized = normalizeBarcode(data);
     // Keep the camera live after a result: a different box scans immediately.
     // The same code is ignored until "Scan next" so one box cannot create
     // duplicate spools frame after frame.
-    if (resultRef.current?.code === data) return;
-    void handleCode(data).catch((err) => {
+    if (resultRef.current?.code === normalized) return;
+    void handleCode(normalized).catch((err) => {
       if (focusedRef.current) {
         setError(formatError(err));
       }
@@ -439,10 +461,9 @@ export default function ScanScreen() {
         </Card>
 
         <AppText variant="caption" faint style={styles.tip}>
-          Scan the striped EAN/UPC barcode on the box. The square Bambu QR is
-          just a short link and does not contain the filament data. Known boxes
-          are created automatically; other brands ask for colour and material
-          once.
+          Scan the striped barcode on the box. The square Bambu QR is just a
+          short link and is ignored. Known boxes are created automatically;
+          other brands ask for colour and material once.
         </AppText>
 
         <AppText variant="caption" faint style={styles.buildTag}>

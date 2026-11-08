@@ -417,7 +417,14 @@ export default function DashboardPage() {
                     ) : null}
 
                     {loadedSpool && loadedFilament ? (
-                      <div className="rounded-xl border bg-muted/30 p-3">
+                      <button
+                        type="button"
+                        className="w-full cursor-pointer rounded-xl border bg-muted/30 p-3 text-left transition-colors hover:border-primary/40"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedSpool(loadedSpool);
+                        }}
+                      >
                         <div className="flex items-center gap-3">
                           <SpoolIndicator
                             remaining={loadedSpool.remaining_g}
@@ -449,7 +456,7 @@ export default function DashboardPage() {
                             />
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ) : null}
 
                   </CardContent>

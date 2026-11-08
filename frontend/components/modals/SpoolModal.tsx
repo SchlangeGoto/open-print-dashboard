@@ -118,6 +118,13 @@ export default function SpoolModal({
           ))}
         </div>
 
+        {spool?.notes ? (
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="mb-0.5 text-[10px] text-muted-foreground">Notes</p>
+            <p className="whitespace-pre-wrap text-sm">{spool.notes}</p>
+          </div>
+        ) : null}
+
         <DialogFooter className="gap-2 sm:justify-between">
           {!spool?.active && (onRequestLoad || onActivate) ? (
             <Button

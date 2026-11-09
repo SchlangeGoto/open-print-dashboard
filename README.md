@@ -1,213 +1,145 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" />
-<img src="https://img.shields.io/badge/license-GNU AGPLv3-green?style=flat-square" />
-<img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" />
+<img src="frontend/public/icons/icon-192.png" width="72" height="72" alt="OpenPrintDash icon" />
 
-<br> <br>
+<h1>OpenPrintDash</h1>
 
-```
-        ██████╗ ██████╗ ███████╗███╗   ██╗    ██████╗ ██████╗ ██╗███╗   ██╗████████╗
-         ██╔═══██╗██╔══██╗██╔════╝████╗  ██║    ██╔══██╗██╔══██╗██║████╗  ██║╚══██╔══╝
-         ██║   ██║██████╔╝█████╗  ██╔██╗ ██║    ██████╔╝██████╔╝██║██╔██╗ ██║   ██║   
-         ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║    ██╔═══╝ ██╔══██╗██║██║╚██╗██║   ██║   
-         ╚██████╔╝██║     ███████╗██║ ╚████║    ██║      ██║  ██║██║██║ ╚████║   ██║   
-          ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝   ╚═╝      ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝  
+**Every print. Every spool. Your dashboard.**
 
-     ██████╗  █████╗ ███████╗██╗  ██╗
-     ██╔══██╗██╔══██╗██╔════╝██║  ██║
-     ██║  ██║███████║███████╗███████║
-     ██║  ██║██╔══██║╚════██║██╔══██║
-     ██████╔╝██║  ██║███████║██║  ██║
-      ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+A self-hosted dashboard for Bambu Lab 3D printers. Live status, filament and
+spool inventory, print history and material cost — on your own hardware.
 
-```
+[<img src="https://img.shields.io/badge/website-openprintdash.app-059669?style=flat-square" alt="Website" />](https://openprintdash.app)
+[<img src="https://img.shields.io/badge/demo-live-059669?style=flat-square" alt="Live demo" />](https://demo.openprintdash.app)
+[<img src="https://img.shields.io/badge/version-0.1.0-059669?style=flat-square" alt="Version 0.1.0" />](https://github.com/SchlangeGoto/open-print-dashboard)
+[<img src="https://img.shields.io/badge/license-AGPL--3.0-059669?style=flat-square" alt="AGPL-3.0" />](LICENSE)
+[<img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker ready" />](compose.yml)
 
-### Your 3D printer, fully visible. No cloud required.
-
-**OpenPrintDashboard** is a beautiful, self-hosted dashboard for Bambu Lab 3D printers.  
-Live status, filament inventory, print history, cost tracking — all in one place, all yours.
-
-<br />
-
-[🚀 Quick Start](#-quick-start) · [✨ Features](#-features) · [⚙️ Configuration](#%EF%B8%8F-configuration) · [🗺️ Roadmap](#%EF%B8%8F-roadmap)
-
-<br />
+[Website](https://openprintdash.app) ·
+[Live demo](https://demo.openprintdash.app) ·
+[Install](https://openprintdash.app/install/) ·
+[Docs](docs) ·
+[Issues](https://github.com/SchlangeGoto/open-print-dashboard/issues)
 
 </div>
 
----
+<p align="center">
+  <a href="https://demo.openprintdash.app">
+    <img src="site/public/screenshots/overview.jpg" alt="OpenPrintDash dashboard with demo data" width="100%" />
+  </a>
+</p>
+<p align="center"><sub>The dashboard with demo data. <a href="https://demo.openprintdash.app">Open the live demo</a>.</sub></p>
 
-## ✨ Features
+## What it does
 
-### 🖨️ Live Printer Status
-Real-time data streamed directly from your printer over your local network via MQTT — no polling, no lag.
-- Nozzle & bed temperature (current + target)
-- Print progress bar, layer count, and time remaining
-- Cooling fan speed and print speed level
-- Online / offline detection
-- Auto-reconnects after network blips
+- **Live printer status** — nozzle and bed temperatures, progress, layers, time remaining, fan and speed.
+- **Filament library** — brand, material, colour, temperatures and remaining stock.
+- **Spool inventory** — individual rolls, remaining weight, price per kilogram and the printer they are loaded in.
+- **Print history and cost** — every job with weight, duration, outcome and material cost.
+- **Native scanner** — scan a Bambu box with the iOS or Android app; known barcodes create the spool.
+- **One Docker stack** — app, database, migrations and email preview in one compose file.
 
-<img width="800" alt="{FD839F04-1978-4423-B766-153F8D3C6BBA}" src="https://github.com/user-attachments/assets/45fe02d7-1744-44b9-a927-ea94e821ea9a" /> <br> <br>
+## Screenshots
 
+| Spools | Analytics |
+| :---: | :---: |
+| ![Spool inventory](site/public/screenshots/spools.jpg) | ![Print analytics](site/public/screenshots/analytics.jpg) |
 
+### Native companion
 
-### 📊 Print History & Analytics
-Every print is automatically captured and logged when it completes.
-- Full print timeline with title, duration, weight used
-- Status tracking: Finished / Canceled / Running
-- Success rate statistics
-- Cover image thumbnails from Bambu Cloud
-- Delete individual records to clean up your history
+The Expo app in [`mobile/`](mobile) scans Bambu box barcodes and reads the same
+inventory as the dashboard. The web dashboard stays complete without it.
 
-<img width="800" alt="{E3A513A6-D0BE-4BAB-AAD6-5E50F2B00795}" src="https://github.com/user-attachments/assets/f552e7e1-4aed-4a49-a5d9-990ed040b236" />
-<img width="800" alt="{3D7260DF-735A-4490-AD50-93BE3D179B08}" src="https://github.com/user-attachments/assets/92f3735d-ce22-45bb-8168-a2b9ece6b6b6" /><br> <br>
+<p align="center">
+  <img src="site/public/screenshots/app-spools.jpg" alt="Spool inventory on the native app" width="240" />
+  <img src="site/public/screenshots/app-spool.jpg" alt="Spool detail on the native app" width="240" />
+  <img src="site/public/screenshots/app-scan.jpg" alt="Barcode scanner on the native app" width="240" />
+</p>
 
+## Self-hosted by default
 
-### 🎨 Filament Library
-Build a catalogue of every filament type you own, with all the details that matter.
-- Brand, material type, and color (with visual color swatch)
-- Nozzle and bed temperature profiles
-- Bambu AMS info index for automatic slot mapping
-- Remaining stock aggregated across all spools
-- Average price per kg, calculated from real purchase data
+| Where | What lives there |
+| --- | --- |
+| **Your server** | The app, PostgreSQL, print history, filaments, spools and costs. |
+| **Bambu Cloud** | Account login, printer discovery, and history or covers where cloud sync is used. |
+| **Nowhere else** | No analytics, no telemetry, no third-party tracking. |
 
-<img width="800" alt="{7B86884E-5E37-471E-8EDC-6E92E82EE0DF}" src="https://github.com/user-attachments/assets/c0aaee83-4664-4203-b07f-e34af6212b6e" /><br> <br>
+The app is AGPL-3.0. Bambu Cloud is part of the printer connection, and the site
+says so plainly. Your dashboard data stays on your hardware.
 
-
-### 🧵 Spool Inventory
-Track individual spools from purchase to empty.
-- Remaining weight with a color-coded progress bar
-- Mark a spool as active (currently loaded in the printer)
-- NFC tag support — scan a tag to instantly activate a spool
-- Price per kg for per-print cost calculations
-- Usage automatically deducted after every print
-
-<img width="800" alt="{D344FB10-801D-43ED-AEC8-F6974E3A808E}" src="https://github.com/user-attachments/assets/63db7912-07f4-4c99-8975-9bca487dd1b7" /><br> <br>
-
-
-
-
----
-
-
-**Stack at a glance:**
+## Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 |
-| Backend | FastAPI · Python 3.13 · SQLModel · Pydantic |
-| Database | PostgreSQL 16 |
-| Protocol | MQTT (local LAN, TLS) · Bambu Cloud REST API |
-| Deployment | Docker · Docker Compose |
+| --- | --- |
+| Web | Next.js 16 · React 19 · TypeScript · Tailwind CSS · shadcn/ui |
+| API | FastAPI · Python 3.13 · SQLModel · Pydantic · Alembic |
+| Data | PostgreSQL 16 |
+| Native | Expo · React Native |
+| Site | Next.js static export in [`site/`](site) |
+| Deploy | Docker · Docker Compose |
+| Printer connection | Bambu Cloud account; current LAN/MQTT client for live status |
 
----
+## Quick start
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
-- Your Bambu Lab printer on the same local network
-- Your printer's **IP address**, **serial number**, and **access code** (see [finding these values](#finding-printer-credentials))
-
-### 1. Clone the repository
+You need Docker and Docker Compose, a Bambu Lab printer on your network, and the
+printer's IP address, serial number and access code.
 
 ```bash
-git clone https://github.com/your-username/OpenPrintDashboard.git
-cd OpenPrintDashboard
-```
-
-### 2. Create your environment file
-
-```bash
+git clone https://github.com/SchlangeGoto/open-print-dashboard.git
+cd open-print-dashboard
 cp .env.example .env
+
+# Generate a secret and put it in .env
+openssl rand -hex 32
+
+docker compose up -d --build
 ```
 
-Open `.env` and fill in your values:
+Open <http://localhost:3000> and follow the setup wizard:
 
-```env
-POSTGRES_USER=opd
-POSTGRES_PASSWORD=change_me_please
-POSTGRES_DB=openprintdashboard
+```text
+Create account  →  Connect Bambu Lab  →  Add printer
 ```
 
-### 3. Start the stack
+Mailpit catches the new-account email at <http://localhost:8025>.
 
-```bash
-docker compose up -d
-```
+> **Just looking?** The [live demo](https://demo.openprintdash.app) runs the real
+> dashboard with seeded data and no backend.
 
-That's it. Docker will pull the images, start the database, API, and web frontend.
-
-### 4. Run the setup wizard
-
-Open **http://localhost:3000** in your browser.
-
-You'll be guided through three steps:
-<br><br>
-```
-Step 1: Create Account
-     (local admin)
-```
-<img width="600" alt="{09A32FFD-8D3D-494B-BB68-3A63E58B7C85}" src="https://github.com/user-attachments/assets/fa60fa82-6124-48d6-9da4-5885fd0f8cba" /><br><br>
-```
-Step 2: Bambu Lab Login   →   Step 3: Printer Setup
-(cloud sync + history)        (LAN connection)
-```
-<img width="600" alt="{38251648-B05F-4E96-B369-7CCE06B1FD88}" src="https://github.com/user-attachments/assets/1686ee65-41e0-4c54-8b83-7d71874fe846" /><br><br>
-```
-Step 3: Verification Code
-     (IF activated)
-```
-<img width="600" alt="{EA0E10D4-21A5-47C8-8605-5130462C086A}" src="https://github.com/user-attachments/assets/0e118c5d-f6e2-4f23-a293-f90e4656d103" /><br><br>
-```
-Step 4: Printer Setup
-   (LAN connection)
-```
-<img width="600" alt="{FF73790A-81B4-4846-BBDB-DEE7133FDAE7}" src="https://github.com/user-attachments/assets/c0222dc0-6fe0-4cb7-bb0a-e2e5a1f4ddbb" />
-
-> **Note:** After completing the printer setup, the backend will automatically connect to your printer via MQTT. First data usually arrives within a few seconds.
-
----
-
-## ⚙️ Configuration
-
-### Finding Printer Credentials
-
-You'll need three values from your printer:
+### Finding printer credentials
 
 | Value | Where to find it |
-|-------|-----------------|
-| **IP Address** | Printer touchscreen → **Settings** → **Network** → **IP Address** — or check your router's DHCP client list |
-| **Serial Number** | Printer touchscreen → **Settings** → **Device** → **Serial Number** — also on the sticker on the back of the machine |
-| **Access Code** | Printer touchscreen → **Settings** → **Network** → **Access Code** — requires LAN mode to be enabled |
+| --- | --- |
+| **IP address** | Printer touchscreen → Settings → Network → IP address, or your router's DHCP list |
+| **Serial number** | Printer touchscreen → Settings → Device → Serial number, or the sticker on the back |
+| **Access code** | Printer touchscreen → Settings → Network → Access code; LAN mode must be enabled |
 
-📖 Official guide: [Bambu Lab Wiki — Finding Serial Number](https://wiki.bambulab.com/en/general/find-sn)
+Official guide: [Bambu Lab Wiki — finding the serial number](https://wiki.bambulab.com/en/general/find-sn).
 
-### Docker Compose Configuration
+## Configuration
 
-The default `compose.yml` exposes:
+<details>
+<summary><strong>Ports and services</strong></summary>
 
 | Service | Port | Description |
-|---------|------|-------------|
-| `web` | `3000` | Next.js frontend |
-| `api` | `8000` | FastAPI backend + Swagger UI at `/docs` |
-| `db` | `5432` | PostgreSQL (internal, exposed for debugging) |
+| --- | --- | --- |
+| `frontend` | `3000` | Next.js dashboard |
+| `backend` | `8000` | FastAPI, with Swagger UI at `/docs` |
+| `db` | `5432` | PostgreSQL |
+| `mailpit` | `8025` | Mailpit web UI (SMTP on `11025`) |
 
-To run on a different port, edit `compose.yml`:
+To change the public port, edit `compose.yml`:
 
 ```yaml
 services:
-  web:
+  frontend:
     ports:
-      - "8080:3000"   # Change 8080 to whatever you want
+      - "8080:3000"
 ```
 
+</details>
 
----
-
-## 🔄 Updating
+## Updating
 
 ```bash
 git pull
@@ -215,122 +147,62 @@ docker compose down
 docker compose up -d --build
 ```
 
-Your database data is persisted in a Docker volume (`postgres_data`) and survives updates.
+The database lives in the `postgres_data` Docker volume and survives updates.
 
----
+## Development
 
+See [`development.md`](development.md) for running the backend and frontend
+without Docker, migrations, tests and linting.
 
-## 🗺️ Roadmap
+<details>
+<summary><strong>Project layout</strong></summary>
 
-These are planned features — contributions welcome!
-
-- [ ] **Multi-printer support** — monitor more than one printer simultaneously
-- [ ] **Klipper / Moonraker support** — extend beyond Bambu Lab ecosystem
-- [ ] **OctoPrint support**
-- [ ] **Prusa Connect support**
-- [ ] **Camera stream** — live view using the Bambu ttcode API (groundwork already laid)
-- [ ] **Notifications** — push alerts on print complete, failure, or low filament
-- [ ] **Charts & analytics** — weekly/monthly print trends, material usage over time
-- [ ] **Mobile app** — React Native companion
-- [ ] **Reverse proxy / HTTPS guide** — for external access
-
-Have an idea? [Open a discussion](../../discussions/new) or a feature request issue.
-
----
-
-## 🛠️ Development
-
-### Running locally (without Docker)
-
-**Backend:**
-
-```bash
-cd api
-python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-# Set your database URL
-export DATABASE_URL=postgresql://opd:password@localhost:5432/openprintdashboard
-
-uvicorn app.main:app --reload
+```text
+backend/    FastAPI API, models, migrations and services
+frontend/   Next.js dashboard
+mobile/     Expo iOS/Android app
+site/       openprintdash.app static site
+docs/       API, setup and website research
+compose.yml
 ```
 
-**Frontend:**
+</details>
 
-```bash
-cd web
-npm install
-npm run dev
-```
+## Contributing
 
-The frontend will be available at `http://localhost:3000` and the API at `http://localhost:8000`.
+Issues and pull requests are welcome. Fork the repository, make a focused
+change, run the relevant checks, and open a PR with a clear description.
 
-**API docs** (Swagger UI): `http://localhost:8000/docs`
+If you are changing the dashboard, start with [`development.md`](development.md).
+If you are changing the website, use [`site/README.md`](site/README.md).
 
-### Project Structure
+## Managed hosting (beta)
 
-```
-OpenPrintDashboard/
-├── api/                        # FastAPI backend
-│   ├── app/
-│   │   ├── core/               # Config, MQTT commands, exceptions
-│   │   ├── db/                 # SQLModel models, database engine, helpers
-│   │   ├── routers/            # auth, printers, prints, filaments, spools, settings, users
-│   │   └── services/           # BambuClient (MQTT), BambuCloudClient, PrinterService
-│   ├── requirements.txt
-│   └── Dockerfile
-├── web/                        # Next.js frontend
-│   ├── app/
-│   │   ├── dashboard/          # Dashboard, Printer, Prints, Filaments, Spools, Settings pages
-│   │   └── setup/              # Setup wizard
-│   ├── components/
-│   │   ├── layout/             # Sidebar, DashboardLayout
-│   │   └── ui/                 # Card, Button, Badge, Input, Modal, EmptyState, StatCard
-│   ├── lib/                    # api.ts, auth.tsx, utils.ts
-│   └── Dockerfile
-├── compose.yml
-└── .env.example
-```
+For people who would rather not run Docker, there is a small managed beta at
+[openprintdash.app/hosting](https://openprintdash.app/hosting/). It is a
+convenience for people who cannot self-host, not a feature gate or the business
+model. Self-hosting stays free.
 
----
+## Support
 
-## 🤝 Contributing
+OpenPrintDash is free and self-hosted. If it saves you time, you can
+[sponsor the project on GitHub](https://github.com/sponsors/SchlangeGoto).
+Donations cover the demo, the domain and maintenance; self-hosting stays free.
 
-Contributions are very welcome! This project is in early development and there's a lot of ground to cover.
+## License
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Open a pull request with a clear description
+GNU AGPLv3 — see [`LICENSE`](LICENSE). Not affiliated with Bambu Lab.
 
-Please open an issue first for larger changes so we can discuss the approach.
-
----
-
-## 📄 License
-
-GNU AGPLv3 — See [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Acknowledgements
+## Acknowledgements
 
 - MQTT commands adapted from [ha-bambulab](https://github.com/greghesp/ha-bambulab) by greghesp
 - Built on top of the unofficial Bambu Lab cloud and MQTT APIs
-
----
-
-## Use of AI
-
-- Intigrated JetBrains AI assistant for smart code completion
-- Github Copilot for code review and error checking
-- Claude for react components and help with all kinds of things
+- Backend structure inspired by the [full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template)
 
 <div align="center">
 
-Made with ❤️ for the 3D printing community
+Made with ❤️ for the 3D printing community.
 
-⭐ **Star this repo** if it's useful to you — it helps others find it!
+⭐ **Star this repo** if it is useful — it helps others find it.
 
 </div>

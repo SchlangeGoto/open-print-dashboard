@@ -1,16 +1,18 @@
 # Deployment
 
-## Two compose files
+## Compose files
 
 | File | Use |
 | --- | --- |
 | `compose.yml` | Local development. Mounts source, runs `fastapi dev` and `next dev`, exposes PostgreSQL and Mailpit |
-| `compose.prod.yml` | Production. Built images, `fastapi run`, `next start`, no source mounts, no database port, no Mailpit |
+| `compose.prod.yml` | Production built from source. `fastapi run`, `next start`, no source mounts, no database port, no Mailpit |
+| `compose.ghcr.yml` | Production using published GHCR images. Caddy serves the frontend and proxies `/api` to the backend |
+| `compose.public.yml` | Public marketing site and demo, served from GHCR images through Caddy |
 
 Do not use `compose.yml` for a public deployment: it runs development servers
 and exposes the database.
 
-## Production quick start
+## Source build (compose.prod.yml)
 
 ```bash
 git clone https://github.com/SchlangeGoto/open-print-dashboard.git
@@ -27,55 +29,62 @@ NEXT_PUBLIC_API_URL=https://api.example.com
 FRONTEND_HOST=https://dashboard.example.com
 ```
 
-Then build and start:
+Then:
 
 ```bash
 docker compose -f compose.prod.yml up -d --build
 ```
 
-Open the frontend URL and follow the setup wizard.
+The frontend and API are exposed separately on `:3000` and `:8000`. Put a
+reverse proxy in front for TLS.
 
-## What each value does
+## Prebuilt images (compose.ghcr.yml)
+
+`Release Containers` publishes multi-arch images to GHCR on every `v*` tag:
+
+- `ghcr.io/schlangengoto/open-print-dashboard/backend`
+- `ghcr.io/schlangengoto/open-print-dashboard/frontend`
+- `ghcr.io/schlangengoto/open-print-dashboard/site`
+- `ghcr.io/schlangengoto/open-print-dashboard/demo`
+
+After the first `Release Containers` run, open each package under the
+repository's **Packages** tab and set its visibility to **Public**, or run
+`docker login ghcr.io` on the server with a token that can read packages.
+Otherwise `docker compose pull` cannot fetch the images.
+
+The frontend image is built with an empty `NEXT_PUBLIC_API_URL`, so the browser
+calls `/api/v1` on the same origin. Caddy proxies `/api/*` to the backend; no
+separate API hostname is needed.
+
+```bash
+export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+export IMAGE_TAG=0.2.0        # or latest
+export DOMAIN=dashboard.example.com
+export SECRET_KEY="$(openssl rand -hex 32)"
+export POSTGRES_PASSWORD="<a long random password>"
+
+docker compose -f compose.ghcr.yml pull
+docker compose -f compose.ghcr.yml up -d
+```
+
+Point `dashboard.example.com` at the server and open ports 80/443. Caddy obtains
+TLS certificates automatically.
+
+Set `FRONTEND_HOST` only if you change the public hostname; `compose.ghcr.yml`
+derives it from `DOMAIN`.
+
+## Configuration
 
 | Variable | Notes |
 | --- | --- |
 | `SECRET_KEY` | Required. Generate with `openssl rand -hex 32` |
 | `POSTGRES_PASSWORD` | Required for anything public; change the default |
-| `NEXT_PUBLIC_API_URL` | **Build-time** value. The browser uses it to reach the API. Rebuild the frontend after changing it |
+| `DOMAIN` | Public dashboard hostname for `compose.ghcr.yml` |
+| `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |
+| `NEXT_PUBLIC_API_URL` | Source-build only. **Build-time** value; rebuild after changing it |
 | `FRONTEND_HOST` | Backend CORS allowlist. Must match the public frontend URL |
 | `PRINTER_IP`, `PRINTER_SERIAL`, `PRINTER_ACCESS_CODE` | Optional defaults for the Bambu Lab connection |
 | `SMTP_*`, `EMAILS_FROM_EMAIL` | Optional. If you are not using SMTP, set `EMAILS_FROM_EMAIL=` and `SMTP_HOST=` empty to skip email |
-
-`NEXT_PUBLIC_API_URL` is inlined by Next.js at build time. If you change it,
-run:
-
-```bash
-docker compose -f compose.prod.yml build frontend
-docker compose -f compose.prod.yml up -d frontend
-```
-
-## Reverse proxy and TLS
-
-The stack exposes the frontend on `:3000` and the API on `:8000`. For a public
-deployment, put a reverse proxy in front:
-
-- `https://dashboard.example.com` → `http://127.0.0.1:3000`
-- `https://api.example.com` → `http://127.0.0.1:8000`
-
-Set `NEXT_PUBLIC_API_URL=https://api.example.com` and
-`FRONTEND_HOST=https://dashboard.example.com` before building.
-
-Caddy example:
-
-```caddyfile
-dashboard.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-
-api.example.com {
-    reverse_proxy 127.0.0.1:8000
-}
-```
 
 The backend uses a single process because printer connections and the pending
 Bambu login are kept in memory. Do not scale the backend to multiple replicas
@@ -83,9 +92,19 @@ without moving that state out of process.
 
 ## Updating
 
+Source build:
+
 ```bash
 git pull
 docker compose -f compose.prod.yml up -d --build
+```
+
+Prebuilt images:
+
+```bash
+export IMAGE_TAG=0.3.0
+docker compose -f compose.ghcr.yml pull
+docker compose -f compose.ghcr.yml up -d
 ```
 
 The database lives in the `postgres_data` Docker volume and survives rebuilds.
@@ -94,46 +113,98 @@ Migrations run automatically in `backend/scripts/start.sh`.
 ## Backup
 
 ```bash
-docker compose -f compose.prod.yml exec -T db \
+docker compose -f compose.ghcr.yml exec -T db \
   pg_dump -U opd openprintdashboard > backup.sql
 ```
 
 Restore:
 
 ```bash
-cat backup.sql | docker compose -f compose.prod.yml exec -T db \
+cat backup.sql | docker compose -f compose.ghcr.yml exec -T db \
   psql -U opd -d openprintdashboard
 ```
 
-## Images and CI
+Use `compose.prod.yml` instead of `compose.ghcr.yml` if that is the stack you
+run.
 
-`Docker Build` builds the backend image and `frontend/Dockerfile.prod` on PRs
-that touch Docker, Compose, or dependency files. It does not push them.
+## Public site and demo
 
-Publishing to a registry such as GHCR is optional. If the project starts
-shipping prebuilt images, add a tag-triggered workflow that pushes:
+`site/` is a static Next.js export. `frontend/` can run as a standalone demo
+with `NEXT_PUBLIC_DEMO_MODE=true`. `Release Containers` publishes both as
+images, and `compose.public.yml` serves them with Caddy:
 
-- `ghcr.io/<owner>/open-print-dashboard/backend`
-- `ghcr.io/<owner>/open-print-dashboard/frontend`
+```bash
+export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+export IMAGE_TAG=0.2.0
+export SITE_DOMAIN=openprintdash.app
+export DEMO_DOMAIN=demo.openprintdash.app
 
-Then production hosts can `docker compose pull` instead of building.
+docker compose -f compose.public.yml pull
+docker compose -f compose.public.yml up -d
+```
 
-## Mobile app
+Point both DNS records at the server and open ports 80/443. Caddy obtains
+certificates automatically.
 
-The mobile app is not part of the dashboard deployment.
+For local testing, use hostnames that Caddy can issue locally:
 
-- `Build Mobile APK` is a manual GitHub Actions workflow. It generates the
-  native Android project with `expo prebuild` and uploads a **debug** APK.
-- A debug APK is installable for testing but cannot be published to Google
-  Play.
-- For release builds, use EAS Build with an `EXPO_TOKEN`, or add a keystore
-  secret and a tag-triggered `assembleRelease`/`bundleRelease` workflow.
-- iOS builds need macOS or EAS Build; no IPA workflow is configured.
+```bash
+SITE_DOMAIN=localhost DEMO_DOMAIN=demo.localhost \
+  docker compose -f compose.public.yml up -d
+```
 
-## Marketing site
+There is no Vercel or Cloudflare dependency. The site and demo are self-hosted.
 
-`site/` is a static Next.js export (`site/out/`). `Test Site` builds it in CI.
-Deployment is separate from the self-hosted dashboard.
+## Mobile releases (EAS)
+
+The mobile app is not part of the dashboard deployment. Release builds use
+[EAS Build](https://docs.expo.dev/build/introduction/), which signs Android and
+iOS artifacts in the cloud.
+
+### One-time setup
+
+```bash
+npm install -g eas-cli
+eas login
+cd mobile
+eas init                 # writes the Expo project ID into app.json
+eas build:configure      # creates/updates eas.json
+```
+
+- Android: let EAS generate and store the upload keystore. Back it up in the
+  Expo dashboard.
+- iOS: an Apple Developer account is required. EAS prompts for the Apple login
+  and stores the credentials.
+- Create an Expo access token and add it as the `EXPO_TOKEN` repository secret.
+
+### Release
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`Release Mobile` builds the production Android **AAB** and iOS **IPA**, uploads
+them as workflow artifacts, and attaches them to the GitHub Release.
+
+Manual run:
+
+```bash
+gh workflow run release-mobile.yml
+```
+
+A signed **APK** for direct installation:
+
+```bash
+cd mobile
+eas build --platform android --profile preview
+```
+
+The separate `Build Mobile APK` workflow produces an unsigned/debug APK for
+testing; it is not a store artifact.
+
+The first EAS build fails until `eas init`, credentials, and `EXPO_TOKEN` are
+configured. That is expected.
 
 ## Health checks
 
@@ -141,5 +212,6 @@ Deployment is separate from the self-hosted dashboard.
 - Frontend: `GET /`
 - Database: `pg_isready`
 
-If the frontend loads but API calls fail, check `NEXT_PUBLIC_API_URL` first.
-If the browser gets CORS errors, check `FRONTEND_HOST`.
+If the frontend loads but API calls fail, check `NEXT_PUBLIC_API_URL` (source
+build) or the Caddy `/api` proxy (GHCR stack). If the browser gets CORS errors,
+check `FRONTEND_HOST`.

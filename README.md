@@ -75,7 +75,7 @@ say so plainly. Your dashboard data stays on your hardware.
 | API | FastAPI · Python 3.13 · SQLModel · Pydantic · Alembic |
 | Data | PostgreSQL 16 |
 | Native | Expo · React Native |
-| Deploy | Docker · Docker Compose |
+| Deploy | Docker · Docker Compose · GHCR |
 | Printer connection | Bambu Cloud account; current LAN/MQTT client for live status |
 
 ## Quick start
@@ -94,8 +94,9 @@ openssl rand -hex 32
 docker compose -f compose.prod.yml up -d --build
 ```
 
-> `compose.yml` is the development stack. Production uses `compose.prod.yml`.
-> See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for reverse proxy, TLS and
+> `compose.yml` is the development stack. Production uses `compose.prod.yml`;
+> prebuilt images use `compose.ghcr.yml`. See
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for reverse proxy, TLS, GHCR and
 > `NEXT_PUBLIC_API_URL` details.
 
 Open <http://localhost:3000> and follow the setup wizard:

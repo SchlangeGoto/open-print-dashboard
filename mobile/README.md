@@ -146,16 +146,40 @@ src/
   lib/                 API client, auth provider, storage, theme
 ```
 
-## Build
+## Build and release
 
-Install EAS CLI and configure a project:
+Release builds use EAS Build. One-time setup:
 
 ```bash
 npm install -g eas-cli
-eas build:configure
-eas build --platform android
-eas build --platform ios
+eas login
+cd mobile
+eas init                 # writes the Expo project ID into app.json
+eas build:configure      # creates/updates eas.json
 ```
+
+Create an Expo access token and add it as the `EXPO_TOKEN` repository secret.
+Android signing is managed by EAS (back up the keystore in the Expo dashboard);
+iOS needs an Apple Developer account and an EAS credential setup.
+
+Release on a tag:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The `Release Mobile` workflow builds a production Android **AAB** and iOS
+**IPA**, uploads them as artifacts, and attaches them to the GitHub Release.
+
+A signed APK for direct install:
+
+```bash
+eas build --platform android --profile preview
+```
+
+The separate `Build Mobile APK` GitHub workflow produces a debug APK for
+testing. It is not a store artifact.
 
 Set `EXPO_PUBLIC_*` values only for non-secret configuration. The server URL is
 configured per device in the app, not baked into the build.

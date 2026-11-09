@@ -16,17 +16,31 @@ This repository uses GitHub Actions for three kinds of work:
 | Test Mobile | `.github/workflows/test-mobile.yml` | PRs touching `mobile/` | ESLint, `tsc --noEmit`, `expo install --check`, Android and iOS JS bundle export |
 | Test Site | `.github/workflows/test-site.yml` | PRs touching `site/` | ESLint, `tsc --noEmit`, static export |
 | Test Frontend E2E | `.github/workflows/test-e2e.yml` | PRs touching `frontend/` | Playwright smoke tests against the production build in demo mode |
+| Pre-commit | `.github/workflows/pre-commit.yml` | Every PR | Runs the pre-commit hooks on changed files |
+| Lint Workflows | `.github/workflows/lint-workflows.yml` | Workflow changes, manual | Runs `actionlint` on GitHub Actions files |
+| Zizmor | `.github/workflows/zizmor.yml` | Every PR, push to `main`, manual | Security analysis of workflows (template injection, permissions, unpinned actions) |
+| OpenSSF Scorecard | `.github/workflows/scorecard.yml` | Push to `main`, weekly, branch-rule changes | Supply-chain posture; publishes SARIF |
 | Docker Build | `.github/workflows/docker-build.yml` | PRs touching Docker/Compose/dependency files, manual | Builds the backend image and the production frontend image (no push) |
+| Test Docker Compose | `.github/workflows/test-docker-compose.yml` | Docker/Compose/dependency changes, manual | Builds and starts `compose.prod.yml`, checks backend health and frontend |
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
 | AI PR Review | `.github/workflows/ai-review.yml` | PR opened/updated/ready | Advisory AI review with a filtered inline diff |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
 | Dependabot | `.github/dependabot.yml` | Weekly | Grouped npm, uv, GitHub Actions, and Docker updates |
 
-All workflows cancel superseded runs on the same ref, have a timeout, and use
-least-privilege `permissions`.
+The test and build workflows cancel superseded runs on the same ref, have a
+timeout, and use least-privilege `permissions`. All actions are pinned to commit
+SHAs; Dependabot keeps them updated.
 
 ## Run the same checks locally
+
+Install the hooks once:
+
+```bash
+python -m pip install pre-commit
+pre-commit install
+pre-commit run          # staged files
+```
 
 Backend, from `backend/`:
 
@@ -79,16 +93,18 @@ npm run build
 
 Required status checks are intentionally not enabled yet: `main` still uses the
 old `api/` + `web/` layout and has no workflows. After the migration PR lands on
-`main`, add these as required checks:
+`main`, add only checks that run on **every** PR to `main`:
 
 - `test-backend`
 - `test-frontend`
-- `test-site`
-- `test-mobile`
 - `CodeQL`
 - `dependency-review`
 
-Do **not** require `AI PR Review`; it is advisory and can be slow or skipped.
+Do **not** require `test-site`, `test-mobile`, or `test-e2e` as they are
+path-filtered: they are skipped on unrelated PRs, and a skipped required check
+stays pending forever. If you want one stable required check, add an
+always-running aggregator job that `needs` the others and requires that single
+job instead. Do **not** require `AI PR Review`; it is advisory.
 
 ## Secrets and variables
 
@@ -148,6 +164,25 @@ A release APK/AAB needs a signing keystore and store metadata. Those secrets
 should not run on pull requests. For release builds, use EAS Build with an
 `EXPO_TOKEN`, or add a tag-triggered workflow with a keystore stored as a
 secret.
+
+## Hardening backlog
+
+These are the standard next steps once the repository has more contributors or
+stricter security requirements:
+
+- **Keep pinned actions updated.** All actions are pinned to commit SHAs;
+  Dependabot handles version updates. Review the diff before merging an action
+  bump.
+- **Add OpenSSF Scorecard** and put the badge in the README.
+- **Add a merge queue** when more than one person merges to `main`. Every
+  workflow that provides a required check must also run on `merge_group`.
+- **Use reusable workflows or repository templates** if this project grows into
+  several repositories. For one repository, separate workflows are clearer.
+- **Add release automation** (tagged releases, changelog, signed artifacts)
+  when there is a release cadence.
+- **Consider a managed AI reviewer** (Copilot, CodeRabbit, Greptile) if you
+  want automatic review without maintaining a runner. The local `/pr-review`
+  command remains the vendor-free option.
 
 ## Copilot and GitHub Agents
 

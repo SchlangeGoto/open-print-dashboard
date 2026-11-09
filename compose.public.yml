@@ -1,0 +1,40 @@
+# Public marketing site and demo, served from published GHCR images.
+#
+#   export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+#   export IMAGE_TAG=0.2.0
+#   export SITE_DOMAIN=openprintdash.app
+#   export DEMO_DOMAIN=demo.openprintdash.app
+#   docker compose -f compose.public.yml up -d
+#
+# For local testing, use ports instead of hostnames:
+#   SITE_DOMAIN=:8080 DEMO_DOMAIN=:8081 docker compose -f compose.public.yml up -d
+
+services:
+  site:
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/site:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  demo:
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/demo:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - site
+      - demo
+    environment:
+      - SITE_DOMAIN=${SITE_DOMAIN:-openprintdash.app}
+      - DEMO_DOMAIN=${DEMO_DOMAIN:-demo.openprintdash.app}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.public:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

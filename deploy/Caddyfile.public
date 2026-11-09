@@ -1,0 +1,9 @@
+{$SITE_DOMAIN:openprintdash.app} {
+	encode zstd gzip
+	reverse_proxy site:80
+}
+
+{$DEMO_DOMAIN:demo.openprintdash.app} {
+	encode zstd gzip
+	reverse_proxy demo:3000
+}

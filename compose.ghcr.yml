@@ -1,0 +1,82 @@
+# Production stack using published GHCR images.
+#
+# The frontend image is built with NEXT_PUBLIC_API_URL="", so the browser calls
+# /api/v1 on the same origin and Caddy proxies it to the backend. No separate
+# public API URL is needed.
+#
+#   export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+#   export IMAGE_TAG=0.2.0
+#   export DOMAIN=dashboard.example.com
+#   docker compose -f compose.ghcr.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-opd}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changethis}
+      - POSTGRES_DB=${POSTGRES_DB:-openprintdashboard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-opd} -d ${POSTGRES_DB:-openprintdashboard}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    environment:
+      - PROJECT_NAME=${PROJECT_NAME:-OpenPrintDashboard}
+      - SECRET_KEY=${SECRET_KEY:?Variable not set}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
+      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD:-}
+      - FRONTEND_HOST=https://${DOMAIN:-localhost}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-opd}:${POSTGRES_PASSWORD:-changethis}@db:5432/${POSTGRES_DB:-openprintdashboard}
+      - PRINTER_IP=${PRINTER_IP:-}
+      - PRINTER_SERIAL=${PRINTER_SERIAL:-}
+      - PRINTER_ACCESS_CODE=${PRINTER_ACCESS_CODE:-}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_TLS=${SMTP_TLS:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

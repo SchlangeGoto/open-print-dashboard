@@ -97,3 +97,6 @@ docs/website-research/screenshots/
 
 # Local Expo exports
 mobile/dist-*/
+
+# Local agent config (OpenCode), intentionally not committed
+.opencode/

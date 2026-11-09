@@ -52,6 +52,7 @@
   --color-rule-strong: oklch(1 0 0 / 16%);
   --color-accent: oklch(0.72 0.14 163);
   --color-accent-strong: oklch(0.596 0.145 163.225);
+  --color-brand-mark: oklch(0.696 0.17 162.48);
   --color-accent-hover: oklch(0.54 0.145 163);
   --color-accent-ink: oklch(0.145 0 0);
   --color-accent-strong-ink: oklch(0.145 0 0);

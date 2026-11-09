@@ -52,7 +52,11 @@ export const metadata: Metadata = {
     images: ["/screenshots/printers.jpg"],
   },
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon.png",
   },
 };
 

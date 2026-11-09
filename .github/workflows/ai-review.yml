@@ -72,8 +72,8 @@ jobs:
           OPENCODE_PERMISSION: '{"bash":{"*":"deny","gh pr view*":"allow","gh pr diff*":"allow","git diff*":"allow","git log*":"allow","git show*":"allow"},"edit":"deny","webfetch":"deny","websearch":"deny"}'
         with:
           model: opencode-go/deepseek-v4.1-flash
-          variant: high
-          agent: build
+          variant: minimal
+          agent: ci-reviewer
           use_github_token: true
           share: false
           prompt: |

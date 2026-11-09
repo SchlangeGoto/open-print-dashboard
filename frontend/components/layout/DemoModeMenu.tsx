@@ -16,8 +16,8 @@ import { useAuth } from "@/lib/auth";
 import { resetDemoData } from "@/lib/demo";
 
 /**
- * Small development-only indicator in the dashboard header. Lets you reset
- * local demo edits or leave demo mode to see the real login/setup flow.
+ * Small indicator in the dashboard header while demo mode is active. Lets you
+ * reset local demo edits or leave demo mode to see the real login/setup flow.
  */
 export function DemoModeMenu() {
   const { demo, exitDemo } = useAuth();
@@ -41,7 +41,7 @@ export function DemoModeMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Development demo mode</DropdownMenuLabel>
+          <DropdownMenuLabel>Demo mode</DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem

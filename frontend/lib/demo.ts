@@ -1,14 +1,16 @@
 /**
- * Development-only demo mode.
+ * In-browser demo mode.
  *
- * Demo mode is enabled automatically when running `next dev` and is never
- * available in a production build. Set `NEXT_PUBLIC_DEMO_MODE=false` (for
- * example in `frontend/.env.local`) to work against the real backend without
+ * Enabled automatically when running `next dev`, and opt-in for a production
+ * build via `NEXT_PUBLIC_DEMO_MODE=true` (used by the public demo deployment).
+ * Set `NEXT_PUBLIC_DEMO_MODE=false` to work against the real backend without
  * the demo data, or use the exit button in the dashboard header.
  */
+const DEMO_FLAG = process.env.NEXT_PUBLIC_DEMO_MODE;
+
 export const DEMO_AVAILABLE =
-  process.env.NODE_ENV === "development" &&
-  process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+  DEMO_FLAG === "true" ||
+  (process.env.NODE_ENV === "development" && DEMO_FLAG !== "false");
 
 const DEMO_OPT_OUT_KEY = "opd_demo_opt_out";
 const DEMO_STORAGE_PREFIX = "opd_demo_";

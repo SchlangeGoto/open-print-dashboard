@@ -44,7 +44,7 @@ jobs:
           OPENCODE_PERMISSION: '{"bash":"deny","edit":"deny","webfetch":"deny"}'
         with:
           model: opencode-go/deepseek-v4.1-flash
-          variant: max
+          variant: high
           agent: build
           use_github_token: true
           share: false

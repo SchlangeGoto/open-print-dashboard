@@ -84,7 +84,8 @@ npm run build
 
 ## Review
 
-- CI must pass. The deterministic checks are the gate; AI review is advisory.
+- CI must pass. The deterministic checks are the gate; CodeRabbit review is
+  advisory.
 - Review the diff, not only the summary.
 - For large or stacked PRs, merge bottom-up and rebase the next branch after
   each merge.

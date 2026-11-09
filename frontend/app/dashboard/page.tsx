@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart, Bar, CartesianGrid, XAxis, Cell } from "recharts";
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
@@ -165,9 +165,21 @@ export default function DashboardPage() {
                     value.length > 12 ? `${value.slice(0, 12)}…` : value
                   }
                 />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `${value}g`}
+                />
                 <ChartTooltip
                   cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
+                  content={
+                    <ChartTooltipContent
+                      hideLabel
+                      formatter={(value) =>
+                        `${Number(value).toLocaleString()} g`
+                      }
+                    />
+                  }
                 />
                 <Bar
                   dataKey="remaining"
@@ -200,7 +212,9 @@ export default function DashboardPage() {
                   />
                   <span className="text-muted-foreground">{f.name}</span>
                   <span className="text-muted-foreground/50">·</span>
-                  <span className="tabular-nums text-muted-foreground">{f.pct}%</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {f.remaining.toLocaleString()} g
+                  </span>
                   {f.pct <= 10 ? (
                     <span className="ml-0.5 font-semibold text-red-600 dark:text-red-400">
                       ⚠ Buy now

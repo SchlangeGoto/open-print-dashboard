@@ -41,11 +41,12 @@ Open <http://localhost:3000>.
 
 The frontend talks to the backend at `http://localhost:8000` (override with `NEXT_PUBLIC_API_URL`).
 
-### Demo Mode (development only)
+### Demo Mode
 
 `npm run dev` starts with demo mode enabled, so the dashboard opens with
 realistic mock data and **no backend, account, or printer is required**. Demo
-mode is only active in development and cannot be enabled in production builds.
+mode is also available in a production build when `NEXT_PUBLIC_DEMO_MODE=true`
+is set at build time — this is how the public demo deployment runs.
 
 - The **Demo data** menu in the dashboard header resets local demo edits or
   exits demo mode to show the real login/setup flow.
@@ -72,6 +73,20 @@ npx shadcn@latest add <component>
 The generated components import the `cn` helper from the `cn` package and Radix
 primitives from `radix-ui`. Customize shared primitives (for example extra `Badge`
 variants) directly in `frontend/components/ui`.
+
+### Marketing site
+
+The public site lives in `site/` and deploys independently from the self-hosted
+app:
+
+```bash
+cd site
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000> (or the next free port). `npm run build` writes a
+static export to `site/out/`. See `site/README.md` for deployment notes.
 
 ### Mailpit
 

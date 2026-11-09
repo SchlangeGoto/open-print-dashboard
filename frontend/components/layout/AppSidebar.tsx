@@ -10,7 +10,6 @@ import {
   Package,
   Palette,
   Printer,
-  ScanLine,
   Settings,
 } from "lucide-react";
 
@@ -34,7 +33,6 @@ const navItems = [
   { href: "/dashboard/prints", label: "Print Jobs", icon: History },
   { href: "/dashboard/filaments", label: "Filaments", icon: Palette },
   { href: "/dashboard/spools", label: "Spools", icon: Package },
-  { href: "/dashboard/scan", label: "Scan Filament", icon: ScanLine },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Open Print Dashboard",
     short_name: "Open Print",
     description: "Bambu Lab printer, spool, and filament dashboard.",
-    start_url: "/dashboard/scan",
+    start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     background_color: "#0f172a",

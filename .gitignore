@@ -89,3 +89,6 @@ pnpm-debug.log*
 
 # AI
 AGENTS.md
+
+# Internal design reference (third-party screenshots, do not publish)
+docs/website-research/screenshots/

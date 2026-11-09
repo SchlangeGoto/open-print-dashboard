@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setup, API and deployment docs
+    url: https://github.com/SchlangeGoto/open-print-dashboard/tree/main/docs
+    about: Check the docs before opening an issue.
+  - name: Security report
+    url: https://github.com/SchlangeGoto/open-print-dashboard/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.

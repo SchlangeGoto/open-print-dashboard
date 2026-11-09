@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="frontend/public/icons/icon-192.png" width="72" height="72" alt="OpenPrintDash icon" />
+<img src="docs/assets/readme/icon.png" width="72" height="72" alt="OpenPrintDash icon" />
 
 <h1>OpenPrintDash</h1>
 
@@ -25,7 +25,7 @@ spool inventory, print history and material cost — on your own hardware.
 
 <p align="center">
   <a href="https://demo.openprintdash.app">
-    <img src="site/public/screenshots/overview.jpg" alt="OpenPrintDash dashboard with demo data" width="100%" />
+    <img src="docs/assets/readme/dashboard.jpg" alt="OpenPrintDash dashboard with demo data" width="100%" />
   </a>
 </p>
 <p align="center"><sub>The dashboard with demo data. <a href="https://demo.openprintdash.app">Open the live demo</a>.</sub></p>
@@ -43,17 +43,17 @@ spool inventory, print history and material cost — on your own hardware.
 
 | Spools | Analytics |
 | :---: | :---: |
-| ![Spool inventory](site/public/screenshots/spools.jpg) | ![Print analytics](site/public/screenshots/analytics.jpg) |
+| ![Spool inventory](docs/assets/readme/spools.jpg) | ![Print analytics](docs/assets/readme/analytics.jpg) |
 
 ### Native companion
 
-The Expo app in [`mobile/`](mobile) scans Bambu box barcodes and reads the same
-inventory as the dashboard. The web dashboard stays complete without it.
+The native companion is built with Expo. It scans Bambu box barcodes and reads
+the same inventory as the dashboard. The web dashboard stays complete without it.
 
 <p align="center">
-  <img src="site/public/screenshots/app-spools.jpg" alt="Spool inventory on the native app" width="240" />
-  <img src="site/public/screenshots/app-spool.jpg" alt="Spool detail on the native app" width="240" />
-  <img src="site/public/screenshots/app-scan.jpg" alt="Barcode scanner on the native app" width="240" />
+  <img src="docs/assets/readme/app-spools.jpg" alt="Spool inventory on the native app" width="240" />
+  <img src="docs/assets/readme/app-spool.jpg" alt="Spool detail on the native app" width="240" />
+  <img src="docs/assets/readme/app-scan.jpg" alt="Barcode scanner on the native app" width="240" />
 </p>
 
 ## Self-hosted by default
@@ -64,8 +64,8 @@ inventory as the dashboard. The web dashboard stays complete without it.
 | **Bambu Cloud** | Account login, printer discovery, and history or covers where cloud sync is used. |
 | **Nowhere else** | No analytics, no telemetry, no third-party tracking. |
 
-The app is AGPL-3.0. Bambu Cloud is part of the printer connection, and the site
-says so plainly. Your dashboard data stays on your hardware.
+The app is AGPL-3.0. Bambu Cloud is part of the printer connection, and we
+say so plainly. Your dashboard data stays on your hardware.
 
 ## Stack
 
@@ -75,7 +75,6 @@ says so plainly. Your dashboard data stays on your hardware.
 | API | FastAPI · Python 3.13 · SQLModel · Pydantic · Alembic |
 | Data | PostgreSQL 16 |
 | Native | Expo · React Native |
-| Site | Next.js static export in [`site/`](site) |
 | Deploy | Docker · Docker Compose |
 | Printer connection | Bambu Cloud account; current LAN/MQTT client for live status |
 
@@ -101,8 +100,6 @@ Open <http://localhost:3000> and follow the setup wizard:
 Create account  →  Connect Bambu Lab  →  Add printer
 ```
 
-Mailpit catches the new-account email at <http://localhost:8025>.
-
 > **Just looking?** The [live demo](https://demo.openprintdash.app) runs the real
 > dashboard with seeded data and no backend.
 
@@ -123,19 +120,11 @@ Official guide: [Bambu Lab Wiki — finding the serial number](https://wiki.bamb
 
 | Service | Port | Description |
 | --- | --- | --- |
-| `frontend` | `3000` | Next.js dashboard |
-| `backend` | `8000` | FastAPI, with Swagger UI at `/docs` |
-| `db` | `5432` | PostgreSQL |
-| `mailpit` | `8025` | Mailpit web UI (SMTP on `11025`) |
+| Web app | `3000` | Next.js dashboard |
+| API | `8000` | FastAPI, with Swagger UI at `/docs` |
+| PostgreSQL | `5432` | Database |
 
-To change the public port, edit `compose.yml`:
-
-```yaml
-services:
-  frontend:
-    ports:
-      - "8080:3000"
-```
+Edit the public port in `compose.yml` if 3000 is already taken.
 
 </details>
 
@@ -151,30 +140,15 @@ The database lives in the `postgres_data` Docker volume and survives updates.
 
 ## Development
 
-See [`development.md`](development.md) for running the backend and frontend
-without Docker, migrations, tests and linting.
-
-<details>
-<summary><strong>Project layout</strong></summary>
-
-```text
-backend/    FastAPI API, models, migrations and services
-frontend/   Next.js dashboard
-mobile/     Expo iOS/Android app
-site/       openprintdash.app static site
-docs/       API, setup and website research
-compose.yml
-```
-
-</details>
+See [`docs/SETUP.md`](docs/SETUP.md) for local setup, database and printer
+configuration. API notes are in [`docs/API.md`](docs/API.md).
 
 ## Contributing
 
 Issues and pull requests are welcome. Fork the repository, make a focused
 change, run the relevant checks, and open a PR with a clear description.
 
-If you are changing the dashboard, start with [`development.md`](development.md).
-If you are changing the website, use [`site/README.md`](site/README.md).
+Setup and testing notes are in [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Managed hosting (beta)
 

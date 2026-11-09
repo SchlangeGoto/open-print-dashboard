@@ -11,7 +11,10 @@ everything stacked on it use:
 - `frontend/` — Next.js 16, React 19, Tailwind, shadcn/ui
 - `mobile/` — Expo / React Native
 - `site/` — static Next.js marketing site
-- `compose.yml` — Docker Compose stack (app, db, mailpit)
+- `compose.yml` — development Docker Compose stack (source mounts, dev servers)
+- `compose.prod.yml` — production Docker Compose stack (built images, no source mounts)
+
+CI details: `docs/CI.md`. Production deployment: `docs/DEPLOYMENT.md`.
 
 Do not assume every directory exists on every branch. Check with
 `git ls-tree --name-only <branch>` before adding files to a branch.

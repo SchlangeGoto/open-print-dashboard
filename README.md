@@ -37,7 +37,7 @@ spool inventory, print history and material cost — on your own hardware.
 - **Spool inventory** — individual rolls, remaining weight, price per kilogram and the printer they are loaded in.
 - **Print history and cost** — every job with weight, duration, outcome and material cost.
 - **Native scanner** — scan a Bambu box with the iOS or Android app; known barcodes create the spool.
-- **One Docker stack** — app, database, migrations and email preview in one compose file.
+- **One Docker stack** — app, database and migrations in one compose file, with Mailpit available in the development stack.
 
 ## Screenshots
 
@@ -91,8 +91,12 @@ cp .env.example .env
 # Generate a secret and put it in .env
 openssl rand -hex 32
 
-docker compose up -d --build
+docker compose -f compose.prod.yml up -d --build
 ```
+
+> `compose.yml` is the development stack. Production uses `compose.prod.yml`.
+> See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for reverse proxy, TLS and
+> `NEXT_PUBLIC_API_URL` details.
 
 Open <http://localhost:3000> and follow the setup wizard:
 
@@ -122,9 +126,9 @@ Official guide: [Bambu Lab Wiki — finding the serial number](https://wiki.bamb
 | --- | --- | --- |
 | Web app | `3000` | Next.js dashboard |
 | API | `8000` | FastAPI, with Swagger UI at `/docs` |
-| PostgreSQL | `5432` | Database |
+| PostgreSQL | `5432` | Database (development stack only; not exposed in production) |
 
-Edit the public port in `compose.yml` if 3000 is already taken.
+Edit the public port in `compose.prod.yml` if 3000 is already taken.
 
 </details>
 
@@ -132,8 +136,7 @@ Edit the public port in `compose.yml` if 3000 is already taken.
 
 ```bash
 git pull
-docker compose down
-docker compose up -d --build
+docker compose -f compose.prod.yml up -d --build
 ```
 
 The database lives in the `postgres_data` Docker volume and survives updates.
@@ -143,12 +146,16 @@ The database lives in the `postgres_data` Docker volume and survives updates.
 See [`docs/SETUP.md`](docs/SETUP.md) for local setup, database and printer
 configuration. API notes are in [`docs/API.md`](docs/API.md).
 
+CI and release automation: [`docs/CI.md`](docs/CI.md). Production Docker
+deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## Contributing
 
 Issues and pull requests are welcome. Fork the repository, make a focused
 change, run the relevant checks, and open a PR with a clear description.
 
-Setup and testing notes are in [`docs/SETUP.md`](docs/SETUP.md).
+Setup, testing and CI notes are in [`docs/SETUP.md`](docs/SETUP.md) and
+[`docs/CI.md`](docs/CI.md).
 
 ## Managed hosting (beta)
 

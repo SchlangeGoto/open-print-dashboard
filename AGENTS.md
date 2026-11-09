@@ -21,6 +21,14 @@ Do not assume every directory exists on every branch. Check with
 
 ## Commands
 
+Install local hooks once:
+
+```bash
+python -m pip install pre-commit
+pre-commit install
+pre-commit run
+```
+
 Backend, from `backend/`:
 
 - `uv sync` — install dependencies

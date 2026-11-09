@@ -151,8 +151,10 @@ deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Contributing
 
-Issues and pull requests are welcome. Fork the repository, make a focused
-change, run the relevant checks, and open a PR with a clear description.
+Issues and pull requests are welcome. Read
+[`CONTRIBUTING.md`](CONTRIBUTING.md), make a focused change, run the relevant
+checks, and open a PR with a clear description. Report security issues through
+[`SECURITY.md`](SECURITY.md), not a public issue.
 
 Setup, testing and CI notes are in [`docs/SETUP.md`](docs/SETUP.md) and
 [`docs/CI.md`](docs/CI.md).

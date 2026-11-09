@@ -47,6 +47,17 @@ npm run start -- --port 3100
 
 The demo runs on seeded data and stores edits in the browser only.
 
+## Hosting beta
+
+`/hosting/` is the managed-hosting beta page. It is deliberately not in the
+main navigation: it is linked from the footer, the self-hosted section and the
+install page, so self-hosters can ignore it until they need it.
+
+The Beta plan is the only active plan. Standard and Team are placeholders and
+the page says so; pricing is not published yet. The interest CTA is a `mailto:`
+link (`HOSTING_BETA_MAILTO` in `lib/site.ts`). Update the plan copy, pricing and
+contact when the hosted product is defined.
+
 ## Design
 
 Hallmark custom run. The site uses the dashboard's own tokens: Geist, near-black

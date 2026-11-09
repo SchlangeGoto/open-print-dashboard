@@ -15,12 +15,12 @@
 3. **The open gap is focus.** Bambuddy positions around the *whole print farm*. OctoPrint is generic and dated. Spoolman only manages filament. Nobody owns the **single-printer / small-setup, design-led, filament-and-cost** position. That is OpenPrintDashboard's natural territory.
 4. **The strongest visual references are Immich, Karakeep, Linkwarden, Actual Budget, Frigate and Bambuddy.** The strongest structural references are Bambuddy, Karakeep and Printago. The best cautionary tales are OctoPrint, PhotoPrism, Manyfold and 3DPrinterOS.
 5. **A live demo is table stakes.** Bambuddy, Immich, Karakeep, Linkwarden, Actual, Frigate, Home Assistant and Manyfold all offer one. OpenPrintDashboard already has a demo mode with seeded data; it is currently gated to `next dev`, so a small production-demo flag is needed before deploying `demo.openprintdash.app`. That deployment is the cheapest high-impact conversion asset available.
-6. **The old “No cloud required” promise is being retired.** Cloud stays, and MQTT may go. The site should sell the self-hosted app and data ownership, and be explicit about what is cloud-backed — not fight a protocol war. A paid hosted tier is planned for people who cannot self-host; launch without a pricing page, but leave room for `/cloud` later.
+6. **The old “No cloud required” promise is being retired.** Cloud stays, and MQTT may go. The site should sell the self-hosted app and data ownership, and be explicit about what is cloud-backed — not fight a protocol war. A paid hosted tier is planned for people who cannot self-host; a quiet `/hosting/` beta interest page is live, but pricing waits.
 7. **The brand is now pinned to emerald.** The app default, the site accent and the reticle icon are `oklch(0.596 0.145 163.225)`, with the icon and PWA assets regenerated. Blue remains available in the dashboard accent selector. The site uses one deep-emerald filament shelf as its signature; the rest stays near-black and neutral. The native app is shown as a companion in a phone deck, but its visual language still does not drive the site.
 8. **The old PWA screenshots are gone.** Fresh 2× desktop captures come from the production demo build, and the polished dashboard and analytics captures come from `feat/dashboard-polish` (emerald set manually, temporary Scan Filament sidebar entry). Three phone captures come from the finished native app. The scanning section now shows the app itself — inventory, spool detail and barcode scanning — instead of describing an unfinished UI.
 9. **The best sites sell one concrete outcome, not a feature list.** “Run the whole farm from your own hardware”, “Self-hosted photo and video management solution”, “The Bookmark Everything App”, “Know what is on the shelf, to the gram.” The feature list comes after the promise.
 10. **Install pages beat install snippets in the hero.** Mature OSS sites keep the homepage clean, put a single “Install” CTA in the nav, and give the exact commands on a dedicated page. Karakeep is the exception with a one-line command in its self-host section.
-11. **Pricing is a SaaS signal, and a hosted tier is coming later.** OSS-first projects use Sponsor/Donate/Buy a key/Cloud, not a pricing table. At v0.1, a pricing page would confuse the audience. Add `/cloud` and pricing only when the hosted version is real; until then, a roadmap entry is enough.
+11. **Pricing is a SaaS signal, and a hosted tier is coming later.** OSS-first projects use Sponsor/Donate/Buy a key/Cloud, not a pricing table. At v0.1, a pricing page would confuse the audience. A quiet `/hosting/` beta interest page is live; pricing and `/cloud` wait until the hosted version is real.
 12. **A privacy-respecting site is itself a trust signal.** Most competitors show a cookie banner; Plausible and Bambuddy do better. With cookieless analytics (or none), OpenPrintDashboard can honestly say “no cookies, no trackers” — and mean it.
 
 ---
@@ -71,7 +71,7 @@ These decisions supersede the earlier “no cloud” recommendation:
 
 1. **Bambu Cloud stays.** It is part of the product and the onboarding. The site must not promise “no cloud” or treat cloud as a flaw. Sell the self-hosted app and local data ownership; be explicit about what is cloud-backed.
 2. **MQTT may be removed.** The connection layer is not a durable marketing promise. Do not build the hero, trust row or “local-first” section around LAN/MQTT. Say “connects to Bambu Lab printers” and link to a compatibility page for the current connection modes.
-3. **A paid hosted version is planned.** The launch site is self-hosted-first, but the architecture and IA should leave room for `OpenPrintDash Cloud` later. Do not advertise or price it before it exists; a roadmap entry is enough.
+3. **A paid hosted version is planned.** The launch site is self-hosted-first. A quiet `/hosting/` beta interest page exists; pricing, full plan details and `OpenPrintDash Cloud` wait until the beta is real.
 4. **The design must fit the dashboard.** Same tokens, Geist, radii, card language and dark mode. The marketing site gets bigger type, more whitespace and real screenshots — not the dashboard’s controls.
 5. **A separate `site/` app is approved.** Keep it out of the self-hosted frontend image.
 6. **A production demo flag is approved and implemented.** `NEXT_PUBLIC_DEMO_MODE=true` now enables the in-browser demo in a production build, so the public demo can run without a backend.
@@ -83,12 +83,13 @@ These decisions supersede the earlier “no cloud” recommendation:
 ### 2.6 Build status (8–9 Nov 2026)
 
 - `site/` exists as a separate Next.js 16 static app, deployed independently of the Docker image.
-- Pages: `/`, `/install/`, `/privacy/`, `404`, `sitemap.xml`, `robots.txt`.
+- Pages: `/`, `/install/`, `/hosting/`, `/privacy/`, `404`, `sitemap.xml`, `robots.txt`.
 - Hallmark custom run: dashboard tokens, Geist, emerald accent, one full-bleed deep-emerald filament shelf, no eyebrow labels, no fake browser chrome, no mono meta rows, no glued arrows. `sloplint`: 0 FAIL, 0 WARN, 1 answered.
 - Fresh 2× captures (3200×2000; printer card 1240×1000) are in `site/public/screenshots/`; `overview`/`analytics` come from `feat/dashboard-polish` with emerald set manually and a temporary Scan Filament sidebar entry, the rest from the production demo build. Three 3× phone captures (1170×2532) come from the Expo app; the old mobile PWA shots are removed.
 - The hero is a 3D dashboard deck: the full dashboard in front, spools and analytics behind. Scroll flattens the tilt, a fine pointer adds a small lean, and sections reveal on scroll. Reduced motion and JS-off keep everything flat and visible.
 - Large screenshot cards tilt toward a fine pointer; the whole card rotates, so the capture is not cropped.
-- The six-job section is a scroll-driven sticky tour: the tab bar and full-width preview stay pinned while scrolling advances through the six features at roughly two-thirds of a viewport each; clicking a tab scrolls to it. Once passed, it collapses to a compact tabbed viewer so it does not re-trap you on the way back up. The native scanner is last.
+- The six-job section is a scroll-driven sticky tour: the tab bar and full-width preview stay pinned while scrolling advances through the six features at roughly two thirds of a viewport each; clicking a tab scrolls to it. Once passed, it collapses to a compact tabbed viewer so it does not re-trap you on the way back up. The native scanner is last.
+- `/hosting/` is a quiet managed-hosting beta page: three plan slots, the Beta plan active, Standard and Team marked as placeholders, and a mailto interest CTA. It is linked from the footer, the self-hosted section and the install aside, not the main navigation.
 - The scanning band shows the native app as a fan of three phone captures — inventory, spool detail and barcode scanning — with the same demo data as the web screenshots. The deck becomes a horizontal snap strip on mobile.
 - The production demo flag is implemented in `frontend/lib/demo.ts`; `development.md` and `frontend/.env.example` document it.
 - The README claim is now “On your own hardware.”
@@ -732,7 +733,7 @@ Bambuddy inserts evidence (press, reviews, sponsors) between 8 and 9. Immich ins
 | Appliance / hardware | Bambuddy, FilaMan | Premium, tangible | Possible later |
 | Business tier | Bambuddy | Support, permissions, billing | Not yet |
 
-**Recommendation:** no pricing page at launch. Add a “Support” / “Sponsor” link in the footer and a short “How the project is funded” note on the About page. When the hosted tier is close, add `/cloud` with a waitlist, then pricing. The self-hosted edition stays free and AGPL; the hosted tier sells convenience, not features.
+**Recommendation:** no pricing page yet. A quiet `/hosting/` beta interest page is live; add a “Support” / “Sponsor” link in the footer and a short “How the project is funded” note on the About page. When the hosted tier is real, add `/cloud` with pricing. The self-hosted edition stays free and AGPL; the hosted tier sells convenience, not features.
 
 ### 5.8 Footer
 
@@ -905,7 +906,8 @@ Do not include a star count until it is meaningful. Add `v0.1 · early access` a
 /integrations/spoolman
 /integrations/home-assistant
 /blog/...
-/cloud               later: hosted-tier landing / waitlist (only when real)
+/hosting             managed-hosting beta interest, three plan slots
+/cloud               later: hosted-tier landing / pricing (only when real)
 ```
 
 **Subdomains:**
@@ -914,7 +916,7 @@ Do not include a star count until it is meaningful. Add `v0.1 · early access` a
 - `docs.openprintdash.app` — later; Fumadocs/MkDocs with search, version, “Edit this page”.
 - `status.openprintdash.app` — later; only if there is a hosted service.
 
-**Do not build yet:** pricing, signup/billing, account area, dashboard on the marketing domain, a forum, a merchandise store. Add `/cloud` only when the hosted tier is close enough to take a waitlist.
+**Do not build yet:** pricing, signup/billing, account area, dashboard on the marketing domain, a forum, a merchandise store. `/hosting/` holds beta interest only; add `/cloud` and pricing only when the hosted tier is real enough to sell.
 
 ### 7.3 Homepage wireframe
 
@@ -1230,7 +1232,7 @@ Add a “Cloud” nav item only when the page can take a signup or waitlist. Unt
 |---|---|
 | Bambu Lab changes its cloud/LAN API, or MQTT is removed | Compatibility page, version pinning, clear “tested with” table, fast releases; don’t market a specific protocol |
 | Cloud dependency is a product choice, not a secret | Explain exactly what uses Bambu Cloud; never claim “no cloud”; sell self-hosted app + data ownership instead |
-| Hosted tier distracts from the self-hosted launch | Launch self-hosted-first; add `/cloud` only when it can take a waitlist; keep the free edition complete |
+| Hosted tier distracts from the self-hosted launch | Launch self-hosted-first; `/hosting/` is a footer/install link with beta interest only; no pricing or signup until the beta; keep the free edition complete |
 | Bambuddy is a year ahead with 3.3k stars | Do not compete on farm features; own single-printer UX, filament scanning and cost clarity |
 | AGPL confusion | Explain the license in plain language; link to the source; no “open core” bait-and-switch |
 | Bambu Lab trademark | Disclaimer; no Bambu logos without permission; use “for Bambu Lab printers” descriptively |

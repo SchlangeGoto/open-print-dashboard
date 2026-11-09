@@ -47,7 +47,7 @@ jobs:
 
       - name: Wait for backend
         run: |
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -fsS http://localhost:8000/api/v1/utils/health-check/ >/dev/null; then
               echo "backend is up"
               exit 0

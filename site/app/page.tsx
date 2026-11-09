@@ -312,6 +312,19 @@ export default function HomePage() {
               </div>
             ))}
           </dl>
+
+          <div className="mt-10 flex flex-col gap-3 border-t border-[var(--color-rule)] pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-2xl text-sm leading-6 text-[var(--color-muted)]">
+              Would rather not run the stack yourself? Managed hosting is in
+              beta.
+            </p>
+            <Link
+              href="/hosting/"
+              className="shrink-0 text-sm font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              See the hosting beta
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -477,8 +490,8 @@ export default function HomePage() {
                 "PostgreSQL on your machine. Back it up, move it, inspect it.",
               ],
               [
-                "A hosted option is planned.",
-                "A managed version for people who do not want to run a server. Self-hosting stays free.",
+                "A hosted option is in beta.",
+                "For people who want the dashboard without running a server. The beta is small; self-hosting stays free.",
               ],
             ].map(([title, body]) => (
               <div

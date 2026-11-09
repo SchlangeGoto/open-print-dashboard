@@ -15,6 +15,7 @@ const columns = [
     links: [
       { label: "Features", href: "/#features" },
       { label: "Install", href: "/install/" },
+      { label: "Managed hosting", href: "/hosting/" },
       { label: "Live demo", href: DEMO_URL, external: true },
     ],
   },

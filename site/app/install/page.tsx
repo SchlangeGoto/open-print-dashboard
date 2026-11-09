@@ -339,6 +339,20 @@ docker compose up -d --build`}</code>
               Open the live demo
             </a>
           </div>
+
+          <div className="rounded-xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-5">
+            <h2 className="text-sm font-medium">Want it managed?</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
+              The hosted beta is for people who would rather not run Docker,
+              a database or updates themselves.
+            </p>
+            <Link
+              href="/hosting/"
+              className="mt-4 inline-flex text-sm font-medium text-[var(--color-accent)] hover:text-[var(--color-ink)]"
+            >
+              See the hosting beta
+            </Link>
+          </div>
         </aside>
       </div>
     </div>

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" />
+<img src="https://img.shields.io/badge/version-0.1.0-yellowgreen?style=flat-square" />
 <img src="https://img.shields.io/badge/license-GNU%20AGPLv3-green?style=flat-square" />
 <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" />
 
@@ -23,7 +23,7 @@
 
 ```
 
-### Your 3D printer, fully visible. No cloud required.
+### Your 3D printer, fully visible. On your own hardware.
 
 **OpenPrintDashboard** is a beautiful, self-hosted dashboard for Bambu Lab 3D printers.
 Live status, filament inventory, print history, cost tracking — all in one place, all yours.

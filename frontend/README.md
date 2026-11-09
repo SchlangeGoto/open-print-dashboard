@@ -36,7 +36,7 @@ Open <http://localhost:3000>. The app talks to the backend at `http://localhost:
 ## shadcn/ui
 
 The project uses the **Nova** style (`base-nova`) on the Base UI base, with the
-neutral base color, a blue primary accent, Geist, and Lucide icons. Components
+neutral base color, an emerald primary accent, Geist, and Lucide icons. Components
 are configured in `components.json`. Add more with:
 
 ```bash

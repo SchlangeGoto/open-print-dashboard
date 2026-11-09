@@ -52,8 +52,8 @@
 :root {
   color-scheme: light;
   --radius: 0.625rem;
-  --brand: oklch(0.62 0.19 259.8);
-  --brand-foreground: oklch(0.985 0 0);
+  --brand: oklch(0.596 0.145 163.225);
+  --brand-foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -70,7 +70,7 @@
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: var(--brand);
+  --ring: oklch(0.42 0.1 163);
   --chart-1: var(--brand);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -83,7 +83,7 @@
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: var(--brand);
+  --sidebar-ring: oklch(0.42 0.1 163);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
 }

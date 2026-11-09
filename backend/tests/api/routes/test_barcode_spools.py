@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -88,7 +90,7 @@ def test_barcode_lookup_and_duplicate_creation(
 
 
 def test_ams_links_barcode_spool_by_tag(
-    client: TestClient, db: Session
+    db: Session,
 ) -> None:
     printer = Printer(
         name="AMS Link Test",
@@ -155,6 +157,89 @@ def test_ams_links_barcode_spool_by_tag(
         select(Spool).where(Spool.filament_id == filament.id)
     ).all()
     assert len(matches) == 1
+
+
+def test_ams_links_oldest_barcode_spool_when_multiple(
+    db: Session,
+) -> None:
+    printer = Printer(
+        name="AMS FIFO Test",
+        serial=random_lower_string(),
+        ip="127.0.0.1",
+        access_code="12345678",
+    )
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Green Mate",
+        color_hex="#00AE42",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    spools = []
+    for index in range(4):
+        spool = Spool(
+            filament_id=filament.id,
+            total_weight_g=1000,
+            remaining_g=1000,
+            barcode="TEST-FIFO-BARCODE",
+            source="barcode",
+            created_at=base + timedelta(minutes=index),
+        )
+        db.add(spool)
+        spools.append(spool)
+    db.commit()
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "FIFO1234",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "00AE42",
+                        "tray_weight": "1000",
+                        "remain": "40",
+                        "tray_id_name": "Green Mate",
+                    }
+                ],
+            }
+        ]
+    }
+    ams_client = BambuClient()
+    ams_client.serial = printer.serial
+    ams_client._current_status = {"tray_now": 0, "ams": ams}
+    ams_client._sync_ams_trays(ams)
+
+    db.expire_all()
+    rows = db.exec(
+        select(Spool)
+        .where(Spool.filament_id == filament.id)
+        .order_by(Spool.created_at.asc())
+    ).all()
+    assert len(rows) == 4
+
+    oldest = db.get(Spool, spools[0].id)
+    assert oldest is not None
+    assert oldest.tag_uid == "FIFO1234"
+    assert oldest.remaining_g == 400
+    assert oldest.active is True
+    assert oldest.printer_id == printer.id
+
+    assert [row.tag_uid for row in rows].count("FIFO1234") == 1
+    assert all(
+        row.tag_uid is None for row in rows if row.id != oldest.id
+    )
 
 
 def test_barcode_scan_adopts_unlinked_ams_spool(

@@ -446,10 +446,10 @@ class BambuClient:
                     ).first()
                     if not spool:
                         filament = self._ams_filament(session, tray)
-                        # If exactly one barcode-created spool of this
-                        # filament has no RFID tag yet, this is almost
-                        # certainly the physical spool that was just scanned.
-                        # Link the tag instead of creating a duplicate.
+                        # The barcode is SKU-level, so identical barcode
+                        # spools cannot be distinguished until the AMS reads
+                        # their RFID tags. Adopt the oldest untagged barcode
+                        # spool (FIFO) instead of creating an extra row.
                         candidates = session.exec(
                             select(Spool)
                             .where(
@@ -457,9 +457,12 @@ class BambuClient:
                                 col(Spool.tag_uid).is_(None),
                                 Spool.source == "barcode",
                             )
-                            .order_by(col(Spool.created_at).desc())
+                            .order_by(
+                                col(Spool.created_at).asc(),
+                                col(Spool.id).asc(),
+                            )
                         ).all()
-                        if len(candidates) == 1:
+                        if candidates:
                             spool = candidates[0]
                             spool.tag_uid = tag
                             spool.total_weight_g = total

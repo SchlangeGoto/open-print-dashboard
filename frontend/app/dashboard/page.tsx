@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, Cell } from "recharts";
+import { BarChart, Bar, CartesianGrid, XAxis, Cell } from "recharts";
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
@@ -152,41 +152,27 @@ export default function DashboardPage() {
           <CardContent>
             <ChartContainer
               config={filamentChartConfig}
-              className="h-[200px] w-full"
+              className="h-[300px] w-full"
             >
-              <BarChart
-                accessibilityLayer
-                data={filamentChartData}
-                margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-              >
+              <BarChart accessibilityLayer data={filamentChartData}>
+                <CartesianGrid vertical={false} />
                 <XAxis
                   dataKey="name"
                   tickLine={false}
+                  tickMargin={10}
                   axisLine={false}
-                  tickMargin={8}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => `${value}g`}
+                  tickFormatter={(value) =>
+                    value.length > 12 ? `${value.slice(0, 12)}…` : value
+                  }
                 />
                 <ChartTooltip
                   cursor={false}
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value, _name, item) => {
-                        const pct = (item.payload as { pct?: number } | undefined)
-                          ?.pct;
-                        return `${value}g${pct != null ? ` (${pct}%)` : ""}`;
-                      }}
-                    />
-                  }
+                  content={<ChartTooltipContent hideLabel />}
                 />
                 <Bar
                   dataKey="remaining"
-                  name="Remaining"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
+                  fill="var(--color-remaining)"
+                  radius={8}
                   className="cursor-pointer"
                   onClick={(entry) => {
                     const filament = entry?.payload?.filament;
@@ -194,12 +180,7 @@ export default function DashboardPage() {
                   }}
                 >
                   {filamentChartData.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={chartColor(entry.color)}
-                      stroke="var(--border)"
-                      strokeWidth={1}
-                    />
+                    <Cell key={i} fill={chartColor(entry.color)} />
                   ))}
                 </Bar>
               </BarChart>

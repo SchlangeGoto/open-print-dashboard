@@ -1,5 +1,9 @@
 name: AI PR Review
 
+# Provider-agnostic naming. Change AI_REVIEW_MODEL / AI_REVIEW_API_KEY to move
+# providers; the current runner is OpenCode's GitHub action, but nothing above
+# this line depends on that vendor.
+
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -66,16 +70,18 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           wc -c pr.diff
 
-      - name: Review with OpenCode
+      - name: Run AI review
         uses: anomalyco/opencode/github@latest
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          # The runner reads the provider key from OPENCODE_API_KEY; the
+          # repository secret is generic so the provider can change.
+          OPENCODE_API_KEY: ${{ secrets.AI_REVIEW_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # CI has no one to answer permission prompts. Reviewing is read-only.
           OPENCODE_PERMISSION: '{"bash":{"*":"deny","gh pr view*":"allow","gh pr diff*":"allow","git diff*":"allow","git log*":"allow","git show*":"allow"},"edit":"deny","webfetch":"deny","websearch":"deny"}'
         with:
-          model: opencode-go/deepseek-v4.1-flash
-          variant: high
+          model: ${{ vars.AI_REVIEW_MODEL || 'opencode-go/deepseek-v4.1-flash' }}
+          variant: ${{ vars.AI_REVIEW_VARIANT || 'high' }}
           agent: build
           use_github_token: true
           share: false

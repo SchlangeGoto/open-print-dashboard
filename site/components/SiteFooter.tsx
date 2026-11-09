@@ -7,6 +7,7 @@ import {
   GITHUB_URL,
   ISSUES_URL,
   SITE_FULL_NAME,
+  SPONSOR_URL,
 } from "@/lib/site";
 
 const columns = [
@@ -31,6 +32,7 @@ const columns = [
     title: "Community",
     links: [
       { label: "Contributing", href: `${GITHUB_URL}#contributing`, external: true },
+      { label: "Sponsor", href: SPONSOR_URL, external: true },
       { label: "Releases", href: `${GITHUB_URL}/releases`, external: true },
       { label: "Report an issue", href: ISSUES_URL, external: true },
     ],

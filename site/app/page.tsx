@@ -6,7 +6,7 @@ import { DashboardStage } from "@/components/DashboardStage";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { NativePhones } from "@/components/NativePhones";
 import { ScreenshotFrame } from "@/components/ScreenshotFrame";
-import { DEMO_URL, DOCS_URL, GITHUB_URL, SITE_URL } from "@/lib/site";
+import { DEMO_URL, DOCS_URL, GITHUB_URL, SITE_URL, SPONSOR_URL } from "@/lib/site";
 
 const installCommands = `git clone https://github.com/SchlangeGoto/open-print-dashboard.git
 cd open-print-dashboard
@@ -504,6 +504,23 @@ export default function HomePage() {
                 </p>
               </div>
             ))}
+
+            <div className="border-b border-[var(--color-rule)] py-5">
+              <h3 className="text-base font-medium">Support the project.</h3>
+              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--color-muted)]">
+                If OpenPrintDash saves you time, you can sponsor it on GitHub.
+                Donations cover the demo, the domain and maintenance;
+                self-hosting stays free.
+              </p>
+              <a
+                href={SPONSOR_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex text-sm font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)]"
+              >
+                Sponsor on GitHub
+              </a>
+            </div>
           </div>
         </div>
       </section>

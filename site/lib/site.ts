@@ -4,6 +4,7 @@ export const SITE_URL = "https://openprintdash.app";
 export const GITHUB_URL = "https://github.com/SchlangeGoto/open-print-dashboard";
 export const DOCS_URL = `${GITHUB_URL}/tree/main/docs`;
 export const ISSUES_URL = `${GITHUB_URL}/issues`;
+export const SPONSOR_URL = "https://github.com/sponsors/SchlangeGoto";
 export const DEMO_URL =
   process.env.NEXT_PUBLIC_DEMO_URL ?? "https://demo.openprintdash.app";
 

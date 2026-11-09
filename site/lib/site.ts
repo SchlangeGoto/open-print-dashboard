@@ -7,4 +7,7 @@ export const ISSUES_URL = `${GITHUB_URL}/issues`;
 export const DEMO_URL =
   process.env.NEXT_PUBLIC_DEMO_URL ?? "https://demo.openprintdash.app";
 
+export const HOSTING_BETA_MAILTO =
+  "mailto:kazimir@kkazi.dev?subject=OpenPrintDash%20hosting%20beta";
+
 export const PRINTERS = ["X1", "P1", "A1"] as const;

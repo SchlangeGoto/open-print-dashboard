@@ -41,7 +41,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # CI has no one to answer permission prompts. Reviewing is read-only.
-          OPENCODE_PERMISSION: '{"bash":"deny","edit":"deny","webfetch":"deny"}'
+          OPENCODE_PERMISSION: '{"bash":{"*":"deny","gh pr view*":"allow","gh pr diff*":"allow","git diff*":"allow","git log*":"allow","git show*":"allow"},"edit":"deny","webfetch":"deny","websearch":"deny"}'
         with:
           model: opencode-go/deepseek-v4.1-flash
           variant: high

@@ -72,7 +72,7 @@ jobs:
           wc -c pr.diff
 
       - name: Run AI review
-        uses: anomalyco/opencode/github@20c056d84249fe29be7244ff4f9e0aad044c4799 # dev 2026-11-09
+        uses: anomalyco/opencode/github@latest # zizmor: ignore[unpinned-uses]
         env:
           # The runner reads the provider key from OPENCODE_API_KEY; the
           # repository secret is generic so the provider can change.

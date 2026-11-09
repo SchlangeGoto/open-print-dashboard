@@ -22,7 +22,7 @@ export default function TabsLayout() {
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "600",
+          fontFamily: "Geist_500Medium",
         },
         tabBarHideOnKeyboard: true,
       }}
@@ -33,7 +33,7 @@ export default function TabsLayout() {
           title: "Spools",
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
-              name={focused ? "layers" : "layers-outline"}
+              name={focused ? "cube" : "cube-outline"}
               size={size}
               color={color as string}
             />

@@ -67,7 +67,7 @@ export default function LoginScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <BrandMark size={78} />
+        <BrandMark size={64} />
         <View style={styles.heading}>
           <AppText variant="display" style={styles.center}>
             Welcome back
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
   errorText: {

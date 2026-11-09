@@ -76,6 +76,7 @@ export default function PrintersScreen() {
   const header = (
     <View style={styles.headerBlock}>
       <PageHeader
+        brand
         title="Printers"
         subtitle="Configured printers and loaded spools"
         right={
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -360,8 +361,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
   },
   printerCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderRadius: radius.xl,
     padding: spacing.lg,
     gap: spacing.md,
   },
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
   printerIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -390,8 +391,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     padding: spacing.md,
   },
   loadedSpoolText: {
@@ -406,8 +407,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     padding: spacing.md,
   },
 });

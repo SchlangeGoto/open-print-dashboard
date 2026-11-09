@@ -43,7 +43,7 @@ export function TextField({
               ? theme.colors.danger
               : focused
                 ? theme.colors.accent
-                : theme.colors.border,
+                : theme.colors.inputBorder,
           },
         ]}
       >
@@ -57,10 +57,10 @@ export function TextField({
             setFocused(false);
             rest.onBlur?.(event);
           }}
-          placeholderTextColor={theme.colors.faint}
+          placeholderTextColor={theme.colors.muted}
           style={[
             styles.input,
-            { color: theme.colors.text },
+            { color: theme.colors.text, fontFamily: "Geist_400Regular" },
             rest.multiline && styles.multiline,
             style,
           ]}
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.md,

@@ -240,7 +240,12 @@ export default function SpoolDetailScreen() {
             ) : null}
           </View>
           {currentPrinter ? (
-            <View style={styles.currentPrinter}>
+            <View
+              style={[
+                styles.currentPrinter,
+                { backgroundColor: `${theme.colors.accent}12` },
+              ]}
+            >
               <View
                 style={[
                   styles.printerIcon,
@@ -386,7 +391,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing.xl,
     minHeight: 190,
     justifyContent: "flex-end",
@@ -400,8 +405,8 @@ const styles = StyleSheet.create({
     marginBottom: "auto",
   },
   heroMeta: {
+    fontFamily: "Geist_600SemiBold",
     fontSize: 11,
-    fontWeight: "700",
     letterSpacing: 1.1,
   },
   heroBadge: {
@@ -438,13 +443,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: "rgba(45,212,191,0.07)",
+    borderRadius: radius.lg,
   },
   printerIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -481,7 +485,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
 });

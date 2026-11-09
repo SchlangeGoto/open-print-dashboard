@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText } from "./app-text";
-import { spacing, useTheme } from "@/lib/theme";
+import { radius, spacing, useTheme } from "@/lib/theme";
 
 interface EmptyStateProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 62,
     height: 62,
-    borderRadius: 20,
+    borderRadius: radius.xl,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.sm,

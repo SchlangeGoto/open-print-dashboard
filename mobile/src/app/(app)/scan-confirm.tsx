@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
   card: {
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   preview: {
     width: 35,
     height: 35,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
   presets: {
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
   errorText: {

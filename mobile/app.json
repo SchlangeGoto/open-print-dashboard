@@ -20,7 +20,7 @@
     "android": {
       "package": "com.openprintdashboard.app",
       "adaptiveIcon": {
-        "backgroundColor": "#09090B",
+        "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -42,7 +42,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#09090B",
+          "backgroundColor": "#0A0A0A",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 180
         }

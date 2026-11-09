@@ -113,8 +113,8 @@ export function SpoolCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderRadius: radius.xl,
     padding: spacing.lg,
     gap: spacing.md,
   },
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   colorBlock: {
     width: 46,
     height: 46,
-    borderRadius: 15,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   titleWrap: {
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
   },
   subtitleRow: {
     flexDirection: "row",

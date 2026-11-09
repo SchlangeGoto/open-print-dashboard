@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,13 +23,30 @@ interface PageHeaderProps {
   subtitle?: string;
   left?: ReactNode;
   right?: ReactNode;
+  brand?: boolean;
 }
 
-export function PageHeader({ title, subtitle, left, right }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  subtitle,
+  left,
+  right,
+  brand = false,
+}: PageHeaderProps) {
+  const theme = useTheme();
+
   return (
     <View style={styles.header}>
       {left ? <View style={styles.left}>{left}</View> : null}
       <View style={styles.titleWrap}>
+        {brand ? (
+          <View style={styles.brandRow}>
+            <Ionicons name="disc" size={13} color={theme.colors.accent} />
+            <AppText variant="caption" muted>
+              Open Print
+            </AppText>
+          </View>
+        ) : null}
         <AppText variant="title" numberOfLines={1}>
           {title}
         </AppText>
@@ -63,6 +81,12 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 13,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 2,
   },
   right: {
     flexDirection: "row",

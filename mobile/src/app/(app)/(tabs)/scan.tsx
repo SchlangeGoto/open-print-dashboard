@@ -235,6 +235,7 @@ export default function ScanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <PageHeader
+          brand
           title="Scan"
           subtitle="Add a spool from its filament box"
           right={
@@ -312,11 +313,18 @@ export default function ScanScreen() {
               {result ? (
                 <Pressable
                   accessibilityRole="button"
-                  style={styles.scanNextButton}
+                  style={[
+                    styles.scanNextButton,
+                    { backgroundColor: theme.colors.accent },
+                  ]}
                   onPress={resetScan}
                 >
-                  <Ionicons name="scan" size={17} color="#fff" />
-                  <AppText variant="label" color="#fff">
+                  <Ionicons
+                    name="scan"
+                    size={17}
+                    color={theme.colors.onAccent}
+                  />
+                  <AppText variant="label" color={theme.colors.onAccent}>
                     Scan next barcode
                   </AppText>
                 </Pressable>
@@ -405,7 +413,16 @@ export default function ScanScreen() {
                   <Badge label="New" variant="success" />
                 </View>
 
-                <View style={styles.filamentRow}>
+                <View
+                  style={[
+                    styles.filamentRow,
+                    {
+                      backgroundColor: theme.dark
+                        ? "rgba(255,255,255,0.04)"
+                        : theme.colors.surfaceAlt,
+                    },
+                  ]}
+                >
                   <ColorDot color={result.filament.color_hex} size={40} />
                   <View style={styles.filamentText}>
                     <AppText variant="label" numberOfLines={1}>
@@ -470,7 +487,16 @@ export default function ScanScreen() {
                   />
                 </View>
 
-                <View style={styles.filamentRow}>
+                <View
+                  style={[
+                    styles.filamentRow,
+                    {
+                      backgroundColor: theme.dark
+                        ? "rgba(255,255,255,0.04)"
+                        : theme.colors.surfaceAlt,
+                    },
+                  ]}
+                >
                   <ColorDot color={result.filament.color_hex} size={40} />
                   <View style={styles.filamentText}>
                     <AppText variant="label" numberOfLines={1}>
@@ -629,7 +655,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -673,7 +699,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: "rgba(45,212,191,0.92)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -705,7 +730,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
   bannerText: {
@@ -723,7 +748,7 @@ const styles = StyleSheet.create({
   resultIcon: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: radius.xl,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -739,8 +764,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: radius.lg,
   },
   filamentText: {
     flex: 1,
@@ -762,7 +786,7 @@ const styles = StyleSheet.create({
   },
   buildTag: {
     textAlign: "center",
-    fontFamily: "monospace",
+    fontFamily: "GeistMono_400Regular",
     fontSize: 10,
   },
 });

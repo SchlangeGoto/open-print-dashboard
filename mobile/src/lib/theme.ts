@@ -5,6 +5,7 @@ export interface ThemeColors {
   surface: string;
   surfaceAlt: string;
   border: string;
+  inputBorder: string;
   text: string;
   muted: string;
   faint: string;
@@ -23,40 +24,46 @@ export interface Theme {
   colors: ThemeColors;
 }
 
+/*
+ * Mirrors the dashboard's shadcn tokens (zinc neutrals, teal accent,
+ * foreground/10 rings) so both clients feel like the same product.
+ */
 const darkColors: ThemeColors = {
-  bg: "#09090b",
-  surface: "#131316",
-  surfaceAlt: "#1b1b20",
-  border: "#27272a",
-  text: "#f4f4f5",
-  muted: "#a1a1aa",
-  faint: "#71717a",
-  accent: "#2dd4bf",
-  accentStrong: "#14b8a6",
-  onAccent: "#04211c",
+  bg: "#0a0a0a",
+  surface: "#171717",
+  surfaceAlt: "#262626",
+  border: "rgba(255,255,255,0.10)",
+  inputBorder: "rgba(255,255,255,0.15)",
+  text: "#fafafa",
+  muted: "#a3a3a3",
+  faint: "#737373",
+  accent: "#0d9488",
+  accentStrong: "#0f766e",
+  onAccent: "#ffffff",
   success: "#34d399",
   warning: "#fbbf24",
   danger: "#f87171",
   info: "#60a5fa",
-  input: "#0f0f12",
+  input: "rgba(255,255,255,0.045)",
 };
 
 const lightColors: ThemeColors = {
-  bg: "#f6f6f7",
+  bg: "#ffffff",
   surface: "#ffffff",
-  surfaceAlt: "#efeff1",
-  border: "#e4e4e7",
-  text: "#18181b",
-  muted: "#52525b",
-  faint: "#71717a",
-  accent: "#0f9f8f",
-  accentStrong: "#0d9488",
+  surfaceAlt: "#f5f5f5",
+  border: "#e5e5e5",
+  inputBorder: "#e5e5e5",
+  text: "#0a0a0a",
+  muted: "#737373",
+  faint: "#a3a3a3",
+  accent: "#0d9488",
+  accentStrong: "#0f766e",
   onAccent: "#ffffff",
-  success: "#059669",
-  warning: "#d97706",
+  success: "#047857",
+  warning: "#b45309",
   danger: "#dc2626",
   info: "#2563eb",
-  input: "#ffffff",
+  input: "rgba(0,0,0,0.03)",
 };
 
 export function useTheme(): Theme {
@@ -77,22 +84,44 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 10,
-  md: 14,
-  lg: 20,
-  xl: 26,
+  sm: 6,
+  md: 8,
+  lg: 10,
+  xl: 14,
+  xxl: 18,
   pill: 999,
 } as const;
 
 export const typography = {
-  display: { fontSize: 32, fontWeight: "700" as const, letterSpacing: -0.6 },
-  title: { fontSize: 26, fontWeight: "700" as const, letterSpacing: -0.4 },
-  heading: { fontSize: 19, fontWeight: "700" as const, letterSpacing: -0.2 },
-  body: { fontSize: 15, fontWeight: "400" as const },
-  label: { fontSize: 13, fontWeight: "600" as const },
-  caption: { fontSize: 12, fontWeight: "500" as const },
-  mono: {
+  display: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 28,
+    letterSpacing: -0.5,
+  },
+  title: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 24,
+    letterSpacing: -0.4,
+  },
+  heading: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  body: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 15,
+  },
+  label: {
+    fontFamily: "Geist_500Medium",
+    fontSize: 13,
+  },
+  caption: {
+    fontFamily: "Geist_500Medium",
     fontSize: 12,
-    fontFamily: "monospace" as const,
+  },
+  mono: {
+    fontFamily: "GeistMono_400Regular",
+    fontSize: 12,
   },
 };

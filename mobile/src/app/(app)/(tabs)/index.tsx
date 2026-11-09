@@ -93,6 +93,7 @@ export default function SpoolsScreen() {
   const header = (
     <View style={styles.headerBlock}>
       <PageHeader
+        brand
         title="Spools"
         subtitle="Your filament inventory"
         right={
@@ -222,7 +223,7 @@ export default function SpoolsScreen() {
             />
           ) : (
             <EmptyState
-              icon="layers-outline"
+              icon="cube-outline"
               title="No spools yet"
               description="Scan a filament box to add your first spool."
               action={
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
 });

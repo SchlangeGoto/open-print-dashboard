@@ -8,7 +8,7 @@ export function LoadingScreen({ message = "Loading your dashboard…" }: { messa
   const theme = useTheme();
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
-      <BrandMark size={70} />
+      <BrandMark size={56} />
       <ActivityIndicator color={theme.colors.accent} />
       <AppText muted>{message}</AppText>
     </View>

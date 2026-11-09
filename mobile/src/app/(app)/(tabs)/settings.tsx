@@ -23,7 +23,7 @@ import { testServerConnection } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getBuildInfo } from "@/lib/build-info";
 import { formatError, getInitials } from "@/lib/format";
-import { spacing, useTheme } from "@/lib/theme";
+import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function SettingsScreen() {
   const { user, serverUrl, logout } = useAuth();
@@ -98,7 +98,7 @@ export default function SettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <PageHeader title="Settings" subtitle="Account and connection" />
+        <PageHeader brand title="Settings" subtitle="Account and connection" />
 
         <Card style={styles.accountCard}>
           <View
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 50,
     height: 50,
-    borderRadius: 16,
+    borderRadius: radius.xl,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   diagnosticValue: {
     flexShrink: 1,
     textAlign: "right",
-    fontFamily: "monospace",
+    fontFamily: "GeistMono_400Regular",
   },
   testRow: {
     flexDirection: "row",

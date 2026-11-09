@@ -1,4 +1,4 @@
-import { StyleSheet, View, type ViewProps } from "react-native";
+import { View, type ViewProps } from "react-native";
 
 import { radius, spacing, useTheme } from "@/lib/theme";
 
@@ -11,8 +11,8 @@ export function Card({ style, ...rest }: ViewProps) {
         {
           backgroundColor: theme.colors.surface,
           borderColor: theme.colors.border,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderRadius: radius.xl,
           padding: spacing.lg,
         },
         style,

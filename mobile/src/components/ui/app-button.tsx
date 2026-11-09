@@ -68,11 +68,7 @@ export function AppButton({
         sizes[size],
         {
           backgroundColor: backgrounds[variant],
-          borderColor:
-            variant === "secondary" ? theme.colors.border : "transparent",
-        },
-        variant === "ghost" && {
-          borderColor: theme.colors.border,
+          borderColor: "transparent",
         },
         pressed && styles.pressed,
         isDisabled && styles.disabled,
@@ -99,7 +95,7 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",

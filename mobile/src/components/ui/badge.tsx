@@ -23,7 +23,7 @@ export function Badge({ label, variant = "neutral", style, ...rest }: BadgeProps
       bg: `${theme.colors.warning}1f`,
     },
     danger: { fg: theme.colors.danger, bg: `${theme.colors.danger}1f` },
-    accent: { fg: theme.colors.accent, bg: `${theme.colors.accent}1f` },
+    accent: { fg: theme.colors.accentText, bg: `${theme.colors.accent}1f` },
   };
   const { fg, bg } = colors[variant];
 
@@ -32,7 +32,7 @@ export function Badge({ label, variant = "neutral", style, ...rest }: BadgeProps
       {...rest}
       style={[styles.badge, { backgroundColor: bg }, style]}
     >
-      <AppText variant="caption" color={fg} style={styles.text}>
+      <AppText variant="micro" color={fg}>
         {label}
       </AppText>
     </View>
@@ -45,9 +45,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     alignSelf: "flex-start",
-  },
-  text: {
-    fontSize: 11,
-    fontFamily: "Geist_600SemiBold",
   },
 });

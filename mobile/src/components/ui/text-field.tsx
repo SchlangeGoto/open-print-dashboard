@@ -7,20 +7,24 @@ import {
 } from "react-native";
 
 import { AppText } from "./app-text";
-import { radius, spacing, useTheme } from "@/lib/theme";
+import { radius, spacing, typography, useTheme } from "@/lib/theme";
 
 interface TextFieldProps extends TextInputProps {
   label?: string;
   hint?: string;
   error?: string;
+  left?: ReactNode;
   right?: ReactNode;
+  compact?: boolean;
 }
 
 export function TextField({
   label,
   hint,
   error,
+  left,
   right,
+  compact = false,
   style,
   ...rest
 }: TextFieldProps) {
@@ -37,6 +41,7 @@ export function TextField({
       <View
         style={[
           styles.inputRow,
+          compact && styles.inputRowCompact,
           {
             backgroundColor: theme.colors.input,
             borderColor: error
@@ -47,8 +52,10 @@ export function TextField({
           },
         ]}
       >
+        {left}
         <TextInput
           {...rest}
+          accessibilityLabel={rest.accessibilityLabel ?? label}
           onFocus={(event) => {
             setFocused(true);
             rest.onFocus?.(event);
@@ -60,7 +67,9 @@ export function TextField({
           placeholderTextColor={theme.colors.muted}
           style={[
             styles.input,
-            { color: theme.colors.text, fontFamily: "Geist_400Regular" },
+            typography.body,
+            compact && [styles.inputCompact, typography.bodySmall],
+            { color: theme.colors.text },
             rest.multiline && styles.multiline,
             style,
           ]}
@@ -72,7 +81,7 @@ export function TextField({
           {error}
         </AppText>
       ) : hint ? (
-        <AppText variant="caption" faint>
+        <AppText variant="caption" muted>
           {hint}
         </AppText>
       ) : null}
@@ -90,15 +99,23 @@ const styles = StyleSheet.create({
   inputRow: {
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
+  },
+  inputRowCompact: {
+    paddingHorizontal: spacing.sm,
   },
   input: {
     flex: 1,
     minHeight: 50,
-    fontSize: 15,
     paddingVertical: spacing.md,
+  },
+  inputCompact: {
+    minHeight: 40,
+    paddingVertical: spacing.sm,
   },
   multiline: {
     minHeight: 92,

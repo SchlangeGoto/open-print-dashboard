@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { AppText } from "./ui/app-text";
-import { Badge } from "./ui/badge";
+import { MetaLine } from "./ui/meta-line";
 import { ProgressBar } from "./ui/progress-bar";
 import { formatWeight, percent } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
@@ -15,6 +15,10 @@ interface SpoolCardProps {
   onPress: () => void;
 }
 
+/**
+ * One shelf row: a colour spine for the filament, the specification line
+ * underneath, and the loaded spool pulled forward with the emerald tint.
+ */
 export function SpoolCard({
   spool,
   filament,
@@ -25,6 +29,7 @@ export function SpoolCard({
   const pct = percent(spool.remaining_g, spool.total_weight_g);
   const color = filament?.color_hex ?? theme.colors.faint;
   const low = pct <= 15;
+  const loaded = Boolean(printerName);
   const sourceLabel =
     spool.source === "ams"
       ? "AMS"
@@ -35,135 +40,139 @@ export function SpoolCard({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={`${filament?.color_name ?? "Spool"}, ${pct} percent, ${formatWeight(
+        spool.remaining_g,
+      )} remaining, ${printerName ?? "not loaded"}`}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-        },
-        pressed && styles.pressed,
+        styles.row,
+        loaded && { backgroundColor: `${theme.colors.accent}0D` },
+        pressed && { backgroundColor: theme.colors.input },
       ]}
     >
-      <View style={styles.topRow}>
-        <View
-          style={[
-            styles.colorBlock,
-            {
-              backgroundColor: color,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        />
-        <View style={styles.titleWrap}>
-          <View style={styles.titleRow}>
-            <AppText variant="heading" numberOfLines={1} style={styles.title}>
-              {filament?.color_name ?? "Unknown filament"}
-            </AppText>
-            <Badge
-              label={`${pct}%`}
-              variant={low ? "danger" : pct <= 35 ? "warning" : "neutral"}
-            />
-          </View>
-          <View style={styles.subtitleRow}>
-            <AppText variant="caption" muted numberOfLines={1}>
-              {filament
-                ? `${filament.brand} · ${filament.material}`
-                : "No filament details"}
-            </AppText>
-            {sourceLabel ? (
-              <AppText variant="caption" faint>
-                {sourceLabel}
-              </AppText>
-            ) : null}
-          </View>
-        </View>
-      </View>
-
-      <ProgressBar
-        value={pct}
-        color={low ? theme.colors.danger : color}
-        height={5}
+      <View
+        style={[
+          styles.spine,
+          {
+            backgroundColor: color,
+            borderColor: theme.colors.border,
+          },
+        ]}
       />
 
-      <View style={styles.footer}>
-        <AppText variant="caption" muted>
-          {formatWeight(spool.remaining_g)} of{" "}
-          {formatWeight(spool.total_weight_g)}
-        </AppText>
-        <View style={styles.location}>
-          <Ionicons
-            name={printerName ? "print" : "ellipse-outline"}
-            size={13}
-            color={printerName ? theme.colors.accent : theme.colors.faint}
-          />
+      <View style={styles.content}>
+        <View style={styles.topLine}>
+          <AppText variant="heading" numberOfLines={1} style={styles.title}>
+            {filament?.color_name ?? "Unknown filament"}
+          </AppText>
+          <AppText
+            variant="monoSmall"
+            color={low ? theme.colors.danger : theme.colors.muted}
+            style={styles.readout}
+          >
+            {pct}%
+          </AppText>
+        </View>
+
+        <MetaLine
+          items={
+            filament
+              ? [filament.brand, filament.material, sourceLabel]
+              : ["No filament details"]
+          }
+        />
+
+        <View style={styles.barRow}>
+          <View style={styles.barTrack}>
+            <ProgressBar
+              value={pct}
+              color={low ? theme.colors.danger : color}
+              height={3}
+            />
+          </View>
+          <AppText variant="monoSmall" muted style={styles.readout}>
+            {formatWeight(spool.remaining_g)} left
+          </AppText>
+        </View>
+
+        <View style={styles.locationRow}>
+          {loaded ? (
+            <Ionicons
+              name="print-outline"
+              size={13}
+              color={theme.colors.accentText}
+            />
+          ) : null}
           <AppText
             variant="caption"
-            color={printerName ? theme.colors.text : theme.colors.faint}
+            color={loaded ? theme.colors.accentText : theme.colors.muted}
             numberOfLines={1}
-            style={styles.locationText}
+            style={styles.location}
           >
             {printerName ?? "Not loaded"}
           </AppText>
         </View>
       </View>
+
+      <Ionicons
+        name="chevron-forward"
+        size={15}
+        color={theme.colors.faint}
+        style={styles.chevron}
+      />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  pressed: {
-    opacity: 0.86,
-    transform: [{ scale: 0.995 }],
-  },
-  topRow: {
+  row: {
     flexDirection: "row",
-    gap: spacing.md,
     alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
   },
-  colorBlock: {
-    width: 46,
-    height: 46,
-    borderRadius: radius.lg,
+  spine: {
+    width: 4,
+    minHeight: 52,
+    borderRadius: radius.xs,
     borderWidth: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
   },
-  titleWrap: {
+  content: {
     flex: 1,
-    gap: 3,
+    gap: spacing.xs,
+    minWidth: 0,
   },
-  titleRow: {
+  topLine: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
   title: {
     flex: 1,
-    fontSize: 16,
   },
-  subtitleRow: {
+  readout: {
+    fontVariant: ["tabular-nums"],
+  },
+  barRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  footer: {
+  barTrack: {
+    flex: 1,
+    minWidth: 0,
+  },
+  locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
+    gap: spacing.xs,
   },
   location: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    maxWidth: "55%",
-  },
-  locationText: {
     flexShrink: 1,
+  },
+  chevron: {
+    marginLeft: -2,
   },
 });

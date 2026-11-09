@@ -52,7 +52,7 @@ export function AppButton({
   };
 
   const sizes: Record<Size, ViewStyle> = {
-    sm: { minHeight: 38, paddingHorizontal: spacing.md },
+    sm: { minHeight: 44, paddingHorizontal: spacing.md },
     md: { minHeight: 48, paddingHorizontal: spacing.lg },
     lg: { minHeight: 54, paddingHorizontal: spacing.xl },
   };
@@ -81,9 +81,8 @@ export function AppButton({
         <>
           {icon}
           <AppText
-            variant="label"
+            variant="button"
             color={textColors[variant]}
-            style={styles.label}
           >
             {title}
           </AppText>
@@ -96,6 +95,7 @@ export function AppButton({
 const styles = StyleSheet.create({
   base: {
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -108,8 +108,5 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
-  },
-  label: {
-    fontSize: 14,
   },
 });

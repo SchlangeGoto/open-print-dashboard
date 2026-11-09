@@ -16,35 +16,18 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { CloseButton } from "@/components/close-button";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/lib/auth";
-import { formatError, normalizeHex } from "@/lib/format";
+import {
+  COLOR_PRESETS,
+  DEFAULT_COLOR_HEX,
+  HEX_COLOR_EXAMPLE,
+} from "@/lib/color-presets";
+import { formatError, isLightColor, normalizeHex } from "@/lib/format";
+import { parseSuggestion } from "@/lib/suggested-filament";
 import { radius, spacing, useTheme } from "@/lib/theme";
-import type { SuggestedFilament } from "@/lib/types";
-
-const COLOR_PRESETS = [
-  { name: "White", hex: "#FFFFFF" },
-  { name: "Black", hex: "#000000" },
-  { name: "Gray", hex: "#8E9089" },
-  { name: "Red", hex: "#C12E1F" },
-  { name: "Orange", hex: "#FF6A13" },
-  { name: "Yellow", hex: "#F4EE2A" },
-  { name: "Green", hex: "#00AE42" },
-  { name: "Blue", hex: "#0A2989" },
-  { name: "Purple", hex: "#5E43B7" },
-  { name: "Pink", hex: "#F55A74" },
-];
-
-function parseSuggestion(raw: string | undefined): SuggestedFilament | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as SuggestedFilament | null;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 export default function ScanConfirmScreen() {
   const { code, suggested } = useLocalSearchParams<{
@@ -63,7 +46,7 @@ export default function ScanConfirmScreen() {
     detectedSeries ? detectedSeries.split(" ")[0] : "",
   );
   const [colorName, setColorName] = useState("");
-  const [colorHex, setColorHex] = useState("#9CA3AF");
+  const [colorHex, setColorHex] = useState(DEFAULT_COLOR_HEX);
   const [weight, setWeight] = useState(
     String(suggestion?.spool_weight_g ?? 1000),
   );
@@ -100,7 +83,7 @@ export default function ScanConfirmScreen() {
       return;
     }
     if (!normalizedHex) {
-      setError("Enter a valid hex colour, for example #F99963.");
+      setError(`Enter a valid hex colour, for example ${HEX_COLOR_EXAMPLE}.`);
       return;
     }
     if (!Number.isFinite(weightValue) || weightValue <= 0) {
@@ -152,6 +135,7 @@ export default function ScanConfirmScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={[
             styles.content,
             { paddingBottom: insets.bottom + spacing.xxxl },
@@ -219,7 +203,8 @@ export default function ScanConfirmScreen() {
                 style={[
                   styles.preview,
                   {
-                    backgroundColor: normalizeHex(colorHex) ?? "#9CA3AF",
+                    backgroundColor:
+                      normalizeHex(colorHex) ?? theme.colors.muted,
                     borderColor: theme.colors.border,
                   },
                 ]}
@@ -229,7 +214,7 @@ export default function ScanConfirmScreen() {
               label="Hex colour"
               value={colorHex}
               onChangeText={setColorHex}
-              placeholder="#F99963"
+              placeholder={HEX_COLOR_EXAMPLE}
               autoCapitalize="characters"
               autoCorrect={false}
             />
@@ -242,6 +227,7 @@ export default function ScanConfirmScreen() {
                     key={preset.hex}
                     accessibilityRole="button"
                     accessibilityLabel={preset.name}
+                    accessibilityState={{ selected }}
                     onPress={() => setColorHex(preset.hex)}
                     style={[
                       styles.preset,
@@ -253,7 +239,19 @@ export default function ScanConfirmScreen() {
                         borderWidth: selected ? 3 : StyleSheet.hairlineWidth,
                       },
                     ]}
-                  />
+                  >
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={
+                          isLightColor(preset.hex)
+                            ? theme.colors.mediaInk
+                            : theme.colors.mediaPaper
+                        }
+                      />
+                    ) : null}
+                  </Pressable>
                 );
               })}
             </View>
@@ -321,27 +319,13 @@ export default function ScanConfirmScreen() {
               />
             }
           />
-          <AppText variant="caption" faint style={styles.footer}>
+          <AppText variant="caption" muted style={styles.footer}>
             This barcode is saved with the filament, so scanning it again will
             add another spool automatically.
           </AppText>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
-  );
-}
-
-function CloseButton({ onPress }: { onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Close"
-      hitSlop={12}
-      onPress={onPress}
-    >
-      <Ionicons name="close" size={25} color={theme.colors.text} />
-    </Pressable>
   );
 }
 
@@ -356,6 +340,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     padding: spacing.md,
   },
   card: {
@@ -370,6 +355,7 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: radius.md,
+    borderCurve: "continuous",
     borderWidth: StyleSheet.hairlineWidth,
   },
   presets: {
@@ -381,7 +367,9 @@ const styles = StyleSheet.create({
   preset: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
   },
   row: {
     flexDirection: "row",
@@ -396,6 +384,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     padding: spacing.md,
   },
   errorText: {

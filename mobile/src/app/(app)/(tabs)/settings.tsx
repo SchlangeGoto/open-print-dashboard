@@ -18,11 +18,13 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { DiagnosticRow } from "@/components/diagnostic-row";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { testServerConnection } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getBuildInfo } from "@/lib/build-info";
 import { formatError, getInitials } from "@/lib/format";
+import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function SettingsScreen() {
@@ -43,9 +45,9 @@ export default function SettingsScreen() {
     `Runtime: ${build.runtime}`,
     `Execution environment: ${build.executionEnvironment}`,
     `Platform: ${build.platform} ${build.osVersion}`,
-    `Expo Go: ${build.expoGoVersion ?? "—"}`,
-    `Expo SDK: ${build.sdkVersion ?? "—"}`,
-    `Metro host: ${build.metroHost ?? "—"}`,
+    `Expo Go: ${build.expoGoVersion ?? "Not available"}`,
+    `Expo SDK: ${build.sdkVersion ?? "Not available"}`,
+    `Metro host: ${build.metroHost ?? "Not available"}`,
   ].join("\n");
 
   async function handleTestConnection() {
@@ -92,9 +94,12 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + spacing.xxxl },
+          {
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + spacing.xxxl,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -104,10 +109,10 @@ export default function SettingsScreen() {
           <View
             style={[
               styles.avatar,
-              { backgroundColor: `${theme.colors.accent}22` },
+              { backgroundColor: `${theme.colors.accent}18` },
             ]}
           >
-            <AppText variant="heading" color={theme.colors.accent}>
+            <AppText variant="heading" color={theme.colors.accentText}>
               {getInitials(user?.full_name, user?.email)}
             </AppText>
           </View>
@@ -150,13 +155,13 @@ export default function SettingsScreen() {
                 })
               }
             >
-              <AppText variant="caption" color={theme.colors.accent}>
+              <AppText variant="caption" color={theme.colors.accentText}>
                 Change
               </AppText>
             </Pressable>
           </View>
 
-          <AppText variant="mono" muted numberOfLines={2}>
+          <AppText variant="mono" muted numberOfLines={2} selectable>
             {serverUrl}
           </AppText>
 
@@ -240,12 +245,12 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="construct-outline"
                   size={18}
-                  color={theme.colors.accent}
+                  color={theme.colors.accentText}
                 />
               </View>
               <AppText variant="heading">App & build</AppText>
             </View>
-            <AppText variant="mono" color={theme.colors.accent} selectable>
+            <AppText variant="mono" color={theme.colors.accentText} selectable>
               {build.buildTag}
             </AppText>
           </View>
@@ -266,7 +271,10 @@ export default function SettingsScreen() {
               label="Metro host"
               value={build.metroHost ?? "Not connected"}
             />
-            <DiagnosticRow label="SDK" value={build.sdkVersion ?? "—"} />
+            <DiagnosticRow
+              label="SDK"
+              value={build.sdkVersion ?? "Not available"}
+            />
           </View>
 
           <AppButton
@@ -305,11 +313,11 @@ export default function SettingsScreen() {
             <AppText variant="body" muted>
               Open Print Dashboard
             </AppText>
-            <AppText variant="caption" faint>
+            <AppText variant="caption" muted>
               v{version}
             </AppText>
           </View>
-          <AppText variant="caption" faint style={styles.bodyText}>
+          <AppText variant="caption" muted style={styles.bodyText}>
             Native client for your self-hosted Bambu Lab dashboard.
           </AppText>
         </Card>
@@ -331,31 +339,6 @@ export default function SettingsScreen() {
   );
 }
 
-function DiagnosticRow({
-  label,
-  value,
-  valueColor,
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-}) {
-  return (
-    <View style={styles.diagnosticRow}>
-      <AppText variant="caption" muted>
-        {label}
-      </AppText>
-      <AppText
-        variant="caption"
-        color={valueColor}
-        style={styles.diagnosticValue}
-      >
-        {value}
-      </AppText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
@@ -370,6 +353,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: radius.xl,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -393,23 +377,13 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: radius.lg,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
   diagnostics: {
     gap: spacing.sm,
-  },
-  diagnosticRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  diagnosticValue: {
-    flexShrink: 1,
-    textAlign: "right",
-    fontFamily: "GeistMono_400Regular",
   },
   testRow: {
     flexDirection: "row",

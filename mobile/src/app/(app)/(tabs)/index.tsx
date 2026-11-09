@@ -2,40 +2,38 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SpoolCard } from "@/components/spool-card";
+import { SpoolSkeletonList } from "@/components/spool-skeleton";
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Screen, PageHeader } from "@/components/ui/screen";
+import { ShelfRule } from "@/components/ui/shelf-rule";
+import { StatReadout } from "@/components/ui/stat-readout";
 import { TextField } from "@/components/ui/text-field";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useAuth } from "@/lib/auth";
 import { formatWeight } from "@/lib/format";
+import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
-import type { Filament, Printer, Spool } from "@/lib/types";
-
-interface LoadResult {
-  spools: Spool[];
-  filaments: Filament[];
-  printers: Printer[];
-}
+import type { Printer, SpoolsLoadResult } from "@/lib/types";
 
 export default function SpoolsScreen() {
   const { api } = useAuth();
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
 
-  const loader = useCallback(async (): Promise<LoadResult> => {
+  const loader = useCallback(async (): Promise<SpoolsLoadResult> => {
     const [spools, filaments, printers] = await Promise.all([
       api.getSpools(),
       api.getFilaments(),
@@ -109,39 +107,27 @@ export default function SpoolsScreen() {
         }
       />
 
-      <Card style={styles.summary}>
-        <View style={styles.summaryItem}>
-          <AppText variant="title">{summary.count}</AppText>
-          <AppText variant="caption" faint>
-            Spools
-          </AppText>
-        </View>
-        <View
-          style={[styles.divider, { backgroundColor: theme.colors.border }]}
-        />
-        <View style={styles.summaryItem}>
-          <AppText variant="title">{formatWeight(summary.remaining)}</AppText>
-          <AppText variant="caption" faint>
-            Remaining
-          </AppText>
-        </View>
-        <View
-          style={[styles.divider, { backgroundColor: theme.colors.border }]}
-        />
-        <View style={styles.summaryItem}>
-          <AppText variant="title">{summary.loaded}</AppText>
-          <AppText variant="caption" faint>
-            Loaded
-          </AppText>
-        </View>
-      </Card>
+      <StatReadout
+        stats={[
+          { value: data ? String(summary.count) : "...", label: "Spools" },
+          {
+            value: data ? formatWeight(summary.remaining) : "...",
+            label: "Remaining",
+          },
+          { value: data ? String(summary.loaded) : "...", label: "Loaded" },
+        ]}
+      />
 
       <TextField
         value={query}
         onChangeText={setQuery}
-        placeholder="Search color, brand, material…"
+        placeholder="Search color, brand, material"
         autoCapitalize="none"
         autoCorrect={false}
+        compact
+        left={
+          <Ionicons name="search-outline" size={17} color={theme.colors.muted} />
+        }
         right={
           query ? (
             <Pressable
@@ -152,8 +138,8 @@ export default function SpoolsScreen() {
             >
               <Ionicons
                 name="close-circle"
-                size={18}
-                color={theme.colors.faint}
+                size={17}
+                color={theme.colors.muted}
               />
             </Pressable>
           ) : undefined
@@ -187,6 +173,7 @@ export default function SpoolsScreen() {
     <Screen>
       <FlatList
         data={rows}
+        contentInsetAdjustmentBehavior="automatic"
         keyExtractor={(row) => row.spool.id}
         renderItem={({ item }) => (
           <SpoolCard
@@ -201,54 +188,57 @@ export default function SpoolsScreen() {
             }
           />
         )}
+        ItemSeparatorComponent={ShelfRule}
         ListHeaderComponent={header}
         ListEmptyComponent={
-          loading && !data ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={theme.colors.accent} />
-              <AppText muted>Loading spools…</AppText>
-            </View>
-          ) : error ? (
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Couldn't load spools"
-              description={error}
-              action={<AppButton title="Try again" onPress={reload} />}
-            />
-          ) : query ? (
-            <EmptyState
-              icon="search-outline"
-              title="No matches"
-              description="Try a different color, brand, or material."
-            />
-          ) : (
-            <EmptyState
-              icon="cube-outline"
-              title="No spools yet"
-              description="Scan a filament box to add your first spool."
-              action={
-                <AppButton
-                  title="Scan a barcode"
-                  onPress={() => router.push("/scan")}
-                  icon={
-                    <Ionicons
-                      name="scan-outline"
-                      size={18}
-                      color={theme.colors.onAccent}
-                    />
-                  }
-                />
-              }
-            />
-          )
+          <View style={styles.emptyWrap}>
+            {loading && !data ? (
+              <SpoolSkeletonList />
+            ) : error ? (
+              <EmptyState
+                icon="cloud-offline-outline"
+                title="Couldn't load spools"
+                description={error}
+                action={<AppButton title="Try again" onPress={reload} />}
+              />
+            ) : query ? (
+              <EmptyState
+                icon="search-outline"
+                title="No matches"
+                description="Try a different color, brand, or material."
+              />
+            ) : (
+              <EmptyState
+                icon="cube-outline"
+                title="No spools yet"
+                description="Scan a filament box to add your first spool."
+                action={
+                  <AppButton
+                    title="Scan a barcode"
+                    onPress={() => router.push("/scan")}
+                    icon={
+                      <Ionicons
+                        name="scan-outline"
+                        size={18}
+                        color={theme.colors.onAccent}
+                      />
+                    }
+                  />
+                }
+              />
+            )}
+          </View>
         }
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + spacing.xxxl },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refresh}
-            tintColor={theme.colors.accent}
-            colors={[theme.colors.accent]}
+            tintColor={theme.colors.accentText}
+            colors={[theme.colors.accentText]}
           />
         }
         keyboardShouldPersistTaps="handled"
@@ -260,33 +250,15 @@ export default function SpoolsScreen() {
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxxl,
-    gap: spacing.md,
     flexGrow: 1,
   },
   headerBlock: {
     gap: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
   },
-  summary: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.lg,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 2,
-  },
-  divider: {
-    width: StyleSheet.hairlineWidth,
-    height: 34,
-  },
-  loading: {
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.xxxl,
+  emptyWrap: {
+    paddingTop: spacing.lg,
   },
   banner: {
     flexDirection: "row",
@@ -294,6 +266,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     padding: spacing.md,
   },
 });

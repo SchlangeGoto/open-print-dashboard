@@ -97,3 +97,21 @@ export interface TokenResponse {
   token_type?: string;
   expires_in?: number;
 }
+
+export interface SpoolsLoadResult {
+  spools: Spool[];
+  filaments: Filament[];
+  printers: Printer[];
+}
+
+export interface PrintersLoadResult {
+  printers: Printer[];
+  spools: Spool[];
+  filaments: Filament[];
+}
+
+export interface SpoolDetailData {
+  spool: Spool;
+  filament: Filament | null;
+  printers: Printer[];
+}

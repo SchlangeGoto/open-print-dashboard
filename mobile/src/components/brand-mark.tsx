@@ -19,12 +19,13 @@ export function BrandMark({ size = 56 }: BrandMarkProps) {
           width: size,
           height: size,
           borderRadius: size * 0.32,
+          borderCurve: "continuous",
           backgroundColor: `${theme.colors.accent}18`,
           borderColor: `${theme.colors.accent}33`,
         },
       ]}
     >
-      <Ionicons name="disc" size={size * 0.5} color={theme.colors.accent} />
+      <Ionicons name="disc" size={size * 0.5} color={theme.colors.accentText} />
     </View>
   );
 }

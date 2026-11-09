@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-import { useTheme } from "@/lib/theme";
+import { radius, useTheme } from "@/lib/theme";
 
 interface ProgressBarProps {
   value: number;
@@ -35,11 +35,11 @@ export function ProgressBar({ value, color, height = 6 }: ProgressBarProps) {
 const styles = StyleSheet.create({
   track: {
     width: "100%",
-    borderRadius: 999,
+    borderRadius: radius.pill,
     overflow: "hidden",
   },
   fill: {
     height: "100%",
-    borderRadius: 999,
+    borderRadius: radius.pill,
   },
 });

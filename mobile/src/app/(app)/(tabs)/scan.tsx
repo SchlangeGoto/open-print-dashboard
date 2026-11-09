@@ -3,61 +3,44 @@ import {
   CameraView,
   useCameraPermissions,
   type BarcodeScanningResult,
-  type BarcodeType,
 } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ColorDot } from "@/components/ui/color-dot";
+import { MetaLine } from "@/components/ui/meta-line";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/lib/auth";
+import { LINEAR_BARCODE_TYPES, normalizeBarcode } from "@/lib/barcode";
 import { APP_BUILD_TAG } from "@/lib/build-info";
 import { formatError, formatWeight } from "@/lib/format";
+import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
-
-// Linear formats only. Bambu boxes may use Code128 for the product code, while
-// the square QR is just a short link and is intentionally ignored.
-const BARCODE_TYPES: BarcodeType[] = [
-  "ean13",
-  "ean8",
-  "upc_a",
-  "upc_e",
-  "code128",
-  "code39",
-  "code93",
-  "itf14",
-  "codabar",
-];
-
-/** ITF-14 carton codes often wrap an EAN-13 with a leading packaging zero. */
-function normalizeBarcode(raw: string): string {
-  const value = raw.trim();
-  if (/^\d{14}$/.test(value) && value.startsWith("0")) {
-    return value.slice(1);
-  }
-  return value;
-}
 
 export default function ScanScreen() {
   const { api } = useAuth();
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
   const requested = useRef(false);
@@ -69,6 +52,7 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState(false);
   const [torch, setTorch] = useState(false);
   const [manual, setManual] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
   const [result, setResult] = useState<BarcodeScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,6 +81,7 @@ export default function ScanScreen() {
         setResult(null);
         setError(null);
         setManual("");
+        setManualOpen(false);
       };
     }, []),
   );
@@ -112,6 +97,7 @@ export default function ScanScreen() {
     setResult(null);
     setBusy(true);
     setError(null);
+    setManualOpen(false);
 
     try {
       // Look first so an existing physical spool is never duplicated just
@@ -224,16 +210,26 @@ export default function ScanScreen() {
     setManual("");
   }
 
-  const cameraHeight = Math.min(Math.max(width * 0.78, 300), 420);
+  const cameraHeight = result
+    ? 170
+    : Math.min(Math.max(width * 0.78, 300), 420);
   const cameraActive = focused && Boolean(permission?.granted);
 
   return (
     <Screen>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + spacing.xxxl },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <PageHeader
           brand
           title="Scan"
@@ -242,6 +238,7 @@ export default function ScanScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Toggle torch"
+              hitSlop={6}
               onPress={() => setTorch((value) => !value)}
               style={[
                 styles.iconButton,
@@ -255,7 +252,7 @@ export default function ScanScreen() {
               <Ionicons
                 name={torch ? "flash" : "flash-outline"}
                 size={18}
-                color={torch ? theme.colors.accent : theme.colors.muted}
+                color={torch ? theme.colors.accentText : theme.colors.muted}
               />
             </Pressable>
           }
@@ -264,7 +261,11 @@ export default function ScanScreen() {
         <View
           style={[
             styles.cameraCard,
-            { height: cameraHeight, backgroundColor: "#000" },
+            {
+              height: cameraHeight,
+              backgroundColor: theme.colors.camera,
+              borderColor: theme.colors.border,
+            },
           ]}
         >
           {cameraActive ? (
@@ -272,7 +273,9 @@ export default function ScanScreen() {
               style={StyleSheet.absoluteFill}
               facing="back"
               enableTorch={torch}
-              barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
+              barcodeScannerSettings={{
+                barcodeTypes: LINEAR_BARCODE_TYPES,
+              }}
               onBarcodeScanned={handleBarcodeScanned}
               onCameraReady={() => setPreviewReady(true)}
             />
@@ -281,9 +284,9 @@ export default function ScanScreen() {
               <Ionicons
                 name="camera-outline"
                 size={34}
-                color="rgba(255,255,255,0.7)"
+                color={theme.colors.onCameraMuted}
               />
-              <AppText color="rgba(255,255,255,0.8)" style={styles.center}>
+              <AppText color={theme.colors.onCameraMuted} style={styles.center}>
                 {permission?.granted
                   ? "Camera paused."
                   : permission
@@ -308,6 +311,39 @@ export default function ScanScreen() {
             </View>
           )}
 
+          {cameraActive ? (
+            <View pointerEvents="none" style={styles.scanFrame}>
+              <View
+                style={[
+                  styles.corner,
+                  styles.cornerTopLeft,
+                  { borderColor: theme.colors.onCameraMuted },
+                ]}
+              />
+              <View
+                style={[
+                  styles.corner,
+                  styles.cornerTopRight,
+                  { borderColor: theme.colors.onCameraMuted },
+                ]}
+              />
+              <View
+                style={[
+                  styles.corner,
+                  styles.cornerBottomLeft,
+                  { borderColor: theme.colors.onCameraMuted },
+                ]}
+              />
+              <View
+                style={[
+                  styles.corner,
+                  styles.cornerBottomRight,
+                  { borderColor: theme.colors.onCameraMuted },
+                ]}
+              />
+            </View>
+          ) : null}
+
           {cameraActive && previewReady && !busy ? (
             <View style={styles.cameraHint}>
               {result ? (
@@ -329,14 +365,23 @@ export default function ScanScreen() {
                   </AppText>
                 </Pressable>
               ) : (
-                <View style={styles.hintPill}>
-                  <Ionicons name="scan-outline" size={14} color="#fff" />
+                <View
+                  style={[
+                    styles.hintPill,
+                    { backgroundColor: theme.colors.overlay },
+                  ]}
+                >
+                  <Ionicons
+                    name="scan-outline"
+                    size={14}
+                    color={theme.colors.onCamera}
+                  />
                   <AppText
                     variant="caption"
-                    color="rgba(255,255,255,0.92)"
+                    color={theme.colors.onCameraMuted}
                     style={styles.hintText}
                   >
-                    Scanning automatically — hold the product barcode in view
+                    Scanning automatically. Hold the product barcode in view.
                   </AppText>
                 </View>
               )}
@@ -344,18 +389,28 @@ export default function ScanScreen() {
           ) : null}
 
           {cameraActive && !previewReady ? (
-            <View style={styles.startingOverlay}>
-              <ActivityIndicator color="#fff" />
-              <AppText color="#fff" variant="caption">
+            <View
+              style={[
+                styles.startingOverlay,
+                { backgroundColor: theme.colors.overlay },
+              ]}
+            >
+              <ActivityIndicator color={theme.colors.onCamera} />
+              <AppText color={theme.colors.onCamera} variant="caption">
                 Starting camera…
               </AppText>
             </View>
           ) : null}
 
           {busy ? (
-            <View style={styles.busyOverlay}>
-              <ActivityIndicator color="#fff" size="large" />
-              <AppText color="#fff" variant="label">
+            <View
+              style={[
+                styles.busyOverlay,
+                { backgroundColor: theme.colors.overlayStrong },
+              ]}
+            >
+              <ActivityIndicator color={theme.colors.onCamera} size="large" />
+              <AppText color={theme.colors.onCamera} variant="label">
                 Checking the catalog…
               </AppText>
             </View>
@@ -406,7 +461,7 @@ export default function ScanScreen() {
                   </View>
                   <View style={styles.resultTitleWrap}>
                     <AppText variant="heading">Spool added</AppText>
-                    <AppText variant="caption" faint>
+                    <AppText variant="mono" muted selectable>
                       {result.code}
                     </AppText>
                   </View>
@@ -417,9 +472,7 @@ export default function ScanScreen() {
                   style={[
                     styles.filamentRow,
                     {
-                      backgroundColor: theme.dark
-                        ? "rgba(255,255,255,0.04)"
-                        : theme.colors.surfaceAlt,
+                      backgroundColor: theme.colors.input,
                     },
                   ]}
                 >
@@ -428,9 +481,9 @@ export default function ScanScreen() {
                     <AppText variant="label" numberOfLines={1}>
                       {result.filament.color_name}
                     </AppText>
-                    <AppText variant="caption" muted>
-                      {result.filament.brand} · {result.filament.material}
-                    </AppText>
+                    <MetaLine
+                      items={[result.filament.brand, result.filament.material]}
+                    />
                   </View>
                   {result.spool ? (
                     <AppText variant="label" color={theme.colors.success}>
@@ -475,7 +528,7 @@ export default function ScanScreen() {
                   </View>
                   <View style={styles.resultTitleWrap}>
                     <AppText variant="heading">Already in inventory</AppText>
-                    <AppText variant="caption" faint>
+                    <AppText variant="mono" muted selectable>
                       {result.code}
                     </AppText>
                   </View>
@@ -491,9 +544,7 @@ export default function ScanScreen() {
                   style={[
                     styles.filamentRow,
                     {
-                      backgroundColor: theme.dark
-                        ? "rgba(255,255,255,0.04)"
-                        : theme.colors.surfaceAlt,
+                      backgroundColor: theme.colors.input,
                     },
                   ]}
                 >
@@ -502,9 +553,9 @@ export default function ScanScreen() {
                     <AppText variant="label" numberOfLines={1}>
                       {result.filament.color_name}
                     </AppText>
-                    <AppText variant="caption" muted>
-                      {result.filament.brand} · {result.filament.material}
-                    </AppText>
+                    <MetaLine
+                      items={[result.filament.brand, result.filament.material]}
+                    />
                   </View>
                   {result.spool ? (
                     <AppText variant="label" color={theme.colors.info}>
@@ -562,7 +613,7 @@ export default function ScanScreen() {
                   </View>
                   <View style={styles.resultTitleWrap}>
                     <AppText variant="heading">Barcode not in catalog</AppText>
-                    <AppText variant="caption" faint>
+                    <AppText variant="mono" muted selectable>
                       {result.code}
                     </AppText>
                   </View>
@@ -600,70 +651,103 @@ export default function ScanScreen() {
           </Card>
         ) : null}
 
-        <Card style={styles.manualCard}>
-          <View style={styles.manualHeader}>
-            <AppText variant="heading">Enter it manually</AppText>
-            <AppText variant="caption" faint>
-              Useful when the label is damaged.
+        <View
+          style={[
+            styles.manualSection,
+            {
+              borderTopColor: theme.colors.border,
+              borderBottomColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: manualOpen }}
+            onPress={() => setManualOpen((value) => !value)}
+            style={styles.manualToggle}
+          >
+            <Ionicons
+              name="keypad-outline"
+              size={17}
+              color={theme.colors.muted}
+            />
+            <AppText variant="label" style={styles.manualLabel}>
+              Enter barcode manually
             </AppText>
-          </View>
-          <TextField
-            value={manual}
-            onChangeText={setManual}
-            placeholder="e.g. 6975337032380"
-            returnKeyType="go"
-            onSubmitEditing={() => handleCode(manual)}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <AppButton
-            title="Look up barcode"
-            variant="secondary"
-            disabled={!manual.trim()}
-            loading={busy}
-            onPress={() => handleCode(manual)}
-            icon={
-              <Ionicons
-                name="search-outline"
-                size={17}
-                color={theme.colors.text}
+            <Ionicons
+              name={manualOpen ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={theme.colors.faint}
+            />
+          </Pressable>
+
+          {manualOpen ? (
+            <View style={styles.manualBody}>
+              <TextField
+                value={manual}
+                onChangeText={setManual}
+                placeholder="e.g. 6975337032380"
+                returnKeyType="go"
+                onSubmitEditing={() => handleCode(manual)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                compact
               />
-            }
-          />
-        </Card>
+              <AppButton
+                title="Look up barcode"
+                size="sm"
+                variant="secondary"
+                disabled={!manual.trim()}
+                loading={busy}
+                onPress={() => handleCode(manual)}
+                icon={
+                  <Ionicons
+                    name="search-outline"
+                    size={17}
+                    color={theme.colors.text}
+                  />
+                }
+              />
+            </View>
+          ) : null}
+        </View>
 
-        <AppText variant="caption" faint style={styles.tip}>
+        <AppText variant="caption" muted style={styles.tip}>
           Scan the striped barcode on the box. The square Bambu QR is just a
-          short link and is ignored. Known boxes are created automatically;
-          other brands ask for colour and material once.
+          short link and is ignored. Known boxes are created automatically.
+          Other brands ask for colour and material once.
         </AppText>
 
-        <AppText variant="caption" faint style={styles.buildTag}>
-          Scanner: in-app barcode · build {APP_BUILD_TAG}
+        <AppText variant="monoMicro" muted style={styles.buildTag} selectable>
+          Scanner: in-app barcode. Build {APP_BUILD_TAG}
         </AppText>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxxl,
     gap: spacing.lg,
   },
   iconButton: {
     width: 38,
     height: 38,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
   cameraCard: {
     borderRadius: radius.xl,
+    borderCurve: "continuous",
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.12)",
   },
   cameraFallback: {
     flex: 1,
@@ -671,6 +755,48 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.md,
     padding: spacing.xl,
+  },
+  scanFrame: {
+    position: "absolute",
+    alignSelf: "center",
+    top: "50%",
+    // Half of the frame height, so the frame is optically centred.
+    marginTop: -70,
+    width: 236,
+    height: 140,
+  },
+  corner: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+  },
+  cornerTopLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopLeftRadius: radius.sm,
+  },
+  cornerTopRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderTopRightRadius: radius.sm,
+  },
+  cornerBottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomLeftRadius: radius.sm,
+  },
+  cornerBottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderBottomRightRadius: radius.sm,
   },
   center: {
     textAlign: "center",
@@ -686,7 +812,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: "rgba(0,0,0,0.62)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -709,7 +834,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "rgba(0,0,0,0.55)",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
@@ -720,7 +844,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "rgba(0,0,0,0.62)",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.md,
@@ -731,6 +854,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     padding: spacing.md,
   },
   bannerText: {
@@ -749,6 +873,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.xl,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -765,6 +890,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
   },
   filamentText: {
     flex: 1,
@@ -773,11 +899,22 @@ const styles = StyleSheet.create({
   resultActions: {
     gap: spacing.sm,
   },
-  manualCard: {
-    gap: spacing.md,
+  manualSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  manualHeader: {
-    gap: 2,
+  manualToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  manualLabel: {
+    flex: 1,
+  },
+  manualBody: {
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
   },
   tip: {
     textAlign: "center",
@@ -786,7 +923,5 @@ const styles = StyleSheet.create({
   },
   buildTag: {
     textAlign: "center",
-    fontFamily: "GeistMono_400Regular",
-    fontSize: 10,
   },
 });

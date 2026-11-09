@@ -8,7 +8,7 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
-import { spacing, useTheme } from "@/lib/theme";
+import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function ConnectionErrorScreen() {
   const { status, serverUrl, retry } = useAuth();
@@ -108,7 +108,8 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 82,
     height: 82,
-    borderRadius: 28,
+    borderRadius: radius.xxl,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",

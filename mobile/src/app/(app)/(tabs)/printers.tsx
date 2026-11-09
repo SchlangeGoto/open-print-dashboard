@@ -2,46 +2,34 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PrinterRackRow, type PrinterRow } from "@/components/printer-rack-row";
+import { PrinterSkeletonList } from "@/components/printer-skeleton";
 import { AppButton } from "@/components/ui/app-button";
-import { AppText } from "@/components/ui/app-text";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { ColorDot } from "@/components/ui/color-dot";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ProgressBar } from "@/components/ui/progress-bar";
 import { PageHeader, Screen } from "@/components/ui/screen";
+import { ShelfRule } from "@/components/ui/shelf-rule";
+import { StatReadout } from "@/components/ui/stat-readout";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useAuth } from "@/lib/auth";
-import { formatWeight, percent } from "@/lib/format";
+import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
-import type { Filament, Printer, Spool } from "@/lib/types";
-
-interface PrinterRow {
-  printer: Printer;
-  loadedSpool?: Spool;
-  filament?: Filament;
-}
-
-interface LoadResult {
-  printers: Printer[];
-  spools: Spool[];
-  filaments: Filament[];
-}
+import type { PrintersLoadResult } from "@/lib/types";
 
 export default function PrintersScreen() {
   const { api } = useAuth();
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
-  const loader = useCallback(async (): Promise<LoadResult> => {
+  const loader = useCallback(async (): Promise<PrintersLoadResult> => {
     const [printers, spools, filaments] = await Promise.all([
       api.getPrinters(),
       api.getSpools(),
@@ -83,47 +71,25 @@ export default function PrintersScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Refresh printers"
+            hitSlop={6}
             onPress={refresh}
             style={[
               styles.iconButton,
               { backgroundColor: theme.colors.surfaceAlt },
             ]}
           >
-            <Ionicons
-              name="refresh"
-              size={18}
-              color={theme.colors.muted}
-            />
+            <Ionicons name="refresh" size={18} color={theme.colors.muted} />
           </Pressable>
         }
       />
 
-      <Card style={styles.summary}>
-        <View style={styles.summaryItem}>
-          <AppText variant="title">{rows.length}</AppText>
-          <AppText variant="caption" faint>
-            Printers
-          </AppText>
-        </View>
-        <View
-          style={[styles.divider, { backgroundColor: theme.colors.border }]}
-        />
-        <View style={styles.summaryItem}>
-          <AppText variant="title">{onlineCount}</AppText>
-          <AppText variant="caption" faint>
-            Online
-          </AppText>
-        </View>
-        <View
-          style={[styles.divider, { backgroundColor: theme.colors.border }]}
-        />
-        <View style={styles.summaryItem}>
-          <AppText variant="title">{loadedCount}</AppText>
-          <AppText variant="caption" faint>
-            Loaded
-          </AppText>
-        </View>
-      </Card>
+      <StatReadout
+        stats={[
+          { value: data ? String(rows.length) : "...", label: "Printers" },
+          { value: data ? String(onlineCount) : "...", label: "Online" },
+          { value: data ? String(loadedCount) : "...", label: "Loaded" },
+        ]}
+      />
     </View>
   );
 
@@ -131,11 +97,12 @@ export default function PrintersScreen() {
     <Screen>
       <FlatList
         data={rows}
+        contentInsetAdjustmentBehavior="automatic"
         keyExtractor={(row) =>
           row.printer.id ?? row.printer.serial ?? row.printer.name
         }
         renderItem={({ item }) => (
-          <PrinterCard
+          <PrinterRackRow
             row={item}
             onOpenSpool={
               item.loadedSpool
@@ -148,35 +115,38 @@ export default function PrintersScreen() {
             }
           />
         )}
+        ItemSeparatorComponent={ShelfRule}
         ListHeaderComponent={header}
         ListEmptyComponent={
-          loading && !data ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={theme.colors.accent} />
-              <AppText muted>Loading printers…</AppText>
-            </View>
-          ) : error ? (
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Couldn't load printers"
-              description={error}
-              action={<AppButton title="Try again" onPress={reload} />}
-            />
-          ) : (
-            <EmptyState
-              icon="print-outline"
-              title="No printers yet"
-              description="Configure a printer in the web dashboard and it will appear here."
-            />
-          )
+          <View style={styles.emptyWrap}>
+            {loading && !data ? (
+              <PrinterSkeletonList />
+            ) : error ? (
+              <EmptyState
+                icon="cloud-offline-outline"
+                title="Couldn't load printers"
+                description={error}
+                action={<AppButton title="Try again" onPress={reload} />}
+              />
+            ) : (
+              <EmptyState
+                icon="print-outline"
+                title="No printers yet"
+                description="Configure a printer in the web dashboard and it will appear here."
+              />
+            )}
+          </View>
         }
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + spacing.xxxl },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refresh}
-            tintColor={theme.colors.accent}
-            colors={[theme.colors.accent]}
+            tintColor={theme.colors.accentText}
+            colors={[theme.colors.accentText]}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -185,230 +155,24 @@ export default function PrintersScreen() {
   );
 }
 
-function PrinterCard({
-  row,
-  onOpenSpool,
-}: {
-  row: PrinterRow;
-  onOpenSpool?: () => void;
-}) {
-  const theme = useTheme();
-  const { printer, loadedSpool, filament } = row;
-  const pct = loadedSpool
-    ? percent(loadedSpool.remaining_g, loadedSpool.total_weight_g)
-    : 0;
-
-  return (
-    <View
-      style={[
-        styles.printerCard,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-        },
-      ]}
-    >
-      <View style={styles.printerHeader}>
-        <View
-          style={[
-            styles.printerIcon,
-            {
-              backgroundColor: printer.online
-                ? `${theme.colors.success}18`
-                : theme.colors.surfaceAlt,
-            },
-          ]}
-        >
-          <Ionicons
-            name="print"
-            size={21}
-            color={
-              printer.online ? theme.colors.success : theme.colors.faint
-            }
-          />
-        </View>
-        <View style={styles.printerTitle}>
-          <AppText variant="heading" numberOfLines={1}>
-            {printer.name}
-          </AppText>
-          <AppText variant="caption" muted numberOfLines={1}>
-            {printer.model ?? "Bambu Lab printer"}
-          </AppText>
-        </View>
-        <Badge
-          label={printer.online ? "Online" : "Offline"}
-          variant={printer.online ? "success" : "neutral"}
-        />
-      </View>
-
-      {printer.ip || !printer.configured ? (
-        <View style={styles.ipRow}>
-          {printer.ip ? (
-            <>
-              <Ionicons
-                name="wifi-outline"
-                size={13}
-                color={theme.colors.faint}
-              />
-              <AppText variant="caption" faint>
-                {printer.ip}
-              </AppText>
-            </>
-          ) : null}
-          {!printer.configured ? (
-            <Badge label="Cloud only" variant="warning" />
-          ) : null}
-        </View>
-      ) : null}
-
-      {loadedSpool ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onOpenSpool}
-          style={({ pressed }) => [
-            styles.loadedSpool,
-            {
-              backgroundColor: theme.colors.surfaceAlt,
-              borderColor: theme.colors.border,
-            },
-            pressed && { opacity: 0.82 },
-          ]}
-        >
-          <ColorDot color={filament?.color_hex} size={34} />
-          <View style={styles.loadedSpoolText}>
-            <AppText variant="label" numberOfLines={1}>
-              {filament?.color_name ?? "Loaded spool"}
-            </AppText>
-            <AppText variant="caption" muted>
-              {formatWeight(loadedSpool.remaining_g)} remaining
-            </AppText>
-            <ProgressBar
-              value={pct}
-              color={filament?.color_hex ?? theme.colors.accent}
-              height={4}
-            />
-          </View>
-          <View style={styles.loadedSpoolRight}>
-            <AppText variant="caption" color={theme.colors.accent}>
-              {pct}%
-            </AppText>
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color={theme.colors.faint}
-            />
-          </View>
-        </Pressable>
-      ) : (
-        <View
-          style={[
-            styles.noSpool,
-            {
-              backgroundColor: theme.colors.surfaceAlt,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <Ionicons
-            name="ellipse-outline"
-            size={17}
-            color={theme.colors.faint}
-          />
-          <AppText variant="caption" faint>
-            No spool loaded
-          </AppText>
-        </View>
-      )}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxxl,
-    gap: spacing.md,
     flexGrow: 1,
   },
   headerBlock: {
     gap: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
   },
   iconButton: {
     width: 38,
     height: 38,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
-  summary: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.lg,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 2,
-  },
-  divider: {
-    width: StyleSheet.hairlineWidth,
-    height: 34,
-  },
-  loading: {
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.xxxl,
-  },
-  printerCard: {
-    borderWidth: 1,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  printerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  printerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  printerTitle: {
-    flex: 1,
-    gap: 2,
-  },
-  ipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  loadedSpool: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-  },
-  loadedSpoolText: {
-    flex: 1,
-    gap: 3,
-  },
-  loadedSpoolRight: {
-    alignItems: "flex-end",
-    gap: 2,
-  },
-  noSpool: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
+  emptyWrap: {
+    paddingTop: spacing.lg,
   },
 });

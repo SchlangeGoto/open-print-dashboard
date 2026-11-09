@@ -118,13 +118,18 @@ protects the API, but the credentials and tokens would travel unencrypted.
 
 ## Design
 
-The mobile UI uses the same visual language as the web dashboard:
+The mobile UI uses the same visual language as the web dashboard. The full
+system is documented in [`DESIGN.md`](DESIGN.md); the source of truth is
+[`src/lib/theme.ts`](src/lib/theme.ts).
 
 - Geist Sans / Geist Mono
 - zinc surfaces (`#0a0a0a` background, `#171717` cards) and `foreground/10`
   borders
-- teal accent (`#0d9488`) with the same success/warning/danger colors
-- shadcn-like radii: 14px cards, 10px buttons and inputs
+- emerald accent (`#059669`), with `accentText` (`#34d399` in dark mode) for
+  readable links and icons
+- shadcn-like radii: 14px cards, 10px buttons and inputs, continuous curves
+- hairline shelf rows on Spools and rack rows on Printers instead of stacked
+  cards; the loaded spool is pulled forward with an emerald tint
 - the same disc mark and “Open Print” wordmark on the main screens
 
 ## Project structure

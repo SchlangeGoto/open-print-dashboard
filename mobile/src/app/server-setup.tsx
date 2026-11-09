@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandLockup } from "@/components/brand-lockup";
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
@@ -58,6 +58,7 @@ export default function ServerSetupScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -72,7 +73,7 @@ export default function ServerSetupScreen() {
           ) : null}
         </View>
 
-        <BrandMark size={64} />
+        <BrandLockup size={64} />
         <View style={styles.heading}>
           <AppText variant="display" style={styles.center}>
             Connect your dashboard
@@ -140,9 +141,9 @@ export default function ServerSetupScreen() {
           <Ionicons
             name="shield-checkmark-outline"
             size={16}
-            color={theme.colors.faint}
+            color={theme.colors.muted}
           />
-          <AppText variant="caption" faint style={styles.hintText}>
+          <AppText variant="caption" muted style={styles.hintText}>
             On iOS and Android, tokens are stored in the device&apos;s secure
             storage. The app never sends your password anywhere except your own
             server.
@@ -179,6 +180,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: spacing.xl,
     borderRadius: radius.xl,
+    borderCurve: "continuous",
   },
   errorBox: {
     flexDirection: "row",
@@ -186,6 +188,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     padding: spacing.md,
   },
   errorText: {

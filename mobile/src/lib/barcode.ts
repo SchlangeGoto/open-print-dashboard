@@ -1,0 +1,26 @@
+import type { BarcodeType } from "expo-camera";
+
+/**
+ * Linear formats only. Bambu boxes may use Code128 for the product code,
+ * while the square QR is just a short link and is intentionally ignored.
+ */
+export const LINEAR_BARCODE_TYPES: BarcodeType[] = [
+  "ean13",
+  "ean8",
+  "upc_a",
+  "upc_e",
+  "code128",
+  "code39",
+  "code93",
+  "itf14",
+  "codabar",
+];
+
+/** ITF-14 carton codes often wrap an EAN-13 with a leading packaging zero. */
+export function normalizeBarcode(raw: string): string {
+  const value = raw.trim();
+  if (/^\d{14}$/.test(value) && value.startsWith("0")) {
+    return value.slice(1);
+  }
+  return value;
+}

@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,9 +16,13 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { DetailRow } from "@/components/detail-row";
 import { EmptyState } from "@/components/ui/empty-state";
+import { MetaLine } from "@/components/ui/meta-line";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { PageHeader, Screen } from "@/components/ui/screen";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatGrid } from "@/components/ui/stat-readout";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useAuth } from "@/lib/auth";
 import {
@@ -31,13 +34,7 @@ import {
   percent,
 } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
-import type { Filament, Printer, Spool } from "@/lib/types";
-
-interface DetailData {
-  spool: Spool;
-  filament: Filament | null;
-  printers: Printer[];
-}
+import type { Printer, SpoolDetailData } from "@/lib/types";
 
 export default function SpoolDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,7 +45,7 @@ export default function SpoolDetailScreen() {
   const [busyPrinter, setBusyPrinter] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const loader = useCallback(async (): Promise<DetailData> => {
+  const loader = useCallback(async (): Promise<SpoolDetailData> => {
     if (!id) {
       throw new Error("Spool not found");
     }
@@ -113,9 +110,10 @@ export default function SpoolDetailScreen() {
     return (
       <Screen>
         <View style={styles.headerPadding}>{header}</View>
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.colors.accent} />
-          <AppText muted>Loading spool…</AppText>
+        <View style={styles.loadingSkeleton}>
+          <Skeleton width="100%" height={190} rounded={radius.xl} />
+          <Skeleton width="100%" height={54} rounded={radius.lg} />
+          <Skeleton width="100%" height={132} rounded={radius.xl} />
         </View>
       </Screen>
     );
@@ -138,9 +136,14 @@ export default function SpoolDetailScreen() {
   const { spool, filament, printers } = data;
   const pct = percent(spool.remaining_g, spool.total_weight_g);
   const color = filament?.color_hex ?? theme.colors.faint;
-  const heroText = isLightColor(color) ? "#18181b" : "#ffffff";
+  const heroText = isLightColor(color)
+    ? theme.colors.mediaInk
+    : theme.colors.mediaPaper;
   const currentPrinter = printers.find(
     (printer) => printer.id && printer.id === spool.printer_id,
+  );
+  const otherPrinters = printers.filter(
+    (printer) => printer.id !== spool.printer_id,
   );
   const sourceLabel =
     spool.source === "ams"
@@ -148,12 +151,13 @@ export default function SpoolDetailScreen() {
       : spool.source === "barcode"
         ? "Barcode"
         : spool.source
-          ? spool.source
+          ? spool.source.charAt(0).toUpperCase() + spool.source.slice(1)
           : "Manual";
 
   return (
     <Screen>
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + spacing.xxxl },
@@ -177,12 +181,19 @@ export default function SpoolDetailScreen() {
           style={[styles.hero, { borderColor: theme.colors.border }]}
         >
           <View style={styles.heroTop}>
-            <AppText variant="caption" color={heroText} style={styles.heroMeta}>
-              {filament
-                ? `${filament.brand.toUpperCase()} · ${filament.material}`
-                : "FILAMENT"}
-            </AppText>
-            <View style={styles.heroBadge}>
+            <MetaLine
+              items={
+                filament ? [filament.brand, filament.material] : ["Filament"]
+              }
+              color={heroText}
+              ruleColor={`${heroText}55`}
+            />
+            <View
+              style={[
+                styles.heroBadge,
+                { backgroundColor: theme.colors.scrim },
+              ]}
+            >
               <AppText variant="caption" color={heroText}>
                 {pct}% left
               </AppText>
@@ -225,20 +236,17 @@ export default function SpoolDetailScreen() {
           </View>
         ) : null}
 
-        <Card style={styles.statsCard}>
-          <Stat label="Remaining" value={formatWeight(spool.remaining_g)} />
-          <Stat label="Total" value={formatWeight(spool.total_weight_g)} />
-          <Stat label="Price" value={formatPrice(spool.price_per_kg)} />
-          <Stat label="Source" value={sourceLabel} />
-        </Card>
+        <StatGrid
+          stats={[
+            { value: formatWeight(spool.remaining_g), label: "Remaining" },
+            { value: formatWeight(spool.total_weight_g), label: "Total" },
+            { value: formatPrice(spool.price_per_kg), label: "Price" },
+            { value: sourceLabel, label: "Source" },
+          ]}
+        />
 
         <Card style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <AppText variant="heading">Location</AppText>
-            {currentPrinter ? (
-              <Badge label="Loaded" variant="success" />
-            ) : null}
-          </View>
+          <AppText variant="heading">Location</AppText>
           {currentPrinter ? (
             <View
               style={[
@@ -255,7 +263,7 @@ export default function SpoolDetailScreen() {
                 <Ionicons
                   name="print"
                   size={20}
-                  color={theme.colors.accent}
+                  color={theme.colors.accentText}
                 />
               </View>
               <View style={styles.currentPrinterText}>
@@ -269,62 +277,62 @@ export default function SpoolDetailScreen() {
             <AppText muted>This spool is not loaded in a printer.</AppText>
           )}
 
-          {printers.length > 0 ? (
+          {otherPrinters.length > 0 ? (
             <View style={styles.printerList}>
-              {printers.map((printer) => {
-                const isCurrent = Boolean(
-                  printer.id && printer.id === spool.printer_id,
-                );
-                return (
-                  <View
-                    key={printer.id ?? printer.serial}
-                    style={[
-                      styles.printerRow,
-                      { borderColor: theme.colors.border },
-                    ]}
-                  >
-                    <View style={styles.printerRowText}>
-                      <AppText variant="label" numberOfLines={1}>
-                        {printer.name}
-                      </AppText>
-                      <AppText variant="caption" faint>
-                        {printer.online ? "Online" : "Offline"}
-                        {printer.configured ? "" : " · Cloud only"}
-                      </AppText>
-                    </View>
-                    {printer.id ? (
-                      <AppButton
-                        title={isCurrent ? "Loaded" : "Load here"}
-                        size="sm"
-                        variant={isCurrent ? "ghost" : "secondary"}
-                        disabled={isCurrent}
-                        loading={busyPrinter === printer.id}
-                        onPress={() => loadInto(printer)}
-                      />
-                    ) : (
-                      <Badge label="Cloud only" variant="warning" />
-                    )}
+              {otherPrinters.map((printer) => (
+                <View
+                  key={printer.id ?? printer.serial}
+                  style={[
+                    styles.printerRow,
+                    { borderColor: theme.colors.border },
+                  ]}
+                >
+                  <View style={styles.printerRowText}>
+                    <AppText variant="label" numberOfLines={1}>
+                      {printer.name}
+                    </AppText>
+                    <MetaLine
+                      items={[
+                        printer.online ? "Online" : "Offline",
+                        printer.configured ? null : "Cloud only",
+                      ]}
+                    />
                   </View>
-                );
-              })}
+                  {printer.id ? (
+                    <AppButton
+                      title="Load here"
+                      size="sm"
+                      variant="secondary"
+                      loading={busyPrinter === printer.id}
+                      onPress={() => loadInto(printer)}
+                    />
+                  ) : (
+                    <Badge label="Cloud only" variant="warning" />
+                  )}
+                </View>
+              ))}
             </View>
-          ) : (
-            <AppText variant="caption" faint>
+          ) : printers.length === 0 ? (
+            <AppText variant="caption" muted>
               No printers configured. Add one from the web dashboard.
             </AppText>
-          )}
+          ) : currentPrinter ? (
+            <AppText variant="caption" muted>
+              No other printers to load into.
+            </AppText>
+          ) : null}
         </Card>
 
         <Card style={styles.section}>
           <AppText variant="heading">Details</AppText>
-          <DetailRow label="Barcode" value={spool.barcode ?? "—"} mono />
-          <DetailRow label="NFC / tag UID" value={spool.tag_uid ?? "—"} mono />
+          <DetailRow label="Barcode" value={spool.barcode ?? "None"} mono />
+          <DetailRow label="NFC / tag UID" value={spool.tag_uid ?? "None"} mono />
           <DetailRow label="Added" value={formatDate(spool.created_at)} />
           <DetailRow label="Last used" value={formatDate(spool.last_used_at)} />
           {filament ? (
             <DetailRow
               label="Bambu preset"
-              value={filament.bambu_info_idx ?? "—"}
+              value={filament.bambu_info_idx ?? "None"}
               mono
             />
           ) : null}
@@ -334,44 +342,6 @@ export default function SpoolDetailScreen() {
         </Card>
       </ScrollView>
     </Screen>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.stat}>
-      <AppText variant="caption" faint>
-        {label}
-      </AppText>
-      <AppText variant="label" numberOfLines={1}>
-        {value}
-      </AppText>
-    </View>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <View style={styles.detailRow}>
-      <AppText variant="caption" muted>
-        {label}
-      </AppText>
-      <AppText
-        variant={mono ? "mono" : "body"}
-        numberOfLines={2}
-        style={styles.detailValue}
-      >
-        {value}
-      </AppText>
-    </View>
   );
 }
 
@@ -389,8 +359,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.md,
   },
+  loadingSkeleton: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.lg,
+  },
   hero: {
     borderRadius: radius.xl,
+    borderCurve: "continuous",
     borderWidth: 1,
     padding: spacing.xl,
     minHeight: 190,
@@ -403,14 +378,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: "auto",
-  },
-  heroMeta: {
-    fontFamily: "Geist_600SemiBold",
-    fontSize: 11,
-    letterSpacing: 1.1,
+    gap: spacing.md,
   },
   heroBadge: {
-    backgroundColor: "rgba(0,0,0,0.22)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
@@ -421,22 +391,8 @@ const styles = StyleSheet.create({
   heroProgress: {
     marginTop: spacing.sm,
   },
-  statsCard: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    rowGap: spacing.lg,
-  },
-  stat: {
-    width: "50%",
-    gap: 2,
-  },
   section: {
     gap: spacing.md,
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
   currentPrinter: {
     flexDirection: "row",
@@ -444,11 +400,13 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
   },
   printerIcon: {
     width: 40,
     height: 40,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -470,22 +428,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: spacing.lg,
-    alignItems: "flex-start",
-  },
-  detailValue: {
-    flex: 1,
-    textAlign: "right",
-  },
   banner: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
     padding: spacing.md,
   },
 });

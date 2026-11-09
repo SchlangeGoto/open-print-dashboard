@@ -41,7 +41,7 @@ export function PageHeader({
       <View style={styles.titleWrap}>
         {brand ? (
           <View style={styles.brandRow}>
-            <Ionicons name="disc" size={13} color={theme.colors.accent} />
+            <Ionicons name="disc" size={13} color={theme.colors.accentText} />
             <AppText variant="caption" muted>
               Open Print
             </AppText>
@@ -51,7 +51,7 @@ export function PageHeader({
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant="caption" muted style={styles.subtitle}>
+          <AppText variant="subhead" muted>
             {subtitle}
           </AppText>
         ) : null}
@@ -79,13 +79,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  subtitle: {
-    fontSize: 13,
-  },
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: spacing.xs,
+    // Optical gap between the brand line and the screen title.
     marginBottom: 2,
   },
   right: {

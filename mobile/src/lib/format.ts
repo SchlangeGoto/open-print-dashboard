@@ -1,5 +1,5 @@
 export function formatWeight(grams: number | null | undefined): string {
-  if (grams == null || Number.isNaN(grams)) return "—";
+  if (grams == null || Number.isNaN(grams)) return "Not set";
   if (grams >= 1000) {
     const kg = grams / 1000;
     return `${kg % 1 === 0 ? kg.toFixed(0) : kg.toFixed(1)} kg`;
@@ -16,15 +16,15 @@ export function percent(
 }
 
 export function formatPrice(value: number | null | undefined): string {
-  if (value == null) return "—";
+  if (value == null) return "Not set";
   const rounded = value % 1 === 0 ? value.toFixed(0) : value.toFixed(2);
   return `€${rounded}/kg`;
 }
 
 export function formatDate(value: string | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",

@@ -13,6 +13,7 @@ export function Card({ style, ...rest }: ViewProps) {
           borderColor: theme.colors.border,
           borderWidth: 1,
           borderRadius: radius.xl,
+          borderCurve: "continuous",
           padding: spacing.lg,
         },
         style,

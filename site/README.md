@@ -58,6 +58,16 @@ the page says so; pricing is not published yet. The interest CTA is a `mailto:`
 link (`HOSTING_BETA_MAILTO` in `lib/site.ts`). Update the plan copy, pricing and
 contact when the hosted product is defined.
 
+Hosting is framed as a convenience for people who cannot run a server, not the
+business model or a feature gate. Self-hosting stays free.
+
+## Support
+
+The site links to GitHub Sponsors from the footer and the open-source section
+(`SPONSOR_URL` in `lib/site.ts`). Enable GitHub Sponsors on the account or swap
+the constant. Donations are described as support for the demo, domain and
+maintenance, not a paywall.
+
 ## Design
 
 Hallmark custom run. The site uses the dashboard's own tokens: Geist, near-black

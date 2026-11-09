@@ -242,6 +242,16 @@ Contributions are very welcome!
 
 ---
 
+## 💚 Support
+
+OpenPrintDashboard is free and self-hosted. If it is useful, you can
+[sponsor the project on GitHub](https://github.com/sponsors/SchlangeGoto).
+Donations cover the demo, the domain and maintenance, and self-hosting stays
+free. The managed hosting beta is a convenience for people who cannot run a
+server, not a feature gate or the business model.
+
+---
+
 ## 📄 License
 
 GNU AGPLv3 — See [LICENSE](LICENSE) for details.

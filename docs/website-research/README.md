@@ -733,7 +733,7 @@ Bambuddy inserts evidence (press, reviews, sponsors) between 8 and 9. Immich ins
 | Appliance / hardware | Bambuddy, FilaMan | Premium, tangible | Possible later |
 | Business tier | Bambuddy | Support, permissions, billing | Not yet |
 
-**Recommendation:** no pricing page yet. A quiet `/hosting/` beta interest page is live; add a “Support” / “Sponsor” link in the footer and a short “How the project is funded” note on the About page. When the hosted tier is real, add `/cloud` with pricing. The self-hosted edition stays free and AGPL; the hosted tier sells convenience, not features.
+**Recommendation:** no pricing page yet. A quiet `/hosting/` beta interest page is live; GitHub Sponsors is linked from the footer and open-source section. Hosting is a convenience for people who cannot self-host, not the business model. When the hosted tier is real, add `/cloud` with pricing. The self-hosted edition stays free and AGPL.
 
 ### 5.8 Footer
 

@@ -45,7 +45,7 @@ jobs:
         with:
           model: opencode-go/deepseek-v4.1-flash
           variant: max
-          agent: plan
+          agent: build
           use_github_token: true
           share: false
           prompt: |

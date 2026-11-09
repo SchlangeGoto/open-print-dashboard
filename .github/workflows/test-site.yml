@@ -1,0 +1,53 @@
+name: Test Site
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "site/**"
+      - ".github/workflows/test-site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/test-site.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

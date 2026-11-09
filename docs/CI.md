@@ -5,7 +5,7 @@ This repository uses GitHub Actions for three kinds of work:
 1. **Deterministic gates** — lint, typecheck, tests, builds. These are the
    checks that should block a merge.
 2. **Security and maintenance** — CodeQL, dependency review, Dependabot.
-3. **Advisory AI review** — best-effort PR feedback. It never blocks a merge.
+3. **Managed automated review** — CodeRabbit, advisory. It never blocks a merge.
 
 ## Workflows
 
@@ -24,13 +24,17 @@ This repository uses GitHub Actions for three kinds of work:
 | Test Docker Compose | `.github/workflows/test-docker-compose.yml` | Docker/Compose/dependency changes, manual | Builds and starts `compose.prod.yml`, checks backend health and frontend |
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
-| AI PR Review | `.github/workflows/ai-review.yml` | PR opened/updated/ready | Advisory AI review with a filtered inline diff |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
 | Dependabot | `.github/dependabot.yml` | Weekly | Grouped npm, uv, GitHub Actions, and Docker updates |
 
 The test and build workflows cancel superseded runs on the same ref, have a
 timeout, and use least-privilege `permissions`. All actions are pinned to commit
 SHAs; Dependabot keeps them updated.
+
+PR review is handled by **CodeRabbit**, a GitHub App configured in
+`.coderabbit.yaml`. It is free for public repositories, does not use a
+repository API key, and is advisory. OpenCode is not used in CI; it remains a
+local review tool (`/pr-review`).
 
 ## Run the same checks locally
 
@@ -104,43 +108,40 @@ Do **not** require `test-site`, `test-mobile`, or `test-e2e` as they are
 path-filtered: they are skipped on unrelated PRs, and a skipped required check
 stays pending forever. If you want one stable required check, add an
 always-running aggregator job that `needs` the others and requires that single
-job instead. Do **not** require `AI PR Review`; it is advisory.
+job instead. Do **not** require `CodeRabbit`; it is advisory.
+
+## Review automation
+
+### CodeRabbit (GitHub App)
+
+- Free for public repositories. No repository API key or provider key is needed.
+- Configured in [`.coderabbit.yaml`](../.coderabbit.yaml).
+- Reviews PRs targeting `main` and `feat/marketing-site`; drafts are skipped.
+- Uses `AGENTS.md` as code guidelines and the path instructions in the config,
+  which point to `.github/REVIEW.md`.
+- Advisory: it posts comments and a status, but does not block merges.
+- Manual commands on a PR: `@coderabbitai review`, `@coderabbitai full review`,
+  `@coderabbitai pause`, `@coderabbitai resume`,
+  `@coderabbitai configuration`.
+
+### Local OpenCode review
+
+OpenCode is not used in CI. For a local review with your own key/model:
+
+```text
+/pr-review 10
+```
+
+This uses clean-context `reviewer` subagents and `.github/REVIEW.md`. It works
+with whichever provider you have configured locally; nothing in GitHub depends
+on it.
 
 ## Secrets and variables
 
-| Name | Kind | Purpose |
-| --- | --- | --- |
-| `AI_REVIEW_API_KEY` | Secret | Provider key for the AI review job |
-| `AI_REVIEW_MODEL` | Variable | Model id, default `opencode-go/deepseek-v4.1-flash` |
-| `AI_REVIEW_VARIANT` | Variable | Reasoning variant, default `high` |
-
-The workflow maps `AI_REVIEW_API_KEY` to the environment variable the current
-runner expects. The naming is provider-agnostic even though the current runner
-is OpenCode's GitHub action.
-
-`OPENCODE_API_KEY` may still exist as a legacy secret for older stacked
-branches. Remove it after those branches rebase onto the current CI.
-
-## AI review details
-
-- It skips drafts, fork PRs (no secrets), and PRs over 80 files or 12k
-  additions.
-- It inlines a filtered diff: lockfiles, images, build output, `.next`, and
-  Expo exports are excluded.
-- It runs read-only: no edits, no shell, no web search.
-- It is `continue-on-error` and timed out at 15 minutes, so it cannot block a
-  merge.
-- For a reliable local review, use:
-
-  ```text
-  /pr-review 10
-  ```
-
-  This uses clean-context `reviewer` subagents and `.github/REVIEW.md`.
-
-To change provider or model, update `AI_REVIEW_MODEL` and
-`AI_REVIEW_API_KEY`. If the new provider is not supported by the current
-OpenCode runner, replace the `Run AI review` step with that provider's runner.
+There are no review secrets in the repository. CodeRabbit is a GitHub App, and
+the local OpenCode review uses your local credentials. The only tokens used by
+CI are the automatic `GITHUB_TOKEN` and the standard provider keys for the
+build/test workflows where applicable.
 
 ## Builds and deployment
 
@@ -173,26 +174,25 @@ stricter security requirements:
 - **Keep pinned actions updated.** All actions are pinned to commit SHAs;
   Dependabot handles version updates. Review the diff before merging an action
   bump.
-- **Add OpenSSF Scorecard** and put the badge in the README.
+- **Put the OpenSSF Scorecard badge in the README.**
 - **Add a merge queue** when more than one person merges to `main`. Every
   workflow that provides a required check must also run on `merge_group`.
 - **Use reusable workflows or repository templates** if this project grows into
   several repositories. For one repository, separate workflows are clearer.
 - **Add release automation** (tagged releases, changelog, signed artifacts)
   when there is a release cadence.
-- **Consider a managed AI reviewer** (Copilot, CodeRabbit, Greptile) if you
-  want automatic review without maintaining a runner. The local `/pr-review`
-  command remains the vendor-free option.
 
 ## Copilot and GitHub Agents
 
 - **Automatic Copilot code review** is disabled in the account's personal
   Copilot settings. The `copilot-pull-request-reviewer` comments on older PRs
   are historical.
+- **CodeRabbit** is the managed reviewer for this repository. It is a GitHub
+  App, not a workflow, and it does not use a repository API key.
 - The repository **Agents** tab is GitHub Copilot's cloud coding agent. Custom
   agents are Copilot profiles in `.github/agents/*.agent.md`. They are
   Copilot-specific and are **not** used by this repository.
-- The local agent configuration lives in `.opencode/agents/` and
+- The local OpenCode agent configuration lives in `.opencode/agents/` and
   `.opencode/commands/`. Do not put OpenCode agents in `.github/agents/`; that
   directory is for Copilot.
 
@@ -200,11 +200,13 @@ stricter security requirements:
 
 - **A required check is missing**: the workflow may have been skipped by a
   `paths` filter. Run it manually or adjust the ruleset.
-- **A PR from a fork has no AI review**: fork PRs do not receive repository
-  secrets. A maintainer can review manually or run `/pr-review` locally.
-- **A PR is too large for AI review**: split it. The job skips PRs over 80
-  files or 12k additions by design.
-- **A workflow is stuck**: cancel it and rerun. The AI review is advisory; it
-  does not need to finish before merging.
+- **CodeRabbit did not review a PR**: confirm the app is installed on the repo,
+  the PR targets `main` or `feat/marketing-site`, and it is not a draft. Trigger
+  it with `@coderabbitai review`.
+- **CodeRabbit is too noisy**: change `reviews.profile` to `chill`, tighten
+  `path_filters`/`path_instructions`, or pause it with
+  `@coderabbitai pause`.
+- **A workflow is stuck**: cancel it and rerun. CodeRabbit is advisory; it does
+  not need to finish before merging.
 - **Dependency review fails**: enable the dependency graph or check the new
   dependency's advisory. The graph is enabled for this repository.

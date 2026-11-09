@@ -1,12 +1,16 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 /**
  * Adds the `js` class only after hydration, then reveals marked sections as
- * they enter the viewport. Without JS, the content is visible by default.
+ * they enter the viewport. Re-runs on client-side navigation so new page
+ * sections are observed too. Without JS, the content is visible by default.
  */
 export function RevealObserver() {
+  const pathname = usePathname();
+
   useEffect(() => {
     const root = document.documentElement;
     const elements = Array.from(
@@ -39,9 +43,8 @@ export function RevealObserver() {
 
     return () => {
       observer.disconnect();
-      root.classList.remove("js");
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }

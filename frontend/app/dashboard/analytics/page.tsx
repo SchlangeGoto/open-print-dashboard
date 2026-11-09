@@ -8,7 +8,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  LabelList,
   XAxis,
   YAxis,
 } from "recharts";
@@ -296,66 +295,38 @@ function UsageBarChart({ data, label }: { data: UsageDatum[]; label: string }) {
   } satisfies ChartConfig;
 
   return (
-    <ChartContainer
-      config={config}
-      className="w-full"
-      style={{ height: Math.max(180, data.length * 42) }}
-    >
+    <ChartContainer config={config}>
       <BarChart
         accessibilityLayer
         layout="vertical"
         data={data}
-        margin={{ top: 4, right: 48, left: 0, bottom: 0 }}
+        margin={{ left: 0 }}
       >
-        <XAxis type="number" hide />
+        <XAxis type="number" dataKey="value" hide />
         <YAxis
           type="category"
           dataKey="name"
           width={112}
           tickLine={false}
+          tickMargin={10}
           axisLine={false}
-          tickMargin={4}
           tickFormatter={(value: string) =>
-            value.length > 15 ? `${value.slice(0, 14)}…` : value
+            value.length > 14 ? `${value.slice(0, 14)}…` : value
           }
         />
         <ChartTooltip
           cursor={false}
           content={
             <ChartTooltipContent
-              labelFormatter={(_, payload) => {
-                const item = payload?.[0]?.payload as
-                  | { name?: string }
-                  | undefined;
-                return item?.name ?? "";
-              }}
-              formatter={(value, _name, item) => {
-                const payload = item.payload as
-                  | { pct?: number; cost?: number }
-                  | undefined;
-                const parts = [formatWeight(Number(value))];
-                if (payload?.pct != null) parts.push(`${payload.pct}%`);
-                if (payload?.cost) parts.push(formatCurrency(payload.cost));
-                return parts.join(" · ");
-              }}
+              hideLabel
+              formatter={(value) => formatWeight(Number(value))}
             />
           }
         />
-        <Bar dataKey="value" name={label} radius={5}>
+        <Bar dataKey="value" fill="var(--color-value)" radius={5}>
           {data.map((entry) => (
-            <Cell
-              key={entry.name}
-              fill={entry.color}
-              stroke="var(--border)"
-              strokeWidth={1}
-            />
+            <Cell key={entry.name} fill={entry.color} />
           ))}
-          <LabelList
-            dataKey="pctLabel"
-            position="right"
-            className="fill-muted-foreground"
-            fontSize={11}
-          />
         </Bar>
       </BarChart>
     </ChartContainer>

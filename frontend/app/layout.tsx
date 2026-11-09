@@ -22,6 +22,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Open Print Dashboard",
   description: "Bambu Lab 3D Printer Dashboard",
+  icons: {
+    icon: { url: "/icons/icon.svg", type: "image/svg+xml" },
+    apple: "/icons/icon-180.png",
+  },
 };
 
 export const viewport: Viewport = {

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Disc3 } from "lucide-react";
 import { ReactNode } from "react";
 
+import { SpoolMark } from "@/components/brand/SpoolMark";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AuthLayoutProps {
@@ -18,9 +18,10 @@ export function AuthLayout({ title, description, children, footer }: AuthLayoutP
         <div className="mb-6 text-center">
           <Link
             href="/"
+            aria-label="Open Print Dashboard home"
             className="inline-flex size-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20"
           >
-            <Disc3 className="size-7 text-primary" />
+            <SpoolMark className="size-8 text-primary" />
           </Link>
           <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
           {description ? (

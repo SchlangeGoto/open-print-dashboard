@@ -8,7 +8,6 @@ import {
   Check,
   ChevronRight,
   Cloud,
-  Disc3,
   ExternalLink,
   FlaskConical,
   Info,
@@ -19,6 +18,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isDemoActive } from "@/lib/demo";
+import { SpoolMark } from "@/components/brand/SpoolMark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -178,7 +178,7 @@ export default function SetupPage() {
       <div className="w-full max-w-lg">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex rounded-2xl bg-primary/10 p-4 ring-1 ring-primary/20">
-            <Disc3 className="size-8 text-primary" />
+            <SpoolMark className="size-9 text-primary" />
           </div>
           <h1 className="text-2xl font-bold">Setup Open Print Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart2,
-  Disc3,
   History,
   LayoutDashboard,
   Package,
@@ -26,6 +25,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { SpoolMark } from "@/components/brand/SpoolMark";
 import { UserMenu } from "./UserMenu";
 
 const navItems = [
@@ -49,7 +49,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/20">
-                <Disc3 className="size-4" />
+                <SpoolMark className="size-5!" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">Open Print</span>

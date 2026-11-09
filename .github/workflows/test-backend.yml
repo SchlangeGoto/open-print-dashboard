@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: test-backend-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   SECRET_KEY: changethis
   DATABASE_URL: postgresql://opd:changethis@localhost:5432/openprintdashboard
@@ -33,6 +37,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       - name: Start database and mailpit
         run: |
@@ -40,7 +46,7 @@ jobs:
           docker compose up -d --wait db mailpit
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Lint
         run: uv run bash scripts/lint.sh

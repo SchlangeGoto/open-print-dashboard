@@ -1,0 +1,112 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "site/public/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Advisory only: never blocks a merge. Use /pr-review locally for a fast,
+    # reliable review.
+    continue-on-error: true
+    # Skip drafts, fork PRs (secrets are not available), and PRs too large to
+    # review usefully. Split those before requesting a review.
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.changed_files <= 80 &&
+      github.event.pull_request.additions <= 12000
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Get PR diff
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          git diff "origin/${{ github.base_ref }}...HEAD" -- . \
+            ':(exclude)**/package-lock.json' \
+            ':(exclude)**/uv.lock' \
+            ':(exclude)**/*.lock' \
+            ':(exclude)**/*.png' \
+            ':(exclude)**/*.jpg' \
+            ':(exclude)**/*.jpeg' \
+            ':(exclude)**/*.gif' \
+            ':(exclude)**/*.webp' \
+            ':(exclude)**/*.ico' \
+            ':(exclude)**/dist/**' \
+            ':(exclude)**/.next/**' \
+            ':(exclude)site/public/screenshots/**' \
+            > pr.diff
+          {
+            echo 'diff<<PR_DIFF_EOF_9f3c'
+            head -c 180000 pr.diff
+            echo
+            echo 'PR_DIFF_EOF_9f3c'
+          } >> "$GITHUB_OUTPUT"
+          wc -c pr.diff
+
+      - name: Review with OpenCode
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # CI has no one to answer permission prompts. Reviewing is read-only.
+          OPENCODE_PERMISSION: '{"bash":{"*":"deny","gh pr view*":"allow","gh pr diff*":"allow","git diff*":"allow","git log*":"allow","git show*":"allow"},"edit":"deny","webfetch":"deny","websearch":"deny"}'
+        with:
+          model: opencode-go/deepseek-v4.1-flash
+          variant: high
+          agent: build
+          use_github_token: true
+          share: false
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+
+            Read .github/REVIEW.md from the base branch first. Review only the
+            diff included below, not the whole repository.
+
+            Do not run glob, grep, or read to discover the diff, and do not
+            explore the repository. You may read a file only to verify one
+            specific finding.
+
+            Ignore lockfiles, generated files, build output, screenshots, images,
+            formatting-only changes, and anything ESLint/Ruff/mypy already enforces.
+
+            Focus on:
+            - correctness and regressions
+            - security, auth, secrets, injection, data loss
+            - API contract changes between FastAPI and the Next.js/Expo clients
+            - database model changes without an Alembic migration
+            - React hook/effect bugs and Next.js server/client boundary mistakes
+            - missing tests for new behavior
+            - Docker Compose breakage
+
+            Report only confident findings. For each: severity
+            (blocker/high/medium/low), file:line, failure scenario, and a concrete
+            fix. Deduplicate. If nothing is wrong, say so. Do not approve or merge.
+            Do not comment on unchanged code.
+
+            Diff:
+            ~~~diff
+            ${{ steps.pr.outputs.diff }}
+            ~~~

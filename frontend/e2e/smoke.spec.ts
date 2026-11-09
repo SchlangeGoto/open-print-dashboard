@@ -56,3 +56,5 @@ test.describe("auth screen", () => {
     await expect(page.getByLabel("Password")).toBeVisible();
   });
 });
+
+// Smoke test for the AI review workflow.

@@ -207,16 +207,12 @@ export function FeatureShowcase() {
           })}
         </div>
 
-        <div
-          className={`mt-6 ${
-            phase === "tour"
-              ? "lg:mt-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
-              : ""
-          }`}
-        >
+        <div className="mt-6 lg:mt-4">
           <div
-            className={`relative aspect-[16/10] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-rule-strong)] bg-[var(--color-paper-2)] ${
-              phase === "tour" ? "lg:aspect-auto lg:h-full lg:flex-1" : ""
+            className={`relative mx-auto aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-rule-strong)] bg-[var(--color-paper-2)] ${
+              phase === "tour"
+                ? "lg:max-w-[calc(160svh-22.4rem)]"
+                : ""
             }`}
           >
             {features.slice(0, 5).map((item, index) => (

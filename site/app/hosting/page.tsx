@@ -149,8 +149,9 @@ export default function HostingPage() {
           </h2>
           <p className="mt-4 text-sm leading-6 text-[var(--color-muted)]">
             The beta is for people who want to try the product without running
-            the stack themselves. We are keeping it small so feedback has
-            somewhere to go.
+            the stack themselves. It is a convenience, not a feature gate or the
+            business model; the app stays AGPL-3.0 and self-hosting stays free.
+            We are keeping the beta small so feedback has somewhere to go.
           </p>
         </div>
 

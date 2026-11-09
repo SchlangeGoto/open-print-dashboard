@@ -87,8 +87,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# AI
-AGENTS.md
+# Playwright
+playwright-report/
+test-results/
+blob-report/
 
 # Internal design reference (third-party screenshots, do not publish)
 docs/website-research/screenshots/
+
+# Local Expo exports
+mobile/dist-*/

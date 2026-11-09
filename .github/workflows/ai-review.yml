@@ -1,0 +1,70 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "site/public/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip drafts, fork PRs (secrets are not available), and PRs too large to
+    # review usefully. Split those before requesting a review.
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.changed_files <= 80 &&
+      github.event.pull_request.additions <= 12000
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Review with OpenCode
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: opencode-go/deepseek-v4.1-flash
+          variant: max
+          agent: plan
+          use_github_token: true
+          share: false
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+
+            Read .github/REVIEW.md from the base branch first. Review only the
+            diff against the base branch, not the whole repository.
+
+            Ignore lockfiles, generated files, build output, screenshots, images,
+            formatting-only changes, and anything ESLint/Ruff/mypy already enforces.
+
+            Focus on:
+            - correctness and regressions
+            - security, auth, secrets, injection, data loss
+            - API contract changes between FastAPI and the Next.js/Expo clients
+            - database model changes without an Alembic migration
+            - React hook/effect bugs and Next.js server/client boundary mistakes
+            - missing tests for new behavior
+            - Docker Compose breakage
+
+            Report only confident findings. For each: severity
+            (blocker/high/medium/low), file:line, failure scenario, and a concrete
+            fix. Deduplicate. If nothing is wrong, say so. Do not approve or merge.
+            Do not comment on unchanged code.

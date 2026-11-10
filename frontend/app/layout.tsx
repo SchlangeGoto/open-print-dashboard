@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import Script from "next/script";
 
+import { ACCENTS } from "@/lib/accent";
 import { AppearanceProvider } from "@/lib/appearance";
 import { AuthProvider } from "@/lib/auth";
 import { ServiceWorkerRegistration } from "@/components/layout/ServiceWorkerRegistration";
@@ -34,6 +36,24 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+// Runs before hydration so a saved accent never flashes the default colour.
+const accentBootstrap = `
+(function () {
+  try {
+    var accents = ${JSON.stringify(
+      ACCENTS.map(({ id, color, foreground }) => ({ id, color, foreground })),
+    )};
+    var stored = localStorage.getItem("accent-color");
+    var accent =
+      accents.filter(function (item) { return item.id === stored; })[0] ||
+      accents[0];
+    var root = document.documentElement;
+    root.style.setProperty("--brand", accent.color);
+    root.style.setProperty("--brand-foreground", accent.foreground);
+  } catch (error) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -42,6 +62,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Script
+          id="accent-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: accentBootstrap }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

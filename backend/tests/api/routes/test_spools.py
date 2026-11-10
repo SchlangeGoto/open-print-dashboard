@@ -513,3 +513,31 @@ def test_duplicate_print_job_is_rejected(db: Session) -> None:
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
+
+
+def test_activating_without_a_printer_is_rejected(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    spool = Spool(
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=False,
+        printer_id=None,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"active": True},
+    )
+
+    assert r.status_code == 422
+    db.expire_all()
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    assert stored.active is False

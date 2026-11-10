@@ -474,17 +474,28 @@ export default function AnalyticsPage() {
     [filaments],
   );
 
+  const filamentForPrint = useCallback(
+    (print: any) => {
+      if (print.filament_id) {
+        const direct = filamentById.get(String(print.filament_id));
+        if (direct) return direct;
+      }
+      const spool = print.spool_id
+        ? spoolById.get(String(print.spool_id))
+        : null;
+      return spool
+        ? (filamentById.get(String(spool.filament_id)) ?? null)
+        : null;
+    },
+    [spoolById, filamentById],
+  );
+
   const materialData = useMemo(() => {
     const usage = new Map<string, { weight: number; cost: number }>();
 
     for (const print of rangePrints) {
       if (!print.weight) continue;
-      const spool = print.spool_id
-        ? spoolById.get(String(print.spool_id))
-        : null;
-      const filament = spool
-        ? filamentById.get(String(spool.filament_id))
-        : null;
+      const filament = filamentForPrint(print);
       const material = filament?.material ?? "Unassigned";
       const entry = usage.get(material) ?? { weight: 0, cost: 0 };
       entry.weight += print.weight;
@@ -511,7 +522,7 @@ export default function AnalyticsPage() {
         };
       })
       .sort((a, b) => b.value - a.value);
-  }, [rangePrints, spoolById, filamentById]);
+  }, [rangePrints, filamentForPrint]);
 
   const filamentData = useMemo(() => {
     const usage = new Map<
@@ -521,12 +532,7 @@ export default function AnalyticsPage() {
 
     for (const print of rangePrints) {
       if (!print.weight) continue;
-      const spool = print.spool_id
-        ? spoolById.get(String(print.spool_id))
-        : null;
-      const filament = spool
-        ? filamentById.get(String(spool.filament_id))
-        : null;
+      const filament = filamentForPrint(print);
       const key = filament ? String(filament.id) : "unassigned";
       const entry = usage.get(key) ?? {
         id: key,
@@ -570,7 +576,7 @@ export default function AnalyticsPage() {
         pctLabel: pct === 0 && entry.weight > 0 ? "<1%" : `${pct}%`,
       };
     });
-  }, [rangePrints, spoolById, filamentById]);
+  }, [rangePrints, filamentForPrint]);
 
   const activityTotal = activityData.reduce(
     (sum, entry) => sum + entry[metric],

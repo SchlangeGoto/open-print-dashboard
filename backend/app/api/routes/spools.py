@@ -168,7 +168,12 @@ def read_spools(session: SessionDep, filament_id: uuid.UUID | None = None) -> An
 @router.get("/active", response_model=SpoolPublic)
 def read_active_spool(session: SessionDep, printer_id: uuid.UUID | None = None) -> Any:
     """Return a loaded spool, optionally scoped to one printer."""
-    query = select(Spool).where(col(Spool.active).is_(True))
+    query = (
+        select(Spool)
+        .where(col(Spool.active).is_(True))
+        .where(col(Spool.printer_id).is_not(None))
+        .order_by(col(Spool.created_at).desc(), col(Spool.id).desc())
+    )
     if printer_id:
         query = query.where(Spool.printer_id == printer_id)
     spool = session.exec(query).first()
@@ -301,6 +306,13 @@ def update_spool(
         spool.remaining_unknown = False
     if "active" in update_dict and not spool.active:
         spool.printer_id = None
+    # Re-assert after applying the patch: the input may clear printer_id and
+    # set active at the same time, which the pre-update check cannot see.
+    if spool.active and spool.printer_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Load the spool into a printer before activating it",
+        )
     session.add(spool)
     session.commit()
     session.refresh(spool)

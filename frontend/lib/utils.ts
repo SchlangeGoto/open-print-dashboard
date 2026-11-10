@@ -108,11 +108,21 @@ export function chartColor(color?: string | null): string {
  * Resolve the filament a print job was printed with through its spool.
  */
 export function getPrintFilament(
-  print: { spool_id?: string | null } | null | undefined,
+  print:
+    | { spool_id?: string | null; filament_id?: string | null }
+    | null
+    | undefined,
   spools: any[],
   filaments: any[],
 ): any | null {
-  if (!print?.spool_id) return null;
+  if (!print) return null;
+  // Prefer the denormalised field so a deleted spool does not lose the
+  // attribution; fall back to the spool join for legacy rows.
+  if (print.filament_id) {
+    const direct = filaments.find((item) => item.id === print.filament_id);
+    if (direct) return direct;
+  }
+  if (!print.spool_id) return null;
   const spool = spools.find((item) => item.id === print.spool_id);
   if (!spool?.filament_id) return null;
   return filaments.find((item) => item.id === spool.filament_id) ?? null;

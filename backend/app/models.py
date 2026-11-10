@@ -342,6 +342,8 @@ class PrintJob(PrintJobBase, table=True):
 class PrintJobPublic(PrintJobBase):
     id: uuid.UUID
     spool_id: uuid.UUID | None = None
+    # Survives deleting the spool, unlike the spool_id join.
+    filament_id: uuid.UUID | None = None
     created_at: datetime | None = None
 
 

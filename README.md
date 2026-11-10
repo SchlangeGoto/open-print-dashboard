@@ -76,7 +76,7 @@ say so plainly. Your dashboard data stays on your hardware.
 | Data | PostgreSQL 16 |
 | Native | Expo · React Native |
 | Deploy | Docker · Docker Compose · GHCR |
-| Printer connection | Bambu Cloud account; current LAN/MQTT client for live status |
+| Printer connection | Bambu Cloud account (default); optional LAN/MQTT mode |
 
 ## Quick start
 

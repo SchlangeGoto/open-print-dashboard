@@ -309,6 +309,11 @@ h3 {
   position: relative;
   z-index: 2;
   transform: translateZ(0);
+  /* The default frame hairline is a 16 % white rule. On the large dark hero
+     capture it reads as a stray white outline, so use the screenshot's own
+     edge and a shadow for separation instead. */
+  border-color: transparent;
+  box-shadow: 0 32px 80px -44px oklch(0 0 0 / 0.85);
 }
 
 .stage-layer {

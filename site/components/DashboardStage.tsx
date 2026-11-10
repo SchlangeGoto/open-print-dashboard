@@ -2,6 +2,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
+
+import { imageSrcSet, imageVariant } from "@/lib/images";
 import {
   motion,
   useMotionTemplate,
@@ -37,14 +39,6 @@ const baseSpring = {
   damping: 32,
   mass: 0.2,
 };
-
-function variant(src: string, width: 1600 | 2400): string {
-  return src.replace(/\.jpg$/, `-${width}.jpg`);
-}
-
-function stageSrcSet(src: string): string {
-  return `${variant(src, 1600)} 1600w, ${variant(src, 2400)} 2400w, ${src} 3200w`;
-}
 
 export function DashboardStage({
   src,
@@ -144,7 +138,7 @@ export function DashboardStage({
                 >
                   <img
                     src={layer.src}
-                    srcSet={stageSrcSet(layer.src)}
+                    srcSet={imageSrcSet(layer.src)}
                     alt=""
                     width={width}
                     height={height}
@@ -159,12 +153,12 @@ export function DashboardStage({
             <picture>
               <source
                 media="(max-width: 768px)"
-                srcSet={`${variant(src, 1600)} 1600w`}
+                srcSet={`${imageVariant(src, 1600)} 1600w`}
                 sizes="100vw"
               />
               <img
                 src={src}
-                srcSet={stageSrcSet(src)}
+                srcSet={imageSrcSet(src)}
                 alt={alt}
                 width={width}
                 height={height}

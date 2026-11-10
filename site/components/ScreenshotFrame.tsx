@@ -1,7 +1,10 @@
+/* eslint-disable @next/next/no-img-element -- static export serves pre-generated srcset variants */
 "use client";
 
 import Image from "next/image";
 import { useEffect, useState, type PointerEvent } from "react";
+
+import { imageSrcSet } from "@/lib/images";
 import {
   motion,
   useMotionTemplate,
@@ -19,6 +22,7 @@ type ScreenshotFrameProps = {
   className?: string;
   caption?: string;
   tone?: "dark" | "light";
+  responsive?: boolean;
 };
 
 const spring = {
@@ -36,6 +40,7 @@ export function ScreenshotFrame({
   className = "",
   caption,
   tone = "dark",
+  responsive = false,
 }: ScreenshotFrameProps) {
   const reduce = useReducedMotion();
   const [canTilt, setCanTilt] = useState(false);
@@ -80,15 +85,28 @@ export function ScreenshotFrame({
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
         >
-          <Image
-            src={src}
-            alt={alt}
-            width={width}
-            height={height}
-            priority={priority}
-            className="h-auto w-full"
-            sizes="(max-width: 768px) 100vw, 1100px"
-          />
+          {responsive ? (
+            <img
+              src={src}
+              srcSet={imageSrcSet(src)}
+              alt={alt}
+              width={width}
+              height={height}
+              loading={priority ? "eager" : "lazy"}
+              className="h-auto w-full"
+              sizes="(max-width: 768px) 100vw, 1100px"
+            />
+          ) : (
+            <Image
+              src={src}
+              alt={alt}
+              width={width}
+              height={height}
+              priority={priority}
+              className="h-auto w-full"
+              sizes="(max-width: 768px) 100vw, 1100px"
+            />
+          )}
         </motion.div>
       </div>
       {caption ? (

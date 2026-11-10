@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- static export serves pre-generated srcset variants */
 "use client";
 
 import Image from "next/image";
@@ -16,6 +17,8 @@ import {
   useScroll,
 } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+import { imageSrcSet } from "@/lib/images";
 
 const features = [
   {
@@ -216,13 +219,14 @@ export function FeatureShowcase() {
             }`}
           >
             {features.slice(0, 5).map((item, index) => (
-              <Image
+              <img
                 key={item.image}
                 src={item.image}
+                srcSet={imageSrcSet(item.image)}
                 alt={index === active ? item.alt : ""}
-                fill
+                loading="lazy"
                 sizes="(max-width: 1360px) 100vw, 1360px"
-                className={`object-cover transition-opacity duration-500 motion-reduce:transition-none ${
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 motion-reduce:transition-none ${
                   index === active ? "opacity-100" : "opacity-0"
                 }`}
                 aria-hidden={index !== active}

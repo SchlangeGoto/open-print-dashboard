@@ -193,6 +193,7 @@ export default function HomePage() {
             src="/screenshots/spools.jpg"
             alt="OpenPrintDash spool library with individual spools, remaining weight, price per kilogram and loaded status"
             className="mt-12"
+            responsive
             caption="Demo data"
           />
 
@@ -258,6 +259,7 @@ export default function HomePage() {
             src="/screenshots/analytics.jpg"
             alt="OpenPrintDash analytics with success rate, print time, filament used, money spent and a print activity chart"
             className="mt-12"
+            responsive
             caption="Demo data"
           />
 
@@ -410,6 +412,7 @@ export default function HomePage() {
                 src="/screenshots/print-jobs.jpg"
                 alt="Print job history in OpenPrintDash with status, weight, duration, cost and finish time"
                 caption="Demo data"
+                responsive
               />
             </div>
           </div>

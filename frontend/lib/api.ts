@@ -288,6 +288,12 @@ const apiImpl = {
       throw new ApiError(res.status, data.detail ?? "Login failed");
     }
     const data = (await res.json()) as TokenResponse;
+    if (!data.access_token) {
+      throw new ApiError(
+        500,
+        "Login response did not include an access token",
+      );
+    }
     storeTokens(data);
     return {
       ok: true as const,

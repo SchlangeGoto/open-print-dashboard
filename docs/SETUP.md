@@ -6,6 +6,12 @@
 - [Node.js](https://nodejs.org/) (22+) and npm for the Next.js frontend
 - [Docker](https://www.docker.com/) and Docker Compose (for PostgreSQL and Mailpit)
 
+## The `.env` File
+
+Copy `.env.example` to `.env` before starting anything. `DATABASE_URL` has no
+default, so migrations and the backend fail until it exists. Adjust the values
+as needed; Docker Compose uses the same file for variable interpolation.
+
 ## Local Development
 
 Run PostgreSQL and Mailpit in Docker Compose, and the FastAPI and Next.js servers locally.
@@ -93,10 +99,18 @@ static export to `site/out/`. See `site/README.md` for deployment notes.
 [Mailpit](https://mailpit.axllent.org) captures all emails sent by the app instead of
 delivering them. The web UI is at <http://localhost:8025>.
 
-The backend reads its SMTP settings from `.env` (`SMTP_HOST`, `SMTP_PORT`, ...). With Docker
-Compose the backend points at the `mailpit` service on port `1025`; when run locally it points
-at `localhost:11025` (Mailpit's SMTP port is published on `11025` to avoid clashing with
-services that commonly use `1025`).
+Email is disabled by default. To use Mailpit locally, set these in `.env`:
+
+```dotenv
+SMTP_HOST=localhost
+SMTP_PORT=11025
+SMTP_TLS=False
+EMAILS_FROM_EMAIL=info@example.com
+```
+
+With Docker Compose the backend points at the `mailpit` service on port `1025`;
+when run locally it points at `localhost:11025` (Mailpit's SMTP port is
+published on `11025` to avoid clashing with services that commonly use `1025`).
 
 Emails are sent for:
 
@@ -123,11 +137,6 @@ Services:
 
 The `backend` service mounts `./backend` and runs `fastapi dev`, so code changes reload
 automatically. The `frontend` service runs `next dev`.
-
-## The `.env` File
-
-Copy `.env.example` to `.env` and adjust as needed. Docker Compose uses it for variable
-interpolation and passes the values each container needs.
 
 ## Migrations
 

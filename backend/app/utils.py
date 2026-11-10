@@ -54,7 +54,14 @@ def send_email(
     if settings.SMTP_PASSWORD:
         smtp_options["password"] = settings.SMTP_PASSWORD
     response = message.send(to=email_to, smtp=smtp_options)
-    logger.info(f"send email result: {response}")
+    status = getattr(response, "status_code", None)
+    if status is None or status >= 400:
+        # A refused connection often returns status None instead of raising.
+        # Keep the request successful (no account enumeration / no failed
+        # signup), but make the silent non-delivery visible in the logs.
+        logger.error("Email to %s was not sent: %s", email_to, response)
+    else:
+        logger.info("Email to %s sent with status %s", email_to, status)
 
 
 def generate_test_email(email_to: str) -> EmailData:

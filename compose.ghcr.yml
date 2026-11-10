@@ -47,9 +47,15 @@ services:
       - FRONTEND_HOST=${FRONTEND_HOST:-https://${DOMAIN:-localhost}}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-opd}:${POSTGRES_PASSWORD:?Variable not set}@db:5432/${POSTGRES_DB:-openprintdashboard}
       - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_TLS=${SMTP_TLS:-true}
+      - SMTP_SSL=${SMTP_SSL:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - BAMBU_CLOUD_MQTT_HOST=${BAMBU_CLOUD_MQTT_HOST:-us.mqtt.bambulab.com}
+      - BAMBU_CLOUD_MQTT_PORT=${BAMBU_CLOUD_MQTT_PORT:-8883}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

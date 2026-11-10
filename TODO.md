@@ -326,3 +326,15 @@ re-opened.
 | AMS switch flush; automatic Bambu re-login with visible state | `879878c` | Human #20 |
 | Finish updates bound to the task id; filament deducted once | `98733f0` | Human #20 |
 | Password-reset links single-use (`type`/`jti`, 1 h) | `99f5a4f` | Human #20 |
+| AMS adoption keeps the scanned spool total; foreign spools excluded | `c657ac5` | Human #20 |
+| Active spool selection requires `active = true` | `c657ac5` | Human #20 |
+| Every Bambu Cloud request has a timeout | `ea507ce` | Human #20 |
+| Filament stats survive spool deletion (`PrintJob.filament_id`) | `0b21e68` | Human #20 |
+| Public setup status hides Bambu/printer state behind auth | `66b09df` | Human #20 |
+| Non-GTIN barcodes skip EAN padding and check-digit validation | `0b116ed` | Human #20 |
+| Dashboard polling is sequenced and surfaces load errors | `ffd6666` | Human #20 |
+| Analytics previous window uses the same day count | `1bc2c58` | Human #20 |
+| First-signup advisory lock; fixed Bambu error messages | `1a69208` | Human #20 |
+| Retired LAN settings removed from docs, compose and `.env.example` | `f2aff4d` | Human #20 |
+| Mobile rejects any 4xx session; audio permission and token docs fixed | `426a594` | Human #20 |
+| Printer screenshot refreshed to the current copy | `40c189c` | Human #20 |

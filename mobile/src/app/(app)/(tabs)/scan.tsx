@@ -55,6 +55,7 @@ export default function ScanScreen() {
   const [manual, setManual] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [result, setResult] = useState<BarcodeScanResult | null>(null);
+  const [scanType, setScanType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export default function ScanScreen() {
         setPreviewReady(false);
         setTorch(false);
         setResult(null);
+        setScanType(null);
         setError(null);
         setManual("");
         setManualOpen(false);
@@ -88,14 +90,15 @@ export default function ScanScreen() {
     }, []),
   );
 
-  async function handleCode(raw: string) {
-    const code = normalizeBarcode(typeof raw === "string" ? raw : "");
+  async function handleCode(raw: string, type?: string) {
+    const code = normalizeBarcode(typeof raw === "string" ? raw : "", type);
     if (!code || scanLock.current) return;
 
     // State updates are async; the ref is the synchronous guard against
     // multiple decoded frames creating duplicate spools.
     scanLock.current = true;
     resultRef.current = null;
+    setScanType(type ?? null);
     setResult(null);
     setBusy(true);
     setError(null);
@@ -104,7 +107,7 @@ export default function ScanScreen() {
     try {
       // Look first so an existing physical spool is never duplicated just
       // because its barcode was scanned again.
-      const lookup = await api.scanBarcode(code, false);
+      const lookup = await api.scanBarcode(code, false, type);
       if (!focusedRef.current) return;
 
       // Compatibility with a backend that predates create=false: it creates
@@ -138,7 +141,7 @@ export default function ScanScreen() {
         return;
       }
 
-      const created = await api.scanBarcode(code, true);
+      const created = await api.scanBarcode(code, true, scanType ?? undefined);
       if (!focusedRef.current) return;
       const normalized: BarcodeScanResult = {
         ...created,
@@ -167,7 +170,7 @@ export default function ScanScreen() {
     setBusy(true);
     setError(null);
     try {
-      const created = await api.scanBarcode(code, true);
+      const created = await api.scanBarcode(code, true, scanType ?? undefined);
       if (!focusedRef.current) return;
       const normalized: BarcodeScanResult = {
         ...created,
@@ -193,7 +196,7 @@ export default function ScanScreen() {
     if (!focusedRef.current || scanLock.current) return;
     const data = typeof scan.data === "string" ? scan.data : "";
     if (!data) return;
-    const normalized = normalizeBarcode(data);
+    const normalized = normalizeBarcode(data, scan.type);
     // Keep the camera live after a result: a different box scans immediately.
     // The same code is ignored until "Scan next" so one box cannot create
     // duplicate spools frame after frame.
@@ -206,7 +209,7 @@ export default function ScanScreen() {
     if (last && last.code === normalized && now - last.at < 1500) return;
     lastAttemptRef.current = { code: normalized, at: now };
 
-    void handleCode(normalized).catch((err) => {
+    void handleCode(data, scan.type).catch((err) => {
       if (focusedRef.current) {
         setError(formatError(err));
       }
@@ -217,6 +220,7 @@ export default function ScanScreen() {
     resultRef.current = null;
     lastAttemptRef.current = null;
     setResult(null);
+    setScanType(null);
     setError(null);
     setManual("");
   }
@@ -644,6 +648,7 @@ export default function ScanScreen() {
                         pathname: "/scan-confirm",
                         params: {
                           code: result.code,
+                          type: scanType ?? undefined,
                           suggested: JSON.stringify(
                             result.suggested_filament ?? null,
                           ),

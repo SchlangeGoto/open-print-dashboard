@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import EmailStr, field_validator
+from pydantic import EmailStr, model_validator
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.barcodes import is_valid_ean13, normalize_barcode
@@ -10,6 +10,11 @@ from app.core.barcodes import is_valid_ean13, normalize_barcode
 
 def get_datetime_utc() -> datetime:
     return datetime.now(UTC)
+
+
+# Formats whose payload is a GTIN. Code128, Code39, Code93 and Codabar are
+# free-form and must not be padded or check-digit validated as EAN-13.
+NUMERIC_BARCODE_TYPES = {"ean13", "ean8", "upc_a", "upc_e", "itf14", "gtin"}
 
 
 def _normalize_barcode_field(value: str) -> str:
@@ -21,6 +26,12 @@ def _normalize_barcode_field(value: str) -> str:
     ):
         raise ValueError("Invalid EAN-13 check digit")
     return normalized
+
+
+def _normalize_barcode_for_type(value: str, barcode_type: str | None) -> str:
+    if barcode_type and barcode_type.lower() not in NUMERIC_BARCODE_TYPES:
+        return value.strip()
+    return _normalize_barcode_field(value)
 
 
 # ────────────────────────────────────────────────────────────
@@ -236,11 +247,15 @@ class BarcodeScanRequest(SQLModel):
     # Existing clients omit this and keep the old create-on-scan behavior.
     # The mobile app first sends create=false to check for a duplicate.
     create: bool = True
+    # Scanner symbology (ean13, code128, ...). Only GTIN formats are padded
+    # and check-digit validated; omitted keeps the old behaviour for manual
+    # entry.
+    type: str | None = Field(default=None, max_length=20)
 
-    @field_validator("code")
-    @classmethod
-    def _validate_code(cls, value: str) -> str:
-        return _normalize_barcode_field(value)
+    @model_validator(mode="after")
+    def _normalize_code(self) -> "BarcodeScanRequest":
+        self.code = _normalize_barcode_for_type(self.code, self.type)
+        return self
 
 
 class BarcodeConfirmRequest(SQLModel):
@@ -248,11 +263,12 @@ class BarcodeConfirmRequest(SQLModel):
     filament: FilamentCreate
     total_weight_g: float | None = Field(default=None, gt=0)
     price_per_kg: float | None = Field(default=None, ge=0)
+    type: str | None = Field(default=None, max_length=20)
 
-    @field_validator("code")
-    @classmethod
-    def _validate_code(cls, value: str) -> str:
-        return _normalize_barcode_field(value)
+    @model_validator(mode="after")
+    def _normalize_code(self) -> "BarcodeConfirmRequest":
+        self.code = _normalize_barcode_for_type(self.code, self.type)
+        return self
 
 
 class BarcodeScanResult(SQLModel):

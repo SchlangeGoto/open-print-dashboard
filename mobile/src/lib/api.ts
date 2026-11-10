@@ -403,10 +403,11 @@ export class ApiClient {
   scanBarcode(
     code: string,
     create = true,
+    type?: string,
   ): Promise<BarcodeScanResult> {
     return this.request<BarcodeScanResult>("/spools/scan/barcode", {
       method: "POST",
-      body: JSON.stringify({ code, create }),
+      body: JSON.stringify({ code, create, ...(type ? { type } : {}) }),
     });
   }
 
@@ -415,6 +416,7 @@ export class ApiClient {
     filament: FilamentInput,
     totalWeightG?: number,
     pricePerKg?: number,
+    type?: string,
   ): Promise<BarcodeScanResult> {
     return this.request<BarcodeScanResult>("/spools/scan/barcode/confirm", {
       method: "POST",
@@ -423,6 +425,7 @@ export class ApiClient {
         filament,
         total_weight_g: totalWeightG,
         price_per_kg: pricePerKg,
+        ...(type ? { type } : {}),
       }),
     });
   }

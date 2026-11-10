@@ -495,3 +495,31 @@ def test_unknown_barcode_uses_the_optional_sku(
     assert data["found"] is False
     assert data["suggested_filament"]["series"] == "PLA Matte"
     assert data["suggested_filament"]["spool_weight_g"] == 1000
+
+
+def test_scan_accepts_a_twelve_digit_code128_payload(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    # A 12-digit Code128 payload is not a UPC-A. Padding it would produce an
+    # EAN-13 with a bad check digit and a 422.
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "123456789012", "create": False, "type": "code128"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["code"] == "123456789012"
+    assert r.json()["found"] is False
+
+
+def test_scan_without_a_type_keeps_ean13_validation(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337032381", "create": False},
+    )
+
+    assert r.status_code == 422

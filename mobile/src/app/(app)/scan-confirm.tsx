@@ -30,9 +30,10 @@ import { parseSuggestion } from "@/lib/suggested-filament";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function ScanConfirmScreen() {
-  const { code, suggested } = useLocalSearchParams<{
+  const { code, suggested, type } = useLocalSearchParams<{
     code?: string;
     suggested?: string;
+    type?: string;
   }>();
   const { api } = useAuth();
   const router = useRouter();
@@ -109,6 +110,7 @@ export default function ScanConfirmScreen() {
         },
         weightValue,
         priceValue,
+        type,
       );
       await Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Success,

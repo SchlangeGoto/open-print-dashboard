@@ -16,9 +16,29 @@ export const LINEAR_BARCODE_TYPES: BarcodeType[] = [
   "codabar",
 ];
 
-/** ITF-14 carton codes often wrap an EAN-13 with a leading packaging zero. */
-export function normalizeBarcode(raw: string): string {
+/** Formats whose payload is a GTIN and may be padded/normalised. */
+const GTIN_BARCODE_TYPES = new Set([
+  "ean13",
+  "ean8",
+  "upc_a",
+  "upc_e",
+  "itf14",
+]);
+
+/**
+ * ITF-14 carton codes often wrap an EAN-13 with a leading packaging zero.
+ *
+ * Only GTIN formats are rewritten. A 12-digit Code128 payload is not a UPC-A,
+ * and padding it would turn it into an EAN-13 with a bad check digit.
+ */
+export function normalizeBarcode(
+  raw: string,
+  type?: string | null,
+): string {
   const value = raw.trim();
+  if (type && !GTIN_BARCODE_TYPES.has(type)) {
+    return value;
+  }
   if (/^\d{14}$/.test(value) && value.startsWith("0")) {
     return value.slice(1);
   }

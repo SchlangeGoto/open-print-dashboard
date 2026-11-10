@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlparse
 
 import cloudscraper
 import requests
@@ -15,6 +16,23 @@ from app.core.store import get_cloud_credentials, get_cloud_token
 logger = logging.getLogger("uvicorn.error")
 
 BASE_URL = "https://api.bambulab.com"
+
+# Cover images are only ever fetched from Bambu Lab content hosts. Anything
+# else is refused so the endpoint cannot be used as an SSRF proxy.
+ALLOWED_COVER_HOSTS = ("bblmw.com", "bambulab.com")
+MAX_COVER_BYTES = 10 * 1024 * 1024
+
+
+def is_allowed_cover_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    return any(
+        host == domain or host.endswith(f".{domain}") for domain in ALLOWED_COVER_HOSTS
+    )
 
 
 class BambuCloudClient:
@@ -186,15 +204,35 @@ class BambuCloudClient:
         self.user_id = data.get("uid")
         return data
 
+    def reset_session(self) -> None:
+        """Forget the in-memory Bambu Cloud session."""
+        self.email = None
+        self.password = None
+        self.token = None
+        self.user_id = None
+
     def download_cover_image(self, url: str) -> bytes | None:
         """
         Download a print thumbnail image from the cover URL in a task.
         The cover URL is unauthenticated — no token needed.
         """
+        if not is_allowed_cover_url(url):
+            logger.warning("Refused to fetch a cover image from %s", url)
+            return None
         try:
-            resp = requests.get(url, timeout=10)
-            resp.raise_for_status()
-            return resp.content
+            with requests.get(
+                url, timeout=10, allow_redirects=False, stream=True
+            ) as resp:
+                resp.raise_for_status()
+                content = bytearray()
+                for chunk in resp.iter_content(chunk_size=64 * 1024):
+                    content.extend(chunk)
+                    if len(content) > MAX_COVER_BYTES:
+                        logger.warning(
+                            "Cover image at %s exceeds %s bytes", url, MAX_COVER_BYTES
+                        )
+                        return None
+                return bytes(content)
         except requests.RequestException as e:
             logger.error(f"Failed to download cover image: {e}")
             return None

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Cloud,
@@ -15,6 +16,7 @@ import {
 import { ACCENTS, useAppearance, type AccentId } from "@/lib/appearance";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { toast } from "@/lib/toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ function initials(name: string | null | undefined): string {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { logout, username } = useAuth();
   const { theme, setTheme } = useTheme();
   const { accent, setAccent } = useAppearance();
@@ -47,6 +50,7 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [bambuBusy, setBambuBusy] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -84,6 +88,33 @@ export default function SettingsPage() {
     settings.bambu_cloud_email || settings.bambu_cloud_token,
   );
   const themeValue = mounted && theme ? [theme] : [];
+
+  async function handleBambuConnection() {
+    if (!cloudConnected) {
+      router.push("/setup");
+      return;
+    }
+    setBambuBusy(true);
+    try {
+      await api.bambuLogout();
+      setSettings((current) => {
+        const next = { ...current };
+        delete next.bambu_cloud_email;
+        delete next.bambu_cloud_password;
+        delete next.bambu_cloud_token;
+        return next;
+      });
+      toast.success("Bambu Lab session cleared");
+      // The setup wizard shows the Bambu step whenever no account is connected.
+      router.push("/setup");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not sign out",
+      );
+    } finally {
+      setBambuBusy(false);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
@@ -237,6 +268,21 @@ export default function SettingsPage() {
                 <p className="mt-0.5 truncate text-sm font-medium">
                   {settings.bambu_cloud_email || "Not connected"}
                 </p>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {cloudConnected
+                    ? "Signing out forgets the stored account and stops cloud printers."
+                    : "Connect a Bambu Lab account to use cloud printers."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBambuConnection}
+                  disabled={cloudConnected && bambuBusy}
+                >
+                  <LogOut /> {cloudConnected ? "Sign out" : "Connect"}
+                </Button>
               </div>
             </CardContent>
           </Card>

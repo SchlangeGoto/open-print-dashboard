@@ -355,6 +355,9 @@ const apiImpl = {
 
   getBambuProfile: () => request<any>("/bambu/profile"),
 
+  bambuLogout: () =>
+    request<{ message: string }>("/bambu/session", { method: "DELETE" }),
+
   // Settings
   getSettings: () => request<{ key: string; value: string }[]>("/settings/"),
 

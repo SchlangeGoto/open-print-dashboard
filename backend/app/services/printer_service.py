@@ -112,6 +112,13 @@ class PrinterService:
             client.disconnect()
         self.clients.clear()
 
+    def disconnect_cloud(self) -> None:
+        """Disconnect only the cloud clients, leaving LAN printers running."""
+        for serial, client in list(self.clients.items()):
+            if client.mode == "cloud":
+                client.disconnect()
+                del self.clients[serial]
+
     def reload(self) -> None:
         self.disconnect()
         self.configure_and_connect()

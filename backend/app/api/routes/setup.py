@@ -18,9 +18,7 @@ def get_setup_status(session: SessionDep) -> Any:
     wizard before any account exists to decide which step to show.
     """
     user_created = crud.count_users(session=session) > 0
-    bambu_logged_in = (
-        crud.get_setting(session=session, key="bambu_cloud_token") is not None
-    )
+    bambu_logged_in = crud.get_cloud_token(session=session) is not None
     printer_configured = crud.count_printers(session=session) > 0
     return SetupStatus(
         user_created=user_created,

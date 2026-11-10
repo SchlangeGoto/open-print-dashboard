@@ -3,7 +3,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import SQLModel
 
-from app.api.deps import get_current_user
+from app import crud
+from app.api.deps import SessionDep, get_current_user
 from app.core.bambu_exceptions import (
     CloudflareError,
     CodeExpiredError,
@@ -11,6 +12,7 @@ from app.core.bambu_exceptions import (
     CodeRequiredError,
 )
 from app.core.store import get_cloud_token
+from app.models import Message
 from app.services.printer_service import printer_service
 
 router = APIRouter(
@@ -38,7 +40,7 @@ def login_start(payload: BambuLoginRequest) -> Any:
     Start a Bambu Lab cloud login. Some accounts require an email code before
     the login completes; in that case ``requireCode`` is returned.
     """
-    if get_cloud_token():
+    if get_cloud_token() and printer_service.cloud_client.is_token_valid():
         raise HTTPException(status_code=400, detail="Already logged in")
 
     global _pending_login
@@ -88,3 +90,14 @@ def get_profile() -> Any:
     Return the Bambu Lab account profile. Also validates the stored token.
     """
     return printer_service.cloud_client.get_user_profile()
+
+
+@router.delete("/session", response_model=Message)
+def delete_session(session: SessionDep) -> Any:
+    """Sign out of Bambu Cloud and forget the stored account credentials."""
+    global _pending_login
+    _pending_login = False
+    crud.clear_cloud_credentials(session=session)
+    printer_service.disconnect_cloud()
+    printer_service.cloud_client.reset_session()
+    return Message(message="Bambu Lab session cleared")

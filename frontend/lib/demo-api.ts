@@ -192,6 +192,8 @@ export const demoApi: ApiShape = {
 
   getBambuProfile: () => delay({ ...DEMO_BAMBU_PROFILE }),
 
+  bambuLogout: () => delay({ message: "Bambu Lab session cleared" }),
+
   // ── Settings ──────────────────────────────────────────────────────────────
   getSettings: () => delay(load("settings", DEMO_SETTINGS as any[])),
 

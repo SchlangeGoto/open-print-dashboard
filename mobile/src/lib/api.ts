@@ -404,10 +404,16 @@ export class ApiClient {
     code: string,
     create = true,
     type?: string,
+    requestId?: string,
   ): Promise<BarcodeScanResult> {
     return this.request<BarcodeScanResult>("/spools/scan/barcode", {
       method: "POST",
-      body: JSON.stringify({ code, create, ...(type ? { type } : {}) }),
+      body: JSON.stringify({
+        code,
+        create,
+        ...(type ? { type } : {}),
+        ...(requestId ? { request_id: requestId } : {}),
+      }),
     });
   }
 
@@ -417,6 +423,7 @@ export class ApiClient {
     totalWeightG?: number,
     pricePerKg?: number,
     type?: string,
+    requestId?: string,
   ): Promise<BarcodeScanResult> {
     return this.request<BarcodeScanResult>("/spools/scan/barcode/confirm", {
       method: "POST",
@@ -426,6 +433,7 @@ export class ApiClient {
         total_weight_g: totalWeightG,
         price_per_kg: pricePerKg,
         ...(type ? { type } : {}),
+        ...(requestId ? { request_id: requestId } : {}),
       }),
     });
   }

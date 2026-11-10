@@ -27,6 +27,7 @@ import {
 } from "@/lib/color-presets";
 import { formatError, isLightColor, normalizeHex } from "@/lib/format";
 import { parseSuggestion } from "@/lib/suggested-filament";
+import { newRequestId } from "@/lib/id";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function ScanConfirmScreen() {
@@ -54,6 +55,9 @@ export default function ScanConfirmScreen() {
   const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  // Keep one id for this form: a retry after a timeout must not add a second
+  // spool if the first request already committed.
+  const requestIdRef = useRef(newRequestId());
   const [error, setError] = useState<string | null>(null);
 
   if (!code) {
@@ -113,6 +117,7 @@ export default function ScanConfirmScreen() {
         weightValue,
         priceValue,
         type,
+        requestIdRef.current,
       );
       try {
         await Haptics.notificationAsync(

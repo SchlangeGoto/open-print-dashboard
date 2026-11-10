@@ -35,6 +35,7 @@ import { formatError, formatWeight } from "@/lib/format";
 import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type { BarcodeScanResult } from "@/lib/types";
+import { newRequestId } from "@/lib/id";
 
 export default function ScanScreen() {
   const { api } = useAuth();
@@ -53,6 +54,7 @@ export default function ScanScreen() {
     attempts: number;
   } | null>(null);
   const typeRef = useRef<string | null>(null);
+  const intentRef = useRef<{ code: string; requestId: string } | null>(null);
   const [focused, setFocused] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -84,6 +86,7 @@ export default function ScanScreen() {
         resultRef.current = null;
         lastAttemptRef.current = null;
         typeRef.current = null;
+        intentRef.current = null;
         setFocused(false);
         setPreviewReady(false);
         setTorch(false);
@@ -99,6 +102,14 @@ export default function ScanScreen() {
   async function handleCode(raw: string, type?: string) {
     const code = normalizeBarcode(typeof raw === "string" ? raw : "", type);
     if (!code || scanLock.current) return;
+
+    // One id per user intent. Camera retries of the same code reuse it, so a
+    // request that committed before the response was lost returns that spool.
+    const requestId =
+      intentRef.current?.code === code
+        ? intentRef.current.requestId
+        : newRequestId();
+    intentRef.current = { code, requestId };
 
     // State updates are async; the ref is the synchronous guard against
     // multiple decoded frames creating duplicate spools.
@@ -152,6 +163,7 @@ export default function ScanScreen() {
         code,
         true,
         typeRef.current ?? undefined,
+        requestId,
       );
       if (!focusedRef.current) return;
       const normalized: BarcodeScanResult = {
@@ -181,10 +193,12 @@ export default function ScanScreen() {
     setBusy(true);
     setError(null);
     try {
+      // A deliberate second spool is a new intent, unlike a camera retry.
       const created = await api.scanBarcode(
         code,
         true,
         typeRef.current ?? undefined,
+        newRequestId(),
       );
       if (!focusedRef.current) return;
       const normalized: BarcodeScanResult = {
@@ -239,6 +253,7 @@ export default function ScanScreen() {
     resultRef.current = null;
     lastAttemptRef.current = null;
     typeRef.current = null;
+    intentRef.current = null;
     setResult(null);
     setScanType(null);
     setError(null);
@@ -474,6 +489,19 @@ export default function ScanScreen() {
             >
               {error}
             </AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Try scanning this code again"
+              onPress={() => {
+                lastAttemptRef.current = null;
+                setError(null);
+              }}
+              hitSlop={8}
+            >
+              <AppText variant="caption" color={theme.colors.accentText}>
+                Try again
+              </AppText>
+            </Pressable>
           </View>
         ) : null}
 

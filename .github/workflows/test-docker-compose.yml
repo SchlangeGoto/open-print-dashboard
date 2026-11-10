@@ -37,7 +37,7 @@ jobs:
       - name: Prepare environment
         run: |
           cp .env.example .env
-          sed -i 's/^SECRET_KEY=.*/SECRET_KEY=ci-secret/' .env
+          sed -i 's/^SECRET_KEY=.*/SECRET_KEY=ci-secret-0123456789abcdef0123456789abcdef0123456789abcdef/' .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-password/' .env
           sed -i 's/^EMAILS_FROM_EMAIL=.*/EMAILS_FROM_EMAIL=/' .env
           sed -i 's/^SMTP_HOST=.*/SMTP_HOST=/' .env

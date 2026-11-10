@@ -217,7 +217,6 @@ These open issues should be solved as part of the epic, not separately:
 | S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 90-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
 | S-07 | `backend/app/api/routes/login.py` (`refresh_access_token`) | Expiry is checked before revocation, so a rotated-but-expired token reports "expired" and never triggers reuse detection. | Check `revoked_at` first. | Human #7 · 09 Nov 20:18 UTC |
 | S-08 | `backend/app/api/routes/login.py`, `frontend/lib/api.ts` | Logout failures are swallowed and look identical to success; demo mode and session expiry clear local tokens without calling logout, orphaning rows. | Surface failures, and call logout on demo exit and forced expiry. | Human #7 · 09 Nov 20:18 UTC |
-| S-09 | `frontend/lib/auth.tsx` | Any `getMe()` error — transport, 502, timeout — calls `clearTokens()` and wipes the 90-day session. | Only clear on `ApiError` 401/403; keep the session and show an offline state otherwise. | Human #7 + CR #7 · 10 Nov 09:21 UTC |
 
 ### 2.2 Printer and cloud backend
 
@@ -229,7 +228,6 @@ These open issues should be solved as part of the epic, not separately:
 | P-06 | `backend/app/api/routes/printers.py` (`_serialize_printers`) | `online` includes `bool(status.get("gcode_state"))`, and `get_status()` never clears `_current_status`, so a dead printer stays "Online" forever. | Drop the `gcode_state` term or gate it on `connected`; clear stale status after the 180 s window. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
 | P-07 | `backend/app/services/bambu_client.py` (`_on_disconnect`) | The callback uses the paho 1.x signature but the client uses `CallbackAPIVersion.VERSION2`: `rc` is a `DisconnectFlags`, so `rc in (4, 5)` is never true and every disconnect is logged as unexpected. | Use `(client, userdata, disconnect_flags, reason_code, properties)` and compare `reason_code.value`. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
 | P-08 | `backend/app/services/printer_service.py` (`_connect`) | `get_user_id()` is a blocking REST call per cloud printer at startup. The uid is account-wide, and one failure skips that printer with no retry. | Cache the uid on the cloud client, resolve once, move connection work to a background task. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
-| P-09 | `backend/app/api/routes/printers.py` (`_cloud_devices`) | `NotLoggedInError` and every other exception collapse to `[]`, so "not signed in", "Cloudflare blocked" and "timeout" all become "No printers found on your account". | Re-raise 401 and return a distinct `cloud_error` flag for upstream failures. | Human #9 · 09 Nov 20:18 UTC |
 | P-10 | `backend/app/services/bambu_client.py` (`_save_print_job_init`, `_save_print_job`) | `startTime`/`endTime` from the task API are assigned directly to `datetime` columns. If they are ISO strings, the bind fails and the job update plus the filament deduction roll back. | Parse to aware UTC in one helper; handle empty/invalid values. Verify against a real completion payload. | CR #4 · 10 Nov 09:26 UTC |
 | P-11 | `backend/app/services/bambu_client.py` (`_maybe_sync_ams`) | Each new AMS signature starts a thread with no lock; syncs can overlap and double-insert. The signature is set before the sync, so a failed sync is never retried. | `threading.Lock` around `_sync_ams_trays`; set the signature only after success. | CR #6 · 10 Nov 09:21 UTC |
 | P-12 | `backend/app/alembic/versions/f3a9c1d7b2e4_*`, `d9e3a1c5b7f2_*` | Downgrades are lossy: the first drops the printer table without restoring `appsetting`, the second blanks LAN credentials. | Document them as lossy or restore the previous rows. Low priority now that LAN is gone. | Human #5 + #9 · 09 Nov 20:18 UTC |
@@ -239,10 +237,7 @@ These open issues should be solved as part of the epic, not separately:
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. By design, every scan adds a spool (D-06); the risk is an accidental retry, not a missing server-side dedupe. | Keep the mobile lookup-first flow as the guard and document “one scan = one spool”. Do not add server-side dedupe. | Human #6 + CR #6 · 10 Nov 09:21 UTC · resolved by D-06 |
-| B-05 | `backend/app/api/routes/spools.py`, `backend/scripts/import_bambu_gtins.py` | No GTIN check-digit validation, and a confirmed mapping cannot be deleted or re-mapped, so one typo is permanent. | Validate EAN-13 going forward (no production backfill, D-07), warn/skip in the importer, allow delete/re-map. | Human #6 · 09 Nov 20:18 UTC |
-| B-06 | `backend/app/services/bambu_catalog.py` | A malformed catalog returns `{}` with no log; a valid-but-non-object payload makes `payload.get` raise on every scan. | Log once, guard `isinstance(payload, dict)` and `barcodes` being a dict. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
 | B-07 | `backend/app/services/bambu_client.py` (`_maybe_sync_ams`) | The dedupe signature is the whole `ams` blob including temp/humidity, so it changes on nearly every `push_status`: a thread and a transaction every ~2 s per printer. | Build the signature from `(tag_uid, remain, tray_now)` per tray. | Human #6 · 09 Nov 20:18 UTC |
-| B-08 | `backend/app/alembic/versions/e2b7c9f4a1d3_*` | `ix_spool_tag_uid` is not unique; overlapping syncs can create two rows for one RFID tag. | Make it unique (barcodes may repeat, tag UIDs may not). | Human #6 · 09 Nov 20:18 UTC |
 | B-09 | `backend/app/api/routes/spools.py` | `suggested_filament` is dead for real scans: `parse_bambu_sku(code)` gets the EAN, but the regex only matches printed SKUs. | Parse an optional `sku` field or drop the field. | Human #6 · 09 Nov 20:18 UTC |
 | B-10 | `backend/app/api/routes/spools.py` (`update_spool`) | `PUT /spools/{id}` does not check that `filament_id` exists; an unknown id reaches the FK and returns 500 instead of 404. | Check like `create_spool`, return 404. | Human #4 · 09 Nov 20:18 UTC |
 | B-11 | `frontend/public/icons/icon-maskable-512.png` | Byte-identical to `icon-512.png`; the artwork sits outside the 80 % safe circle, so Android adaptive icons crop it. | Ship a real maskable variant. | Human #6 · 09 Nov 20:18 UTC |
@@ -253,8 +248,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| F-06 | `frontend/app/dashboard/analytics/page.tsx` | `ceil((end - start) / 86400000)` adds a phantom day at the DST fall-back, so previous prints/day is divided by 8 instead of 7. | Use `differenceInCalendarDays(end, start) + 1`. | Human #10 · 09 Nov 20:18 UTC |
-| F-07 | `frontend/app/dashboard/prints/page.tsx` | Still calls `getPrintJobs()`, which returns only the first 500 rows; the header and the filament filter silently miss older jobs. | Use `getAllPrintJobs()` or add real server-side paging. | Human #10 · 09 Nov 20:18 UTC |
 | F-10 | `frontend/app/dashboard/spools/page.tsx` | Purchased date drifts back one day per edit outside UTC: `new Date("2024-05-03").toISOString()` stores the previous day, and `beginEdit` splits the ISO string. | Format the local date and post `yyyy-MM-dd`. | Human #10 · 09 Nov 20:18 UTC |
 | F-11 | `frontend/app/dashboard/analytics/page.tsx` | `now` is frozen at mount and jobs are fetched once, so an open tab keeps saying "Last 7 days" and misses new prints. | Refresh `now` and the list on an interval or on window focus. | Human #10 · 09 Nov 20:18 UTC |
 | F-12 | `frontend/app/dashboard/printers/page.tsx` | The details modal receives the object captured on click; the list polls every 10 s, so temperatures and progress freeze while it is open. | Look the printer up by serial from the current list when rendering. | CR #5 · 10 Nov 09:21 UTC |
@@ -270,13 +263,10 @@ These open issues should be solved as part of the epic, not separately:
 | M-03 | `mobile/src/lib/barcode.ts` | `normalizeBarcode` only handles ITF-14; a 12-digit UPC-A stays 12 digits, so Android and iOS disagree on the same box and create two rows. | Pad 12-digit codes to 13 and normalise on the server too. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
 | M-04 | `mobile/src/lib/auth.tsx` (`setServerUrl`) | Bumps the epoch and then awaits `clearStoredSession()` before clearing state; an in-flight 401 can refresh against the old server and persist a session after the clear. | Mutate state synchronously before any await. | Human #8 · 09 Nov 20:18 UTC |
 | M-05 | `mobile/src/lib/api.ts` (`logout`) | Bumps the epoch but does not await `refreshPromise`; a racing refresh rotates the token and logout revokes the old one, leaving the new token valid for 90 days. | Await or cancel the in-flight refresh at the top of logout. | Human #8 · 09 Nov 20:18 UTC |
-| M-06 | `mobile/src/lib/api.ts` (`isPrivateHost`) | Regexes match DNS names (`10.example.com`, `192.168.evil.tld`), so cleartext HTTP is allowed to public hosts; `userinfo@` is not handled. | Only allow cleartext for a literal IP (`net.isIP`) or `localhost`/`*.local`, and reject userinfo. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
 | M-07 | `mobile/src/app/(app)/spool/[id].tsx` | `printer.id !== spool.printer_id` compares two nullables; cloud-only printers (`id: null`) are hidden for unloaded spools. | Filter by serial or show an explicit "add the printer first" branch. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
 | M-08 | `mobile/src/app/server-setup.tsx` | `useState(serverUrl ?? "")` initialises once; a deep-link cold start renders an empty field that stays empty. Reconnecting to the same URL skips the session re-check, and `replace` can leave no back stack. | Sync the field from auth state, gate on `status === "loading"`, handle the empty stack. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
 | M-09 | `mobile/src/app/connection-error.tsx` | The only escape appears after `getMe()` fails, and the probe waits 20 s; on an unreachable routable IP the user stares at "Loading…". | Use a 3–5 s probe on restore, or put "Change server" on the loading screen. | Human #8 · 09 Nov 20:18 UTC |
 | M-10 | `mobile/README.md` | Documents Node.js 20+ (SDK 58 needs 22.13+) and the build tag `in-app-scanner-fix` while `build-info.ts` emits `shelf-index-2`. | Update both. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
-| M-11 | `mobile/src/app/(auth)/login.tsx` | No re-entry guard; a keyboard submit can start two logins and orphan a refresh token. | `if (busy) return;` at the top of `handleLogin`. | CR #8 · 10 Nov 09:21 UTC |
-| M-12 | `mobile/src/lib/api.ts` (`login`) | Stores tokens before `getMe()`; a failed `getMe()` leaves the user "logged out" but with persisted tokens, so the next launch restores them. | Wrap `getMe()` in try/catch, clear tokens, rethrow. | CR #8 · 10 Nov 09:21 UTC |
 | M-13 | `mobile/src/lib/auth.tsx` (`restore`) | No stale-completion guard; a slow restore can finish after `setServerUrl`, `login` or `logout` and overwrite the newer state. | Capture an epoch and ignore the result if it changed. | CR #8 · 10 Nov 09:21 UTC |
 
 ### 2.6 CI, demo and infrastructure
@@ -343,3 +333,9 @@ re-opened.
 | Brand/null-safe filament matching | `bf0c792` | Human #6 + CR #6/#8 |
 | Accent flash before hydration | `8322dcf` | Human #4 |
 | CoverImage object URL leak | `531a01b` | Human #4 |
+| Cloud failures distinguished from an empty account | `25c5a10` | Human #9 |
+| Barcode normalization/validation and catalog guard | `99034c3` | Human #6 + CR #6 |
+| Unique `spool.tag_uid` | `c9322ab` | Human #6 |
+| Session kept on transient `getMe` failures | `39cb10c` | Human #7 + CR #7 |
+| DST day and full print history | `1a81ab9` | Human #10 |
+| Mobile server URL and login hardening | `1b9da35` | Human #8 + CR #8 |

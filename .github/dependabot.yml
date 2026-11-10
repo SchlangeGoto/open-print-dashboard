@@ -50,7 +50,23 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/site"
     schedule:
       interval: "weekly"
     cooldown:

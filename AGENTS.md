@@ -37,7 +37,7 @@ Backend, from `backend/`:
 - `uv run bash scripts/prestart.sh` — run migrations + initial data
 - `uv run fastapi dev` — dev server on :8000
 - `uv run bash scripts/lint.sh` — mypy, ruff check, ruff format check
-- `uv run bash scripts/test.sh` — pytest + coverage (needs PostgreSQL)
+- `uv run bash scripts/test.sh` — pytest + coverage (needs PostgreSQL, a migrated `TEST_DATABASE_URL` ending in `_test`; create and pre-migrate it as described in `docs/SETUP.md`)
 
 Frontend, from `frontend/`:
 

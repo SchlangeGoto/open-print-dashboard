@@ -1,6 +1,6 @@
 {$SITE_DOMAIN:openprintdash.app} {
 	encode zstd gzip
-	reverse_proxy site:80
+	reverse_proxy site:8080
 }
 
 www.{$SITE_DOMAIN:openprintdash.app} {

@@ -10,6 +10,7 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import {
   api,
+  ApiError,
   clearTokens,
   hasStoredSession,
   SESSION_EXPIRED_EVENT,
@@ -44,8 +45,13 @@ const AuthContext = createContext<AuthContextType>({
   exitDemo: () => {},
 });
 
+const USERNAME_KEY = "opd-username";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [username, setUsername] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(USERNAME_KEY);
+  });
   const [demo, setDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -62,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!hasStoredSession()) {
+      window.localStorage.removeItem(USERNAME_KEY);
+      setUsername(null);
       setIsLoading(false);
       return;
     }
@@ -71,17 +79,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .getMe()
       .then((me) => {
-        setUsername(me.full_name || me.email);
+        const name = me.full_name || me.email;
+        window.localStorage.setItem(USERNAME_KEY, name);
+        setUsername(name);
       })
-      .catch(() => {
-        clearTokens();
-        setUsername(null);
+      .catch((error) => {
+        // A 401/403 means the session is really gone. A transport error or a
+        // 5xx is not a logout: keep the tokens and the cached name so the
+        // layout does not redirect to the login screen.
+        if (
+          error instanceof ApiError &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          clearTokens();
+          window.localStorage.removeItem(USERNAME_KEY);
+          setUsername(null);
+        }
       })
       .finally(() => setIsLoading(false));
   }, []);
 
   useEffect(() => {
     function handleSessionExpired() {
+      window.localStorage.removeItem(USERNAME_KEY);
       setUsername(null);
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
@@ -102,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [username, isLoading, pathname, router]);
 
   function login(name: string) {
+    window.localStorage.setItem(USERNAME_KEY, name);
     setUsername(name);
   }
 
@@ -114,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       disableDemo();
       setDemo(false);
     }
+    window.localStorage.removeItem(USERNAME_KEY);
     setUsername(null);
     router.push("/");
   }

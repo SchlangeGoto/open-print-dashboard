@@ -11,7 +11,7 @@ import { DEMO_URL, DOCS_URL, GITHUB_URL, SITE_URL, SPONSOR_URL } from "@/lib/sit
 const installCommands = `git clone https://github.com/SchlangeGoto/open-print-dashboard.git
 cd open-print-dashboard
 cp .env.example .env
-docker compose up -d --build`;
+docker compose -f compose.prod.yml up -d --build`;
 
 const faqs = [
   {
@@ -36,7 +36,7 @@ const faqs = [
   },
   {
     q: "How do updates work?",
-    a: "Pull the new code and rebuild: git pull, then docker compose up -d --build. Your database lives in a Docker volume and survives updates.",
+    a: "Pull the new code and rebuild: git pull, then docker compose -f compose.prod.yml up -d --build. Your database lives in a Docker volume and survives updates.",
   },
 ];
 

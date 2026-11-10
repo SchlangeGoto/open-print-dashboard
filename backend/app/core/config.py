@@ -2,7 +2,7 @@ import logging
 import os
 import secrets
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import (
     EmailStr,
@@ -45,7 +45,6 @@ class Settings(BaseSettings):
     # as a stolen token. After this window, reuse revokes every session.
     REFRESH_TOKEN_REUSE_GRACE_SECONDS: int = 30
     FRONTEND_HOST: str = "http://localhost:3000"
-    FASTAPI_ENV: Literal["development"] | None = None
 
     DATABASE_URL: PostgresDsn
 
@@ -89,15 +88,12 @@ class Settings(BaseSettings):
         """Generate and persist a key on first start when none is configured.
 
         A container cannot prompt on ``docker compose up -d``, so the key is
-        created once, written to the data volume and reused afterwards. The
-        placeholder from ``.env.example`` is replaced the same way outside
-        development.
+        created once, written to the data volume and reused afterwards. A
+        missing key, the placeholder from ``.env.example`` or a key shorter
+        than 32 characters is replaced.
         """
         if not isinstance(data, dict):
             return data
-        if data.get("FASTAPI_ENV") == "development":
-            return data
-
         value = str(data.get("SECRET_KEY") or "").strip()
         if value and value.lower() != "changethis" and len(value) >= 32:
             return data
@@ -131,8 +127,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _reject_insecure_secret_key(self) -> "Settings":
-        if self.FASTAPI_ENV == "development":
-            return self
         if len(self.SECRET_KEY) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters")
         if self.BAMBU_CREDENTIALS_KEY and len(self.BAMBU_CREDENTIALS_KEY) < 32:

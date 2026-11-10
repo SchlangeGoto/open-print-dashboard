@@ -9,7 +9,6 @@ from app.core.config import Settings
 @pytest.fixture(autouse=True)
 def _clean_secret_env(monkeypatch) -> None:
     for key in (
-        "FASTAPI_ENV",
         "SECRET_KEY",
         "SECRET_KEY_FILE",
         "BAMBU_CREDENTIALS_KEY",
@@ -36,7 +35,7 @@ def test_generates_and_persists_a_key_when_missing(tmp_path: Path) -> None:
     assert path.read_text().strip() == settings.SECRET_KEY
 
 
-def test_replaces_the_placeholder_outside_development(tmp_path: Path) -> None:
+def test_replaces_the_placeholder(tmp_path: Path) -> None:
     settings = _settings(tmp_path, SECRET_KEY="changethis")
 
     assert settings.SECRET_KEY != "changethis"
@@ -57,13 +56,11 @@ def test_uses_a_configured_key_without_writing_a_file(tmp_path: Path) -> None:
     assert not (tmp_path / "secret_key").exists()
 
 
-def test_allows_the_placeholder_in_development(tmp_path: Path) -> None:
-    settings = _settings(
-        tmp_path, SECRET_KEY="changethis", FASTAPI_ENV="development"
-    )
+def test_replaces_a_short_secret_key(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, SECRET_KEY="short")
 
-    assert settings.SECRET_KEY == "changethis"
-    assert not (tmp_path / "secret_key").exists()
+    assert settings.SECRET_KEY != "short"
+    assert len(settings.SECRET_KEY) == 64
 
 
 def test_rejects_short_bambu_credentials_key(tmp_path: Path) -> None:

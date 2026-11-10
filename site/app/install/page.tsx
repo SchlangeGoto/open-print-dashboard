@@ -15,8 +15,9 @@ const commands = {
   clone: `git clone https://github.com/SchlangeGoto/open-print-dashboard.git
 cd open-print-dashboard`,
   env: `cp .env.example .env
-openssl rand -hex 32   # copy the output into SECRET_KEY`,
-  start: `docker compose up -d --build`,
+# set POSTGRES_PASSWORD; SECRET_KEY is generated on first start
+# set NEXT_PUBLIC_API_URL and FRONTEND_HOST for a non-localhost install`,
+  start: `docker compose -f compose.prod.yml up -d --build`,
 };
 
 const credentials = [
@@ -203,8 +204,8 @@ export default function InstallPage() {
             </p>
             <pre className="code-block mt-4 p-4">
               <code>{`git pull
-docker compose down
-docker compose up -d --build`}</code>
+docker compose -f compose.prod.yml down
+docker compose -f compose.prod.yml up -d --build`}</code>
             </pre>
             <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">
               Data lives in the{" "}
@@ -226,7 +227,7 @@ docker compose up -d --build`}</code>
                 </strong>{" "}
                 Change the frontend port mapping in{" "}
                 <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
-                  compose.yml
+                  compose.prod.yml
                 </code>
                 .
               </p>

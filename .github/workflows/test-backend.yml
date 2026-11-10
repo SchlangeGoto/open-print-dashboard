@@ -16,7 +16,6 @@ concurrency:
 
 env:
   SECRET_KEY: changethis
-  FASTAPI_ENV: development
   DATABASE_URL: postgresql://opd:changethis@localhost:5432/openprintdashboard
   SMTP_HOST: localhost
   SMTP_PORT: "1025"

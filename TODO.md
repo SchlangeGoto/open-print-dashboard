@@ -212,18 +212,13 @@ These open issues should be solved as part of the epic, not separately:
 | --- | --- | --- | --- | --- |
 | S-02 | `frontend/lib/api.ts` (`storeTokens`) | The 90-day refresh token lives in `localStorage`; XSS or an extension gets a renewable credential that survives reload. | Move it to an httpOnly cookie scoped to the refresh endpoint, or shorten the lifetime and document the risk. | Human #7 · 09 Nov 20:18 UTC · code reading |
 | S-03 | `backend/app/api/deps.py` | Access tokens are stateless: after logout, password change or reuse detection a stolen token works until it expires (60 min). Logout is per-device (D-10); the real exposure is password change and reuse detection. | Add `users.sessions_revoked_at` and reject tokens whose `iat` predates it. | Human #7 · 09 Nov 20:18 UTC |
-| S-05 | `backend/app/crud.py`, `backend/app/api/routes/users.py` | Password update and token revocation are two commits. A failure between them leaves the password changed and every refresh token alive. | Flush the revocation and commit once, in both the self-service and admin paths. | Human #7 · 09 Nov 20:18 UTC |
 | S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 90-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
-| S-07 | `backend/app/api/routes/login.py` (`refresh_access_token`) | Expiry is checked before revocation, so a rotated-but-expired token reports "expired" and never triggers reuse detection. | Check `revoked_at` first. | Human #7 · 09 Nov 20:18 UTC |
 
 ### 2.2 Printer and cloud backend
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
-| P-06 | `backend/app/api/routes/printers.py` (`_serialize_printers`) | `online` includes `bool(status.get("gcode_state"))`, and `get_status()` never clears `_current_status`, so a dead printer stays "Online" forever. | Drop the `gcode_state` term or gate it on `connected`; clear stale status after the 180 s window. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
-| P-07 | `backend/app/services/bambu_client.py` (`_on_disconnect`) | The callback uses the paho 1.x signature but the client uses `CallbackAPIVersion.VERSION2`: `rc` is a `DisconnectFlags`, so `rc in (4, 5)` is never true and every disconnect is logged as unexpected. | Use `(client, userdata, disconnect_flags, reason_code, properties)` and compare `reason_code.value`. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
-| P-08 | `backend/app/services/printer_service.py` (`_connect`) | `get_user_id()` is a blocking REST call per cloud printer at startup. The uid is account-wide, and one failure skips that printer with no retry. | Cache the uid on the cloud client, resolve once, move connection work to a background task. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
 | P-12 | `backend/app/alembic/versions/f3a9c1d7b2e4_*`, `d9e3a1c5b7f2_*` | Downgrades are lossy: the first drops the printer table without restoring `appsetting`, the second blanks LAN credentials. | Document them as lossy or restore the previous rows. Low priority now that LAN is gone. | Human #5 + #9 · 09 Nov 20:18 UTC |
 
 ### 2.3 Spools, barcodes and filaments
@@ -231,7 +226,6 @@ These open issues should be solved as part of the epic, not separately:
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. By design, every scan adds a spool (D-06); the risk is an accidental retry, not a missing server-side dedupe. | Keep the mobile lookup-first flow as the guard and document “one scan = one spool”. Do not add server-side dedupe. | Human #6 + CR #6 · 10 Nov 09:21 UTC · resolved by D-06 |
-| B-11 | `frontend/public/icons/icon-maskable-512.png` | Byte-identical to `icon-512.png`; the artwork sits outside the 80 % safe circle, so Android adaptive icons crop it. | Ship a real maskable variant. | Human #6 · 09 Nov 20:18 UTC |
 
 ### 2.4 Frontend
 
@@ -247,15 +241,11 @@ These open issues should be solved as part of the epic, not separately:
 | --- | --- | --- | --- | --- |
 | M-02 | `mobile/src/app/(app)/scan-confirm.tsx` | Confirm is not idempotent; a retry after an ambiguous failure adds a second spool. | Make the backend accept a request id, or retry via `scanBarcode(code, false)` first. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
 | M-05 | `mobile/src/lib/api.ts` (`logout`) | Bumps the epoch but does not await `refreshPromise`; a racing refresh rotates the token and logout revokes the old one, leaving the new token valid for 90 days. | Await or cancel the in-flight refresh at the top of logout. | Human #8 · 09 Nov 20:18 UTC |
-| M-10 | `mobile/README.md` | Documents Node.js 20+ (SDK 58 needs 22.13+) and the build tag `in-app-scanner-fix` while `build-info.ts` emits `shelf-index-2`. | Update both. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
 
 ### 2.6 CI, demo and infrastructure
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| I-02 | `.github/workflows/test-mobile.yml` | `typedRoutes` is enabled but `.expo/` and `expo-env.d.ts` are gitignored, so `tsc --noEmit` on a fresh runner does not validate route paths. | Generate the Expo types before the typecheck step (or reorder). | CR #9 · 10 Nov 09:21 UTC |
-| I-03 | `backend/app/api/routes/prints.py`, `docs/API.md` | `PrintJob.status == 4` means “running” and is used in `/prints/active` and the print-job sync, but it is not documented. | Document the code and its Bambu source in `docs/API.md`. | Product · 2026-11-10 · D-03 |
-| I-04 | `backend/scripts/start.sh`, `docs/DEPLOYMENT.md` | The single-worker requirement is only a shell comment; adding `--workers` silently duplicates MQTT clients. | Document it in `docs/DEPLOYMENT.md` and fail fast if more than one worker is requested. | Product · 2026-11-10 · D-12 |
 
 ---
 
@@ -329,3 +319,8 @@ re-opened.
 | UPC-A normalization (server) | `545d050` | Human #8 + CR #8 |
 | Mobile scan throttle and UPC-A | `3bc3b41` | Human #8 + CR #8 |
 | `setServerUrl` mutation ordering | `6e134b3` | Human #8 |
+| Atomic password change + revocation; revocation checked first | `4655308` | Human #7 |
+| MQTT-based online state, paho v2 callback, cached Bambu uid | `bcebf4c` | Human #9 + CR #9 |
+| Print status and single-worker docs | `c0c25d0` | Product D-03/D-12 |
+| Maskable icon safe zone | `8d4a005` | Human #6 |
+| Mobile Node/build-tag docs; CI route types | `5ce724f` | Human #8 + CR #8/#9 |

@@ -74,7 +74,6 @@ export default function ScanConfirmScreen() {
 
   async function handleCreate() {
     if (!code || busyRef.current) return;
-    busyRef.current = true;
     const normalizedHex = normalizeHex(colorHex);
     const weightValue = Number(weight.replace(",", "."));
     const priceValue = price.trim()
@@ -98,6 +97,7 @@ export default function ScanConfirmScreen() {
       return;
     }
 
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {

@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 concurrency:
   group: release-containers-${{ github.ref }}
@@ -19,6 +17,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:

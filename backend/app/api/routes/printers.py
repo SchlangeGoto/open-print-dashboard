@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy.exc import IntegrityError
 
 from app import crud
 from app.api.deps import SessionDep, get_current_user
@@ -75,9 +76,9 @@ def _serialize_printers(
         serial=serial,
         model=cloud_device.get("dev_model_name") if cloud_device else None,
         ip=printer.ip if printer and connection_mode == "lan" else None,
-        access_code=(
-            printer.access_code if printer and connection_mode == "lan" else None
-        ),
+        # Write-only: the MQTT password of a configured printer is never
+        # returned to a client.
+        access_code=None,
         connection_mode=connection_mode,
         online=online,
         configured=printer is not None,
@@ -190,7 +191,17 @@ def create_printer(*, session: SessionDep, printer_in: PrinterCreate) -> Any:
             status_code=409,
             detail="A printer with this serial number is already configured",
         )
-    printer = crud.create_printer(session=session, printer_in=printer_in)
+    printer = None
+    try:
+        printer = crud.create_printer(session=session, printer_in=printer_in)
+    except IntegrityError:
+        # Two concurrent creates can both pass the lookup above; the unique
+        # index on serial is the real gate.
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A printer with this serial number is already configured",
+        )
     printer_service.reload_printer(printer.serial)
     return _serialize_printers(
         printer=printer,
@@ -210,7 +221,8 @@ def update_printer(
     changes = printer_in.model_dump(exclude_unset=True)
     connection_mode = changes.get("connection_mode", printer.connection_mode)
     ip = changes.get("ip", printer.ip)
-    access_code = changes.get("access_code", printer.access_code)
+    # The API never returns the stored code, so an empty value means "keep it".
+    access_code = changes.get("access_code") or printer.access_code
     if connection_mode == "lan" and not (ip and access_code):
         raise HTTPException(
             status_code=422,

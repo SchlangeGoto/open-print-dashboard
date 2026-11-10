@@ -47,7 +47,8 @@ export default function PrinterSettingsModal({
     name: printer?.name ?? "",
     serial: printer?.serial ?? "",
     ip: printer?.ip ?? "",
-    access_code: printer?.access_code ?? "",
+    // The API never returns the stored code; an empty value keeps it.
+    access_code: "",
   });
   const [saving, setSaving] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -191,12 +192,14 @@ export default function PrinterSettingsModal({
                   </FieldLabel>
                   <Input
                     id="printer-access-code"
-                    placeholder="12345678"
+                    placeholder={
+                      isEdit ? "Leave blank to keep the current code" : "12345678"
+                    }
                     value={form.access_code}
                     onChange={(event) =>
                       setForm({ ...form, access_code: event.target.value })
                     }
-                    required
+                    required={!isEdit}
                   />
                 </Field>
               </>

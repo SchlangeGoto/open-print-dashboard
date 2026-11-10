@@ -172,7 +172,7 @@ export const demoApi: ApiShape = {
       refreshToken: "demo-refresh-token",
     }),
 
-  logout: () => delay(undefined),
+  logout: () => delay(true),
 
   getMe: () => delay({ ...DEMO_USER }),
 

@@ -308,22 +308,29 @@ const apiImpl = {
     };
   },
 
-  logout: async () => {
+  logout: async (): Promise<boolean> => {
+    const epoch = tokenEpoch;
     const refreshToken = getRefreshToken();
+    let revoked = true;
     try {
       if (refreshToken) {
-        await fetch(`${API_ROOT}/login/logout`, {
+        const res = await fetch(`${API_ROOT}/login/logout`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ refresh_token: refreshToken }),
           keepalive: true,
         });
+        revoked = res.ok;
       }
     } catch {
-      // Revoking server-side is best-effort; local logout must still happen.
+      // Local logout must still happen; the caller decides how to surface it.
+      revoked = false;
     } finally {
-      clearTokens();
+      // Do not wipe a newer login that happened while the request was in
+      // flight.
+      if (tokenEpoch === epoch) clearTokens();
     }
+    return revoked;
   },
 
   getMe: () => request<UserPublic>("/users/me"),

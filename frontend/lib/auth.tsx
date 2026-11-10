@@ -22,6 +22,7 @@ import {
   enableDemo,
   isDemoActive,
 } from "@/lib/demo";
+import { toast } from "@/lib/toast";
 
 interface AuthContextType {
   username: string | null;
@@ -29,7 +30,7 @@ interface AuthContextType {
   demo: boolean;
   demoAvailable: boolean;
   login: (username: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   enterDemo: () => void;
   exitDemo: () => void;
 }
@@ -40,7 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   demo: false,
   demoAvailable: DEMO_AVAILABLE,
   login: () => {},
-  logout: () => {},
+  logout: async () => {},
   enterDemo: () => {},
   exitDemo: () => {},
 });
@@ -126,10 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername(name);
   }
 
-  function logout() {
-    // api.logout reads the refresh token before clearing it, so the local
-    // session can be cleared immediately.
-    void api.logout();
+  async function logout() {
+    const revoked = await api.logout();
     clearTokens();
     if (demo) {
       disableDemo();
@@ -137,11 +136,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.localStorage.removeItem(USERNAME_KEY);
     setUsername(null);
+    if (!revoked) {
+      toast.error(
+        "Signed out locally, but the server could not be reached. The old session may still be valid.",
+      );
+    }
     router.push("/");
   }
 
   function enterDemo() {
     if (!DEMO_AVAILABLE) return;
+    // Best effort: do not leave a real session behind when switching to demo.
+    void api.logout();
     enableDemo();
     clearTokens();
     setDemo(true);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Cloud,
   Eye,
@@ -11,7 +12,7 @@ import {
   Thermometer,
 } from "lucide-react";
 
-import { api, type Printer } from "@/lib/api";
+import { api, type CloudStatus, type Printer } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { formatWeight, getPrintFilament, isPrintingStatus } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +29,23 @@ import FilamentModal from "@/components/modals/FilamentModal";
 import PrintJobModal from "@/components/modals/PrintJobModal";
 import SpoolModal from "@/components/modals/SpoolModal";
 
+function emptyPrinterMessage(status: CloudStatus | null): string {
+  if (status && !status.logged_in) {
+    return "Bambu Cloud is not connected. Sign in under Settings.";
+  }
+  if (status?.error === "cloudflare") {
+    return "Bambu Cloud is blocking requests right now. Try again shortly.";
+  }
+  if (status?.error === "unreachable") {
+    return "Could not reach Bambu Cloud. Check the network and try again.";
+  }
+  return "No printers on your Bambu account. Bind the printer in Bambu Handy, then refresh.";
+}
+
 export default function PrintersPage() {
+  const router = useRouter();
   const [printers, setPrinters] = useState<Printer[]>([]);
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus | null>(null);
   const [prints, setPrints] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
@@ -75,6 +91,25 @@ export default function PrintersPage() {
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (printers.length > 0) {
+      setCloudStatus(null);
+      return;
+    }
+    let active = true;
+    api
+      .getCloudAccount()
+      .then((status) => {
+        if (active) setCloudStatus(status);
+      })
+      .catch(() => {
+        if (active) setCloudStatus({ logged_in: true, error: "unreachable" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [printers.length]);
 
   function openSettings(printer: Printer | null) {
     setSelectedPrinter(null);
@@ -146,7 +181,14 @@ export default function PrintersPage() {
         <EmptyState
           icon={PrinterIcon}
           title="No printers"
-          description="Printers on your Bambu Lab account appear here. Bind the printer in Bambu Handy, then refresh."
+          description={emptyPrinterMessage(cloudStatus)}
+          action={
+            cloudStatus && !cloudStatus.logged_in ? (
+              <Button onClick={() => router.push("/dashboard/settings")}>
+                Open settings
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">

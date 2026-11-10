@@ -256,6 +256,8 @@ export const demoApi: ApiShape = {
 
   getPrinterStatus: () => delay({ ...DEMO_PRINTER_STATUS }),
 
+  getCloudAccount: () => delay({ logged_in: true, error: null }),
+
   getCloudStatus: () =>
     delay(DEMO_CLOUD_STATUS.map((status) => ({ ...status }))),
 

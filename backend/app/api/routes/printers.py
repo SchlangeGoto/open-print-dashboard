@@ -5,10 +5,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import SQLModel
 
 from app import crud
 from app.api.deps import SessionDep, get_current_user
-from app.core.bambu_exceptions import NotLoggedInError
+from app.core.bambu_exceptions import CloudflareError, NotLoggedInError
 from app.models import (
     Message,
     Printer,
@@ -25,6 +26,11 @@ router = APIRouter(
     tags=["printers"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+class CloudStatus(SQLModel):
+    logged_in: bool
+    error: str | None = None
 
 
 def _cloud_devices() -> list[dict[str, Any]]:
@@ -145,6 +151,26 @@ def get_cover(cover_url: str) -> Any:
     if image is None:
         raise HTTPException(status_code=404, detail="Cover image not found")
     return Response(content=image, media_type="image/jpeg")
+
+
+@router.get("/cloud/account", response_model=CloudStatus)
+def get_cloud_account() -> Any:
+    """Report whether the Bambu Cloud account is usable, and why not.
+
+    The printer list deliberately degrades to an empty list when the cloud is
+    unreachable. This endpoint lets the UI distinguish "no printers" from
+    "not signed in", a Cloudflare block, or a network failure.
+    """
+    try:
+        printer_service.cloud_client.get_devices()
+    except NotLoggedInError:
+        return CloudStatus(logged_in=False, error="not_logged_in")
+    except CloudflareError:
+        return CloudStatus(logged_in=True, error="cloudflare")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not reach Bambu Cloud: %s", exc)
+        return CloudStatus(logged_in=True, error="unreachable")
+    return CloudStatus(logged_in=True)
 
 
 @router.get("/cloud/status")

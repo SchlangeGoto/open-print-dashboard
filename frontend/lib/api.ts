@@ -243,6 +243,11 @@ export interface Printer {
   updated_at: string | null;
 }
 
+export interface CloudStatus {
+  logged_in: boolean;
+  error: string | null;
+}
+
 export interface BarcodeScanResult {
   found: boolean;
   code: string;
@@ -358,6 +363,7 @@ const apiImpl = {
 
   // Printers
   getPrinters: () => request<Printer[]>("/printers/"),
+  getCloudAccount: () => request<CloudStatus>("/printers/cloud/account"),
   createPrinter: (data: PrinterInput) =>
     request<Printer>("/printers/", {
       method: "POST",

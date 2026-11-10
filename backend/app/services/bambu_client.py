@@ -4,6 +4,7 @@ import threading
 import time
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import paho.mqtt.client as mqtt
 from sqlalchemy import func
@@ -17,6 +18,35 @@ from app.services.bambu_catalog import BAMBU_COLOR_NAMES
 logger = logging.getLogger("uvicorn.error")
 
 WATCHDOG_TIMER = 60
+
+
+def parse_task_datetime(value: Any) -> datetime | None:
+    """Parse a Bambu task timestamp into an aware UTC datetime.
+
+    The cloud task API mixes ISO strings and epoch numbers. Assigning either
+    to a ``datetime`` column directly fails at the database bind, which rolls
+    back both the print job and the filament deduction.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, (int, float)):
+        seconds = value / 1000 if value > 1_000_000_000_000 else value
+        try:
+            return datetime.fromtimestamp(seconds, tz=UTC)
+        except (OSError, OverflowError, ValueError):
+            return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return None
 
 
 class WatchdogThread(threading.Thread):
@@ -138,6 +168,7 @@ class BambuClient:
         self._current_status: dict = {}
         self._ams_signature: str | None = None
         self._last_ams_sync = 0.0
+        self._ams_lock = threading.Lock()
 
         self.client: mqtt.Client | None = None
         self._mqtt_thread: MqttThread | None = None
@@ -308,6 +339,27 @@ class BambuClient:
         except Exception as e:
             logger.error(f"Error processing message: {e}")
 
+    def _ams_signature_for(self, ams: dict) -> str:
+        """Signature of tray identity and usage, ignoring sensor values.
+
+        The raw AMS blob carries per-unit temperature and humidity, so it
+        changes on nearly every report. Identity, preset and remaining weight
+        are what a sync actually depends on.
+        """
+        trays = [
+            (
+                tray.get("tag_uid"),
+                tray.get("remain"),
+                tray.get("tray_info_idx"),
+            )
+            for unit in ams.get("ams", [])
+            for tray in unit.get("tray", [])
+        ]
+        return json.dumps(
+            {"trays": trays, "tray_now": self._current_status.get("tray_now")},
+            sort_keys=True,
+        )
+
     def _handle_print_update(self, print_data: dict) -> None:
         """Merge incoming print data into current status."""
         command = print_data.get("command")
@@ -319,13 +371,15 @@ class BambuClient:
 
         ams = self._current_status.get("ams")
         if ams:
-            signature = json.dumps(ams, sort_keys=True)
+            signature = self._ams_signature_for(ams)
             now = time.time()
             if signature != self._ams_signature and now - self._last_ams_sync > 2:
                 self._ams_signature = signature
                 self._last_ams_sync = now
                 threading.Thread(
-                    target=self._sync_ams_trays, args=(ams,), daemon=True
+                    target=self._sync_ams_trays,
+                    args=(ams, signature),
+                    daemon=True,
                 ).start()
 
         if (
@@ -458,17 +512,24 @@ class BambuClient:
         session.flush()
         return filament
 
-    def _sync_ams_trays(self, ams: dict) -> None:
-        """Create and update spools from AMS trays reported by the printer."""
+    def _sync_ams_trays(self, ams: dict, signature: str) -> None:
         if not self.serial:
             return
+        with self._ams_lock:
+            ok = self._sync_ams_trays_inner(ams)
+        if not ok and self._ams_signature == signature:
+            # Let the next identical report retry a failed sync.
+            self._ams_signature = None
+
+    def _sync_ams_trays_inner(self, ams: dict) -> bool:
+        """Create and update spools from AMS trays reported by the printer."""
         try:
             with Session(engine) as session:
                 printer = session.exec(
                     select(Printer).where(Printer.serial == self.serial)
                 ).first()
                 if not printer:
-                    return
+                    return True
 
                 try:
                     tray_now = int(self._current_status.get("tray_now"))
@@ -563,8 +624,10 @@ class BambuClient:
                         len(trays),
                         active_spool.id,
                     )
+                return True
         except Exception as exc:
             logger.error("AMS sync failed: %s", exc)
+            return False
 
     def _save_print_job_init(self) -> None:
         """Fetch cloud data and save a PrintJob when a print starts."""
@@ -602,7 +665,7 @@ class BambuClient:
                     cover=task.get("cover"),
                     weight=task.get("weight"),
                     duration_seconds=task.get("costTime"),
-                    start_time=task.get("startTime"),
+                    start_time=parse_task_datetime(task.get("startTime")),
                     status=task.get("status"),
                     bambu_task_id=str(task.get("id")),
                     device_id=self.serial,
@@ -684,8 +747,8 @@ class BambuClient:
                 job.weight = task.get("weight")
                 job.estimated_cost = estimated_cost
                 job.duration_seconds = task.get("costTime")
-                job.start_time = task.get("startTime")
-                job.finished_at = task.get("endTime")
+                job.start_time = parse_task_datetime(task.get("startTime"))
+                job.finished_at = parse_task_datetime(task.get("endTime"))
                 job.status = task.get("status")
                 job.bambu_task_id = str(task.get("id"))
                 job.device_id = self.serial

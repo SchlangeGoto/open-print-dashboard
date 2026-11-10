@@ -22,5 +22,10 @@ export function normalizeBarcode(raw: string): string {
   if (/^\d{14}$/.test(value) && value.startsWith("0")) {
     return value.slice(1);
   }
+  // UPC-A (12 digits) is the same product as EAN-13 with a leading zero.
+  // iOS and Android report the two forms differently, so pad to one key.
+  if (/^\d{12}$/.test(value)) {
+    return `0${value}`;
+  }
   return value;
 }

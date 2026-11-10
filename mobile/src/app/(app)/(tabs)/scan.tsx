@@ -47,6 +47,7 @@ export default function ScanScreen() {
   const scanLock = useRef(false);
   const focusedRef = useRef(false);
   const resultRef = useRef<BarcodeScanResult | null>(null);
+  const lastAttemptRef = useRef<{ code: string; at: number } | null>(null);
   const [focused, setFocused] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -75,6 +76,7 @@ export default function ScanScreen() {
       return () => {
         focusedRef.current = false;
         resultRef.current = null;
+        lastAttemptRef.current = null;
         setFocused(false);
         setPreviewReady(false);
         setTorch(false);
@@ -196,6 +198,14 @@ export default function ScanScreen() {
     // The same code is ignored until "Scan next" so one box cannot create
     // duplicate spools frame after frame.
     if (resultRef.current?.code === normalized) return;
+
+    // A failed lookup does not set resultRef, so the camera would retry the
+    // same frame forever. Ignore the same code for a short window instead.
+    const now = Date.now();
+    const last = lastAttemptRef.current;
+    if (last && last.code === normalized && now - last.at < 1500) return;
+    lastAttemptRef.current = { code: normalized, at: now };
+
     void handleCode(normalized).catch((err) => {
       if (focusedRef.current) {
         setError(formatError(err));
@@ -205,6 +215,7 @@ export default function ScanScreen() {
 
   function resetScan() {
     resultRef.current = null;
+    lastAttemptRef.current = null;
     setResult(null);
     setError(null);
     setManual("");

@@ -95,6 +95,11 @@ def count_users(*, session: Session) -> int:
 def revoke_user_refresh_tokens(*, session: Session, user_id: uuid.UUID) -> None:
     """Revoke every active refresh token for a user."""
     now = get_datetime_utc()
+    user = session.get(User, user_id)
+    if user:
+        # Access tokens issued before this instant stop working too.
+        user.sessions_revoked_at = now
+        session.add(user)
     tokens = session.exec(
         select(RefreshToken).where(
             RefreshToken.user_id == user_id,

@@ -290,3 +290,34 @@ def test_expired_reused_token_still_triggers_reuse_detection(
         json={"refresh_token": rotated["refresh_token"]},
     )
     assert r.status_code == 401
+
+
+def test_access_token_is_rejected_after_a_password_change(
+    client: TestClient, db: Session
+) -> None:
+    email = random_email()
+    password = random_lower_string()
+    new_password = random_lower_string()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(email=email, password=password),
+    )
+
+    tokens = login(client, email, password)
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    me = f"{settings.API_V1_STR}/users/me"
+    assert client.get(me, headers=headers).status_code == 200
+
+    reset_token = generate_password_reset_token(email=email)
+    r = client.post(
+        f"{settings.API_V1_STR}/reset-password/",
+        json={"new_password": new_password, "token": reset_token},
+    )
+    assert r.status_code == 200
+
+    # The old access token was issued before sessions_revoked_at.
+    assert client.get(me, headers=headers).status_code == 401
+
+    new_tokens = login(client, email, new_password)
+    new_headers = {"Authorization": f"Bearer {new_tokens['access_token']}"}
+    assert client.get(me, headers=new_headers).status_code == 200

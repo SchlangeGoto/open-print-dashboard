@@ -65,6 +65,9 @@ class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    # Access tokens issued before this instant are rejected. Set on password
+    # change and reuse detection, not on a single-device logout.
+    sessions_revoked_at: datetime | None = None
 
 
 class UserPublic(UserBase):
@@ -387,3 +390,4 @@ class RefreshTokenRequest(SQLModel):
 
 class TokenPayload(SQLModel):
     sub: str | None = None
+    iat: float | None = None

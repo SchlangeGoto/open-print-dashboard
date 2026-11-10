@@ -56,6 +56,11 @@ def _refresh_error(detail: str) -> HTTPException:
 def _revoke_all_refresh_tokens(
     session: Session, user_id: uuid.UUID, now: datetime
 ) -> None:
+    user = session.get(User, user_id)
+    if user:
+        # A detected reuse invalidates stateless access tokens as well.
+        user.sessions_revoked_at = now
+        session.add(user)
     tokens = session.exec(
         select(RefreshToken).where(
             RefreshToken.user_id == user_id,

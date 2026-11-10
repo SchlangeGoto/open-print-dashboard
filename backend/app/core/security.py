@@ -26,8 +26,14 @@ logger = logging.getLogger("uvicorn.error")
 
 
 def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
-    expire = datetime.now(UTC) + expires_delta
-    to_encode = {"exp": expire, "sub": str(subject)}
+    now = datetime.now(UTC)
+    # NumericDate with sub-second precision so a token issued right after a
+    # password change is not rejected by the one-second window.
+    to_encode = {
+        "exp": now + expires_delta,
+        "iat": now.timestamp(),
+        "sub": str(subject),
+    }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

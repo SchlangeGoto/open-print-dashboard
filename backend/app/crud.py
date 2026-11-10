@@ -175,9 +175,18 @@ def delete_printer(*, session: Session, printer: Printer) -> None:
 # ────────────────────────────────────────────────────────────
 # Bambu Lab cloud credentials
 # ────────────────────────────────────────────────────────────
+CLOUD_SETTING_KEYS = (
+    "bambu_cloud_email",
+    "bambu_cloud_password",
+    "bambu_cloud_token",
+)
+
+
 def get_cloud_token(*, session: Session) -> str | None:
     value = get_setting_value(session=session, key="bambu_cloud_token")
-    return decrypt_secret(value) if value else None
+    if not value:
+        return None
+    return decrypt_secret(value)
 
 
 def save_cloud_token(*, session: Session, token: str) -> None:
@@ -189,7 +198,11 @@ def get_cloud_credentials(*, session: Session) -> dict[str, str | None]:
     password = get_setting_value(session=session, key="bambu_cloud_password")
     if not email or not password:
         return {"email": None, "password": None}
-    return {"email": decrypt_secret(email), "password": decrypt_secret(password)}
+    decrypted_email = decrypt_secret(email)
+    decrypted_password = decrypt_secret(password)
+    if not decrypted_email or not decrypted_password:
+        return {"email": None, "password": None}
+    return {"email": decrypted_email, "password": decrypted_password}
 
 
 def save_cloud_credentials(*, session: Session, email: str, password: str) -> None:
@@ -197,6 +210,15 @@ def save_cloud_credentials(*, session: Session, email: str, password: str) -> No
     set_setting(
         session=session, key="bambu_cloud_password", value=encrypt_secret(password)
     )
+
+
+def clear_cloud_credentials(*, session: Session) -> None:
+    """Forget the Bambu Cloud session and the stored account credentials."""
+    for key in CLOUD_SETTING_KEYS:
+        setting = session.get(AppSetting, key)
+        if setting:
+            session.delete(setting)
+    session.commit()
 
 
 # ────────────────────────────────────────────────────────────

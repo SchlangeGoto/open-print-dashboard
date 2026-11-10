@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "OpenPrintDashboard"
     SECRET_KEY: str
+    # Encrypts the stored Bambu Cloud credentials. When unset, a key is derived
+    # from SECRET_KEY for backwards compatibility. Set this to rotate
+    # SECRET_KEY without losing the stored Bambu login.
+    BAMBU_CREDENTIALS_KEY: str | None = None
     # Short-lived access tokens are refreshed transparently by the web and
     # native clients. Refresh tokens rotate on every use and stay valid while
     # the session is active.

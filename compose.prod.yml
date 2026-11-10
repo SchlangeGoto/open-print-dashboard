@@ -41,6 +41,7 @@ services:
     environment:
       - PROJECT_NAME=${PROJECT_NAME:-OpenPrintDashboard}
       - SECRET_KEY=${SECRET_KEY:?Variable not set}
+      - BAMBU_CREDENTIALS_KEY=${BAMBU_CREDENTIALS_KEY:-}
       - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
       - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD:-}
       - FRONTEND_HOST=${FRONTEND_HOST:-http://localhost:3000}

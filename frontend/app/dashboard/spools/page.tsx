@@ -68,7 +68,14 @@ export default function SpoolsPage() {
   const [loadingSpool, setLoadingSpool] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    filament_id: string;
+    total_weight_g: number;
+    remaining_g: number | "";
+    price_per_kg: string;
+    purchased_at: string;
+    notes: string;
+  }>({
     filament_id: "",
     total_weight_g: 1000,
     remaining_g: 1000,
@@ -76,6 +83,12 @@ export default function SpoolsPage() {
     purchased_at: "",
     notes: "",
   });
+
+  const editingUnknown = Boolean(
+    editingId
+      ? spools.find((s) => s.id === editingId)?.remaining_unknown
+      : false,
+  );
 
   async function load() {
     try {
@@ -117,7 +130,9 @@ export default function SpoolsPage() {
     setForm({
       filament_id: String(s.filament_id ?? ""),
       total_weight_g: s.total_weight_g,
-      remaining_g: s.remaining_g,
+      // Leave the field empty: the stored value is only the nominal capacity,
+      // not a measurement. Omitting it from the PUT keeps the unknown state.
+      remaining_g: s.remaining_unknown ? "" : s.remaining_g,
       price_per_kg: s.price_per_kg ?? "",
       purchased_at: s.purchased_at
         ? format(new Date(s.purchased_at), "yyyy-MM-dd")
@@ -136,16 +151,20 @@ export default function SpoolsPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
+    const payload: Record<string, unknown> = {
       filament_id: form.filament_id || null,
       total_weight_g: Number(form.total_weight_g),
-      remaining_g: Number(form.remaining_g),
       price_per_kg: form.price_per_kg ? Number(form.price_per_kg) : null,
       purchased_at: form.purchased_at
         ? new Date(`${form.purchased_at}T00:00:00`).toISOString()
         : null,
       notes: form.notes || null,
     };
+    // Only send the weight when the user actually entered one. A blank field
+    // on an unknown spool must not confirm the nominal placeholder.
+    if (form.remaining_g !== "") {
+      payload.remaining_g = Number(form.remaining_g);
+    }
     setSaving(true);
     try {
       if (editingId) {
@@ -401,11 +420,16 @@ export default function SpoolsPage() {
                   id="remaining"
                   type="number"
                   value={form.remaining_g}
-                  onChange={(e) => setForm({ ...form, remaining_g: Number(e.target.value) })}
-                  required
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      remaining_g:
+                        e.target.value === "" ? "" : Number(e.target.value),
+                    })
+                  }
+                  required={!editingUnknown}
                 />
-                {editingId &&
-                spools.find((s) => s.id === editingId)?.remaining_unknown ? (
+                {editingUnknown ? (
                   <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                     The printer could not read the weight of this spool. Enter
                     the remaining grams.

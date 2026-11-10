@@ -439,3 +439,53 @@ def test_filament_stats_exclude_unknown_weight(db: Session) -> None:
     assert stats.remaining_g == 700
     assert stats.total_g == 1000
     assert stats.used_percent == 30.0
+
+
+def test_updating_other_fields_keeps_an_unknown_weight(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Unknown Edit",
+        color_hex="#ABCDEF",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        remaining_unknown=True,
+        source="ams",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"notes": "edited"},
+    )
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    unchanged = db.get(Spool, spool.id)
+    assert unchanged is not None
+    assert unchanged.remaining_unknown is True
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"remaining_g": 640},
+    )
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    updated = db.get(Spool, spool.id)
+    assert updated is not None
+    assert updated.remaining_unknown is False
+    assert updated.remaining_g == 640

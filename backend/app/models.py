@@ -288,6 +288,10 @@ class PrintJob(PrintJobBase, table=True):
     # Set when filament was subtracted for this job, so a repeated finish
     # event cannot deduct the same print twice.
     filament_deducted_at: datetime | None = None
+    # Denormalised so filament statistics survive deleting the spool.
+    filament_id: uuid.UUID | None = Field(
+        default=None, foreign_key="filament.id", ondelete="SET NULL", index=True
+    )
     spool_id: uuid.UUID | None = Field(
         default=None, foreign_key="spool.id", ondelete="SET NULL"
     )

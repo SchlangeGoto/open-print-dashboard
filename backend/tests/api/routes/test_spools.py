@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -6,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models import Printer, PrintJob, Spool
+from app.models import Filament, Printer, PrintJob, Spool
 
 
 def _create_printer(db: Session) -> Printer:
@@ -321,3 +322,83 @@ def test_database_rejects_two_active_spools(
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
+
+
+def test_active_spool_ignores_inactive_rows_with_a_printer_id(
+    db: Session,
+) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    stale = Spool(
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=False,
+        printer_id=printer.id,
+        created_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    active = Spool(
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+        printer_id=printer.id,
+    )
+    db.add(stale)
+    db.add(active)
+    db.commit()
+    db.refresh(active)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    found = client._active_spool(db)
+
+    assert found is not None
+    assert found.id == active.id
+
+
+def test_filament_stats_survive_deleting_the_spool(db: Session) -> None:
+    from app import crud
+
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Stats Test",
+        color_hex="#123456",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=700,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    job = PrintJob(
+        title="Attribution test",
+        weight=120,
+        estimated_cost=3.5,
+        filament_id=filament.id,
+        spool_id=spool.id,
+    )
+    db.add(job)
+    db.commit()
+
+    before = crud.get_filament_stats(session=db, filament_id=filament.id)
+    assert before.print_count == 1
+    assert before.total_used_g == 120
+    assert before.total_cost == 3.5
+
+    db.delete(spool)
+    db.commit()
+    db.expire_all()
+
+    after = crud.get_filament_stats(session=db, filament_id=filament.id)
+    assert after.print_count == 1
+    assert after.total_used_g == 120
+    assert after.total_cost == 3.5
+    assert after.spool_count == 0

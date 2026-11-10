@@ -258,17 +258,17 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
     spool_count = session.exec(
         select(func.count()).select_from(Spool).where(Spool.filament_id == filament_id)
     ).one()
+    # Aggregate from the denormalised filament_id, not through spool: a
+    # deleted spool must not erase its print history from the filament.
     print_count = session.exec(
         select(func.count())
         .select_from(PrintJob)
-        .join(Spool, col(PrintJob.spool_id) == col(Spool.id))
-        .where(Spool.filament_id == filament_id)
+        .where(PrintJob.filament_id == filament_id)
     ).one()
     total_used_g = (
         session.exec(
             select(func.sum(PrintJob.weight))
-            .join(Spool, col(PrintJob.spool_id) == col(Spool.id))
-            .where(Spool.filament_id == filament_id)
+            .where(PrintJob.filament_id == filament_id)
             .where(col(PrintJob.weight).is_not(None))
         ).first()
         or 0
@@ -276,8 +276,7 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
     total_cost = (
         session.exec(
             select(func.sum(PrintJob.estimated_cost))
-            .join(Spool, col(PrintJob.spool_id) == col(Spool.id))
-            .where(Spool.filament_id == filament_id)
+            .where(PrintJob.filament_id == filament_id)
             .where(col(PrintJob.estimated_cost).is_not(None))
         ).first()
         or 0

@@ -624,6 +624,7 @@ class BambuClient:
                             .where(
                                 Spool.filament_id == filament.id,
                                 col(Spool.tag_uid).is_(None),
+                                col(Spool.printer_id).is_(None),
                                 Spool.source == "barcode",
                             )
                             .order_by(
@@ -745,6 +746,7 @@ class BambuClient:
 
                 job = PrintJob(
                     spool_id=active_spool.id if active_spool else None,
+                    filament_id=active_spool.filament_id if active_spool else None,
                     title=task.get(
                         "title", self._current_status.get("subtask_name", "Unknown")
                     ),
@@ -840,6 +842,10 @@ class BambuClient:
                     session.add(job)
 
                 job.spool_id = active_spool.id if active_spool else None
+                # Keep the filament set at start even if the spool was deleted
+                # before the print finished.
+                if active_spool:
+                    job.filament_id = active_spool.filament_id
                 job.title = task.get("title")
                 job.cover = task.get("cover")
                 job.weight = task.get("weight")

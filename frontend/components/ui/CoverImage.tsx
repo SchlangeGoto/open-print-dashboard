@@ -27,6 +27,7 @@ export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageP
     }
 
     const coverUrl = cover;
+    const controller = new AbortController();
     let revoked = false;
     let nextUrl: string | null = null;
 
@@ -35,12 +36,20 @@ export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageP
         setFailed(false);
         const response = await authenticatedFetch(
           `${API_BASE}/printers/cover/${encodeURIComponent(coverUrl)}`,
+          { signal: controller.signal },
         );
 
         if (!response.ok) throw new Error("Cover failed to load");
         const blob = await response.blob();
         nextUrl = URL.createObjectURL(blob);
-        if (!revoked) setObjectUrl(nextUrl);
+        if (revoked) {
+          // The component unmounted while the image was downloading; the
+          // cleanup already ran, so release the URL here.
+          URL.revokeObjectURL(nextUrl);
+          nextUrl = null;
+          return;
+        }
+        setObjectUrl(nextUrl);
       } catch {
         if (!revoked) {
           setObjectUrl(null);
@@ -53,6 +62,7 @@ export function CoverImage({ cover, alt, className, fit = "cover" }: CoverImageP
 
     return () => {
       revoked = true;
+      controller.abort();
       if (nextUrl) URL.revokeObjectURL(nextUrl);
     };
   }, [cover]);

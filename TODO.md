@@ -195,7 +195,8 @@ touching the database or the API.
 
 These open issues should be solved as part of the epic, not separately:
 
-- **P-05** (one MQTT session per cloud printer) — the registry rewrite.
+- **P-05** (one MQTT session per cloud printer) — only if eviction is observed
+  (D-08); the registry still has to be keyed by tenant.
 - **P-08** (uid lookup per printer) — cache per tenant.
 - **S-02/S-03** (token storage and revocation) — revisit while adding tenant
   context to the session.
@@ -211,10 +212,10 @@ These open issues should be solved as part of the epic, not separately:
 | --- | --- | --- | --- | --- |
 | S-01 | `backend/app/core/config.py`, `.env.example` | `SECRET_KEY=changethis` is accepted everywhere. A copied `.env` signs JWTs with a public key, so tokens can be forged. | Reject the placeholder and short keys when `FASTAPI_ENV != "development"`; validate `BAMBU_CREDENTIALS_KEY` the same way. | CR #4 · 10 Nov 09:24 UTC · security analysis CWE-1188 |
 | S-02 | `frontend/lib/api.ts` (`storeTokens`) | The 90-day refresh token lives in `localStorage`; XSS or an extension gets a renewable credential that survives reload. | Move it to an httpOnly cookie scoped to the refresh endpoint, or shorten the lifetime and document the risk. | Human #7 · 09 Nov 20:18 UTC · code reading |
-| S-03 | `backend/app/api/deps.py` | Access tokens are stateless: after logout, password change or reuse detection a stolen token works until it expires (60 min). | Add `users.sessions_revoked_at` and reject tokens whose `iat` predates it. | Human #7 · 09 Nov 20:18 UTC |
+| S-03 | `backend/app/api/deps.py` | Access tokens are stateless: after logout, password change or reuse detection a stolen token works until it expires (60 min). Logout is per-device (D-10); the real exposure is password change and reuse detection. | Add `users.sessions_revoked_at` and reject tokens whose `iat` predates it. | Human #7 · 09 Nov 20:18 UTC |
 | S-04 | `frontend/lib/api.ts` (`logout`) | `finally { clearTokens() }` runs after the network round-trip; a login in another tab that lands first is wiped. | Capture the token/epoch at call time and only clear if it is unchanged. | Human #7 + CR #7 · 10 Nov 09:21 UTC |
 | S-05 | `backend/app/crud.py`, `backend/app/api/routes/users.py` | Password update and token revocation are two commits. A failure between them leaves the password changed and every refresh token alive. | Flush the revocation and commit once, in both the self-service and admin paths. | Human #7 · 09 Nov 20:18 UTC |
-| S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 90-day session. | Revoke on the `is_active → False` transition. | Human #7 · 09 Nov 20:18 UTC |
+| S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 90-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
 | S-07 | `backend/app/api/routes/login.py` (`refresh_access_token`) | Expiry is checked before revocation, so a rotated-but-expired token reports "expired" and never triggers reuse detection. | Check `revoked_at` first. | Human #7 · 09 Nov 20:18 UTC |
 | S-08 | `backend/app/api/routes/login.py`, `frontend/lib/api.ts` | Logout failures are swallowed and look identical to success; demo mode and session expiry clear local tokens without calling logout, orphaning rows. | Surface failures, and call logout on demo exit and forced expiry. | Human #7 · 09 Nov 20:18 UTC |
 | S-09 | `frontend/lib/auth.tsx` | Any `getMe()` error — transport, 502, timeout — calls `clearTokens()` and wipes the 90-day session. | Only clear on `ApiError` 401/403; keep the session and show an offline state otherwise. | Human #7 + CR #7 · 10 Nov 09:21 UTC |
@@ -227,7 +228,7 @@ These open issues should be solved as part of the epic, not separately:
 | P-02 | `backend/app/services/bambu_client.py` (`disconnect`, `MqttThread.stop`) | `stop()` only sets an event; `join(timeout=5)` runs while the thread is parked in `loop_forever()`, so every disconnect burns 5 s. `loop_stop()` happens after the join. | Call `loop_stop()`/`client.disconnect()` before joining, or have `MqttThread.stop()` do it. | Human #5 · 09 Nov 20:18 UTC |
 | P-03 | `backend/app/api/routes/spools.py` | `active` and `printer_id` are two sources of truth: a spool can be active with no printer, and deleting a printer leaves `active=true, printer_id=NULL` forever. | Make `printer_id` the single source and derive `active`; unload spools inside the printer-delete transaction. | Human #5 · 09 Nov 20:18 UTC |
 | P-04 | `backend/app/alembic/versions/a7c4e2f9d1b6_*` | Nothing enforces one loaded spool per printer; two tabs can both commit `active=true` for the same printer. | Partial unique index on `spool(printer_id) WHERE active`; return 409 for the loser. | Human #5 · 09 Nov 20:18 UTC |
-| P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. Bambu and Handy sessions may share a per-account limit, so printers can evict each other; the REST fallback was removed. | One account-level client subscribed to `device/+/report`, dispatch by serial. Verify the real session limit first. | Human #9 · 09 Nov 20:18 UTC |
+| P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
 | P-06 | `backend/app/api/routes/printers.py` (`_serialize_printers`) | `online` includes `bool(status.get("gcode_state"))`, and `get_status()` never clears `_current_status`, so a dead printer stays "Online" forever. | Drop the `gcode_state` term or gate it on `connected`; clear stale status after the 180 s window. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
 | P-07 | `backend/app/services/bambu_client.py` (`_on_disconnect`) | The callback uses the paho 1.x signature but the client uses `CallbackAPIVersion.VERSION2`: `rc` is a `DisconnectFlags`, so `rc in (4, 5)` is never true and every disconnect is logged as unexpected. | Use `(client, userdata, disconnect_flags, reason_code, properties)` and compare `reason_code.value`. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
 | P-08 | `backend/app/services/printer_service.py` (`_connect`) | `get_user_id()` is a blocking REST call per cloud printer at startup. The uid is account-wide, and one failure skips that printer with no retry. | Cache the uid on the cloud client, resolve once, move connection work to a background task. | Human #9 + CR #9 · 10 Nov 09:21 UTC |
@@ -241,10 +242,10 @@ These open issues should be solved as part of the epic, not separately:
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | B-01 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | The catalog match keys on nullable `bambu_info_idx` + colour; six support/PVA products share `NULL` + `#FFFFFF` and collapse into one filament. The colour+material fallback ignores brand, so a Bambu barcode can bind to another brand's black PLA. | Key on the barcode or a `(series, color_name, spool_weight_g)` product, and include brand/material/colour in the fallback. | Human #6 + CR #6/#8 · 10 Nov 09:21 UTC |
-| B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. The mobile lookup-first flow reduces it but does not make the server idempotent. | Accept a client request id and return the existing spool, or require `create_new=true` explicitly; add a uniqueness rule for new boxes. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
-| B-03 | `backend/app/api/routes/spools.py` (`_create_barcode_spool`) | `_adopt_unlinked_ams_spool` runs on an explicit `create=true` scan, so scanning a **new box** can attach its barcode to an existing untagged AMS spool instead of adding a row. The UI says "Spool added" and inventory does not increase. | Only adopt on the AMS sync path; an explicit create always inserts a new spool. | CR #8 · 10 Nov 09:21 UTC |
+| B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. By design, every scan adds a spool (D-06); the risk is an accidental retry, not a missing server-side dedupe. | Keep the mobile lookup-first flow as the guard and document “one scan = one spool”. Do not add server-side dedupe. | Human #6 + CR #6 · 10 Nov 09:21 UTC · resolved by D-06 |
+| B-03 | `backend/app/api/routes/spools.py` (`_create_barcode_spool`) | `_adopt_unlinked_ams_spool` runs on an explicit `create=true` scan, so scanning a **new box** can attach its barcode to an existing untagged AMS spool instead of adding a row. The UI says "Spool added" and inventory does not increase. | Explicit `create=true` always inserts; remove the adoption call from `_create_barcode_spool` and keep FIFO adoption on the AMS path only (D-06). | CR #8 · 10 Nov 09:21 UTC |
 | B-04 | `backend/app/services/bambu_client.py` (`_tray_remaining`) | `remain <= 0` returns full weight, so an exhausted spool (0 %) is reset to 1000 g on every AMS sync. | `remain < 0` means unknown; `0` means empty. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
-| B-05 | `backend/app/api/routes/spools.py`, `backend/scripts/import_bambu_gtins.py` | No GTIN check-digit validation, and a confirmed mapping cannot be deleted or re-mapped, so one typo is permanent. | Validate EAN-13 in `BarcodeScanRequest`, warn/skip in the importer, allow delete/re-map. | Human #6 · 09 Nov 20:18 UTC |
+| B-05 | `backend/app/api/routes/spools.py`, `backend/scripts/import_bambu_gtins.py` | No GTIN check-digit validation, and a confirmed mapping cannot be deleted or re-mapped, so one typo is permanent. | Validate EAN-13 going forward (no production backfill, D-07), warn/skip in the importer, allow delete/re-map. | Human #6 · 09 Nov 20:18 UTC |
 | B-06 | `backend/app/services/bambu_catalog.py` | A malformed catalog returns `{}` with no log; a valid-but-non-object payload makes `payload.get` raise on every scan. | Log once, guard `isinstance(payload, dict)` and `barcodes` being a dict. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
 | B-07 | `backend/app/services/bambu_client.py` (`_maybe_sync_ams`) | The dedupe signature is the whole `ams` blob including temp/humidity, so it changes on nearly every `push_status`: a thread and a transaction every ~2 s per printer. | Build the signature from `(tag_uid, remain, tray_now)` per tray. | Human #6 · 09 Nov 20:18 UTC |
 | B-08 | `backend/app/alembic/versions/e2b7c9f4a1d3_*` | `ix_spool_tag_uid` is not unique; overlapping syncs can create two rows for one RFID tag. | Make it unique (barcodes may repeat, tag UIDs may not). | Human #6 · 09 Nov 20:18 UTC |
@@ -252,6 +253,7 @@ These open issues should be solved as part of the epic, not separately:
 | B-10 | `backend/app/api/routes/spools.py` (`update_spool`) | `PUT /spools/{id}` does not check that `filament_id` exists; an unknown id reaches the FK and returns 500 instead of 404. | Check like `create_spool`, return 404. | Human #4 · 09 Nov 20:18 UTC |
 | B-11 | `frontend/public/icons/icon-maskable-512.png` | Byte-identical to `icon-512.png`; the artwork sits outside the 80 % safe circle, so Android adaptive icons crop it. | Ship a real maskable variant. | Human #6 · 09 Nov 20:18 UTC |
 | B-12 | `backend/tests/api/routes/test_spools.py` | `test_only_one_active_spool_per_printer` uses one printer, so it would pass with the old global-unload behaviour. | Add a two-printer test: both stay active, then activating on P1 unloads only P1. | Human #5 · 09 Nov 20:18 UTC |
+| B-13 | `backend/app/models.py`, `backend/app/api/routes/spools.py` | The NFC/UID experiment is unused: `Spool.nfc_uid`, `POST /spools/scan`, `POST /spools/scan/assign`, `SpoolScanRequest`, `SpoolAssignRequest`, `SpoolScanResult`. The AMS RFID (`tag_uid`) is the real one and stays. | Remove the endpoints and request/result models; keep the column for one release like the LAN columns, then drop it in a migration. | Product · 2026-11-10 · D-05 |
 
 ### 2.4 Frontend
 
@@ -261,11 +263,11 @@ These open issues should be solved as part of the epic, not separately:
 | F-02 | `frontend/components/ui/CoverImage.tsx` | The object URL leaks when the component unmounts before the fetch resolves: cleanup sees `nextUrl === null`, then the fetch creates a URL that is never revoked. | Use `AbortController` and revoke in the post-`await` branch. | Human #4 · 09 Nov 20:18 UTC |
 | F-03 | `frontend/app/dashboard/settings/page.tsx` | The printer form is populated only from `GET /settings/printer`, whose error is caught to `null`. A failed load renders blank fields with Save enabled, and saving overwrites a working config. | Gate Save on a successful load and show the error. | Human #4 · 09 Nov 20:18 UTC |
 | F-04 | `frontend/lib/api.ts` (`loginUser`) | Stores `data.access_token as string` without checking. A 200 without the field stores `"undefined"` and the app looks signed in while every request 401s. | Throw `ApiError` when the field is missing. | Human #4 · 09 Nov 20:18 UTC |
-| F-05 | `frontend/app/dashboard/analytics/page.tsx` (`getPreviousBounds`) | Trend badges compare a truncated current window with a full previous one: −8 % to −14 % on 7D, −6 % on 12M for a flat rate. | Shift both bounds by the same window length. | Human #10 + CR #10 · 10 Nov 09:21 UTC |
+| F-05 | `frontend/app/dashboard/analytics/page.tsx` (`getPreviousBounds`) | Trend badges compare a truncated current window with a full previous one: −8 % to −14 % on 7D, −6 % on 12M for a flat rate. | Shift both bounds by the same window length. The 12M range is the trailing 365 days (D-01). | Human #10 + CR #10 · 10 Nov 09:21 UTC |
 | F-06 | `frontend/app/dashboard/analytics/page.tsx` | `ceil((end - start) / 86400000)` adds a phantom day at the DST fall-back, so previous prints/day is divided by 8 instead of 7. | Use `differenceInCalendarDays(end, start) + 1`. | Human #10 · 09 Nov 20:18 UTC |
 | F-07 | `frontend/app/dashboard/prints/page.tsx` | Still calls `getPrintJobs()`, which returns only the first 500 rows; the header and the filament filter silently miss older jobs. | Use `getAllPrintJobs()` or add real server-side paging. | Human #10 · 09 Nov 20:18 UTC |
-| F-08 | `frontend/app/dashboard/analytics/page.tsx` | `<Cell key={entry.name}>` while data is keyed by filament id; two filaments named "Black", or a real "Other" plus the aggregate bucket, collide. | Carry the id in `UsageDatum` and key by id. | Human #10 + CR #10 · 10 Nov 09:21 UTC |
-| F-09 | `frontend/app/dashboard/analytics/page.tsx` | "Filament Used" sums jobs with `weight > 0`, but the breakdown skips jobs with `spool_id` null, so the two numbers disagree. | Compute both from the same set or show "N jobs without a recorded spool". | Human #10 · 09 Nov 20:18 UTC |
+| F-08 | `frontend/app/dashboard/analytics/page.tsx` | `<Cell key={entry.name}>` while data is keyed by filament id; a Sunlu green and a Bambu green share “Green”, and a real “Other” plus the aggregate bucket collide. | Carry the id in `UsageDatum`, key by id, and label `brand · color_name` (D-02). | Human #10 + CR #10 · 10 Nov 09:21 UTC |
+| F-09 | `frontend/app/dashboard/analytics/page.tsx` | "Filament Used" sums jobs with `weight > 0`, but the breakdown skips jobs with `spool_id` null, so the two numbers disagree. | Count spool-less jobs too (D-04) and compute both numbers from the same set. | Human #10 · 09 Nov 20:18 UTC |
 | F-10 | `frontend/app/dashboard/spools/page.tsx` | Purchased date drifts back one day per edit outside UTC: `new Date("2024-05-03").toISOString()` stores the previous day, and `beginEdit` splits the ISO string. | Format the local date and post `yyyy-MM-dd`. | Human #10 · 09 Nov 20:18 UTC |
 | F-11 | `frontend/app/dashboard/analytics/page.tsx` | `now` is frozen at mount and jobs are fetched once, so an open tab keeps saying "Last 7 days" and misses new prints. | Refresh `now` and the list on an interval or on window focus. | Human #10 · 09 Nov 20:18 UTC |
 | F-12 | `frontend/app/dashboard/printers/page.tsx` | The details modal receives the object captured on click; the list polls every 10 s, so temperatures and progress freeze while it is open. | Look the printer up by serial from the current list when rendering. | CR #5 · 10 Nov 09:21 UTC |
@@ -296,27 +298,27 @@ These open issues should be solved as part of the epic, not separately:
 | --- | --- | --- | --- | --- |
 | I-01 | `compose.yml` (`db`) | Postgres is published on `0.0.0.0:5432` with a default password. | Bind `127.0.0.1:5432` or drop the mapping; the backend reaches it over the Compose network. | Human #4 + CR #4 · 10 Nov 09:24 UTC |
 | I-02 | `.github/workflows/test-mobile.yml` | `typedRoutes` is enabled but `.expo/` and `expo-env.d.ts` are gitignored, so `tsc --noEmit` on a fresh runner does not validate route paths. | Generate the Expo types before the typecheck step (or reorder). | CR #9 · 10 Nov 09:21 UTC |
+| I-03 | `backend/app/api/routes/prints.py`, `docs/API.md` | `PrintJob.status == 4` means “running” and is used in `/prints/active` and the print-job sync, but it is not documented. | Document the code and its Bambu source in `docs/API.md`. | Product · 2026-11-10 · D-03 |
+| I-04 | `backend/scripts/start.sh`, `docs/DEPLOYMENT.md` | The single-worker requirement is only a shell comment; adding `--workers` silently duplicates MQTT clients. | Document it in `docs/DEPLOYMENT.md` and fail fast if more than one worker is requested. | Product · 2026-11-10 · D-12 |
 
 ---
 
-## 3. Decisions needed
+## 3. Decisions (answered 2026-11-10)
 
-These came out of the reviews as open questions; they block or shape fixes above.
-
-| ID | Question | Affects |
+| ID | Decision | Affects |
 | --- | --- | --- |
-| D-01 | Is “Last 12 months” twelve calendar months including the partial current one, or a trailing 365 days? | F-05 |
-| D-02 | Are duplicate filament `color_name` values expected in real data? If yes, Top Filaments should label by brand + id. | F-08 |
-| D-03 | Is `PrintJob.status == 4` reliably “running” for both local and cloud jobs? | `/prints/active`, analytics |
-| D-04 | Should jobs with no `spool_id` count toward “Filament Used”? | F-09 |
-| D-05 | Can one physical spool carry both a barcode and a tag UID? | B-01, B-02, B-03 |
-| D-06 | Is a scanned barcode one spool per box or one spool per call? | B-02, M-02 |
-| D-07 | Is there production data with 14-digit or UPC-A `FilamentBarcode.code` values? | M-03 |
-| D-08 | Does Bambu cap concurrent MQTT sessions per account, and do Studio/Handy count against it? | P-05, T-06 |
-| D-09 | Is there a documented Bambu token refresh endpoint? | Bambu session lifetime |
-| D-10 | Should “Log out” end this device or every device? | S-03, S-08 |
-| D-11 | Should deactivating a user be a compromise response (revoke) or a soft pause (keep sessions)? | S-06 |
-| D-12 | Will the backend ever run more than one worker? The client registry is in-process. | P-01, T-06 |
+| D-01 | “Last 12 months” means the trailing **365 days**, not calendar months. | F-05 |
+| D-02 | `color_name` is the display name (“Black”, “Green Mate”). Duplicates across brands are expected — a Sunlu green and a Bambu green are different filaments. Label by brand + color_name, key by id. | F-08 |
+| D-03 | `PrintJob.status == 4` is the “running” code and is used in `/prints/active` and the print-job sync. Document it; no code change. | I-03 |
+| D-04 | Jobs without a `spool_id` **do** count toward “Filament Used”. | F-09 |
+| D-05 | Only two identifiers matter: the packaging barcode and the AMS RFID (`tag_uid`). `nfc_uid` and the NFC/UID scan endpoints were experiments and are removed. | B-13 |
+| D-06 | Every barcode scan adds a spool. `create=true` must always insert; the mobile lookup-first flow is the duplicate guard. No server-side dedupe. | B-02, B-03, M-02 |
+| D-07 | No production data with 14-digit or UPC-A mappings. No backfill; validate new codes. | B-05, M-03 |
+| D-08 | No known Bambu per-account session cap. Keep one client per printer for now; revisit only if printers evict each other. | P-05 |
+| D-09 | No documented Bambu token refresh endpoint. Keep the explicit sign-out/sign-in recovery. | Bambu session |
+| D-10 | “Log out” ends **this device** only. Per-token revocation is correct; a stolen access token stays valid for up to 60 minutes. | S-03, S-08 |
+| D-11 | Deactivation semantics are deferred to the multi-tenancy work. | S-06, T-02 |
+| D-12 | The backend runs **one worker** on purpose (documented in `scripts/start.sh`). Multi-worker is out of scope; the in-process registry is safe within one process, but its threads still need a lock. | P-01, T-06, I-04 |
 
 ---
 

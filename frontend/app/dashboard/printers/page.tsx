@@ -354,6 +354,7 @@ export default function PrintersPage() {
                         {activePrint?.title ?? status?.subtask_name ?? "Unknown"}
                       </p>
                       <Progress
+                        aria-label="Print progress"
                         value={pct}
                         className="mt-2 [&_[data-slot=progress-track]]:h-1.5"
                       />
@@ -400,6 +401,7 @@ export default function PrintersPage() {
                             </p>
                           ) : (
                             <Progress
+                              aria-label="Loaded spool remaining"
                               value={loadedPct}
                               className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                               style={

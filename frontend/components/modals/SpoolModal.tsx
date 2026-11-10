@@ -109,6 +109,7 @@ export default function SpoolModal({
                 <span>{pct}%</span>
               </div>
               <Progress
+                aria-label="Spool remaining"
                 value={pct}
                 className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                 style={

@@ -317,6 +317,7 @@ export default function DashboardPage() {
                         <span className="tabular-nums">{pct}%</span>
                       </div>
                       <Progress
+                        aria-label="Print progress"
                         value={pct}
                         className="[&_[data-slot=progress-track]]:h-2"
                       />
@@ -458,6 +459,7 @@ export default function DashboardPage() {
                           {deviceStatus?.subtask_name ?? printerPrint?.title ?? "Unknown"}
                         </p>
                         <Progress
+                          aria-label="Print progress"
                           value={
                             deviceStatus?.mc_percent ??
                             printerPrint?.mc_percent ??
@@ -513,6 +515,7 @@ export default function DashboardPage() {
                               </p>
                             ) : (
                               <Progress
+                                aria-label="Loaded spool remaining"
                                 value={loadedPct}
                                 className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                                 style={

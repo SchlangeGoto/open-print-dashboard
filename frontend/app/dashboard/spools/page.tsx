@@ -364,6 +364,7 @@ export default function SpoolsPage() {
                           <span className="tabular-nums">{pct}%</span>
                         </div>
                         <Progress
+                          aria-label="Spool remaining"
                           value={pct}
                           className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                           style={

@@ -69,16 +69,35 @@ def _find_or_create_catalog_filament(
         # Support W/G/ABS all share brand/material/colour, so series is what
         # keeps them apart.
         series = (data.get("series") or "").strip()
-        query = select(Filament).where(
+        base = select(Filament).where(
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
             func.lower(Filament.material) == data["material"].lower(),
             func.lower(Filament.brand) == data["brand"].lower(),
         )
         if series:
-            query = query.where(func.lower(Filament.series) == series.lower())
+            filament = session.exec(
+                base.where(func.lower(Filament.series) == series.lower()).order_by(
+                    col(Filament.created_at).asc()
+                )
+            ).first()
+            if not filament:
+                # Existing rows predate series. Adopt one and backfill it
+                # instead of creating a duplicate product.
+                filament = session.exec(
+                    base.where(col(Filament.series).is_(None)).order_by(
+                        col(Filament.created_at).asc()
+                    )
+                ).first()
+                if filament:
+                    filament.series = series
+                    session.add(filament)
+                    session.flush()
         else:
-            query = query.where(col(Filament.series).is_(None))
-        filament = session.exec(query.order_by(col(Filament.created_at).asc())).first()
+            filament = session.exec(
+                base.where(col(Filament.series).is_(None)).order_by(
+                    col(Filament.created_at).asc()
+                )
+            ).first()
     if filament:
         return filament
 
@@ -196,6 +215,11 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
             select(Spool).where(Spool.request_id == payload.request_id)
         ).first()
         if replay:
+            if replay.barcode and replay.barcode != code:
+                raise HTTPException(
+                    status_code=409,
+                    detail="request_id already used for a different barcode",
+                )
             filament = session.get(Filament, replay.filament_id)
             return BarcodeScanResult(
                 found=filament is not None,
@@ -279,6 +303,11 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
             select(Spool).where(Spool.request_id == payload.request_id)
         ).first()
         if replay:
+            if replay.barcode and replay.barcode != code:
+                raise HTTPException(
+                    status_code=409,
+                    detail="request_id already used for a different barcode",
+                )
             filament = session.get(Filament, replay.filament_id)
             return BarcodeScanResult(
                 found=filament is not None,
@@ -391,7 +420,9 @@ def update_spool(
             status_code=422,
             detail="Load the spool into a printer before activating it",
         )
-    if spool.remaining_g > spool.total_weight_g:
+    if (
+        "remaining_g" in update_dict or "total_weight_g" in update_dict
+    ) and spool.remaining_g > spool.total_weight_g:
         raise HTTPException(
             status_code=422,
             detail="remaining_g cannot exceed total_weight_g",

@@ -544,16 +544,34 @@ class BambuClient:
             # catalog. Fall back to brand + material + colour (+ series when
             # the tray names one) so a tray does not attach to another brand's
             # filament or collapse the white Support SKUs.
-            query = select(Filament).where(
+            base = select(Filament).where(
                 func.lower(Filament.color_hex) == color.lower(),
                 func.lower(Filament.material) == material.lower(),
                 func.lower(Filament.brand) == brand.lower(),
             )
             if series:
-                query = query.where(func.lower(Filament.series) == series.lower())
-            filament = session.exec(
-                query.order_by(col(Filament.created_at).asc())
-            ).first()
+                filament = session.exec(
+                    base.where(func.lower(Filament.series) == series.lower()).order_by(
+                        col(Filament.created_at).asc()
+                    )
+                ).first()
+                if not filament:
+                    # Adopt a pre-series row and backfill it rather than
+                    # splitting the same product into a duplicate.
+                    filament = session.exec(
+                        base.where(col(Filament.series).is_(None)).order_by(
+                            col(Filament.created_at).asc()
+                        )
+                    ).first()
+                    if filament:
+                        filament.series = series
+                        session.add(filament)
+            else:
+                filament = session.exec(
+                    base.where(col(Filament.series).is_(None)).order_by(
+                        col(Filament.created_at).asc()
+                    )
+                ).first()
         if filament:
             return filament
 
@@ -589,7 +607,7 @@ class BambuClient:
         self,
         session: Session,
         filament_id: uuid.UUID,
-        remaining: float | None,
+        remain_pct: float | None,
         printer_id: uuid.UUID,
     ) -> Spool | None:
         """Return an untagged spool whose weight matches the AMS estimate.
@@ -598,7 +616,7 @@ class BambuClient:
         unknown never adopts anything, and a partial tray never adopts a full
         spool, because the weight difference is too large.
         """
-        if remaining is None:
+        if remain_pct is None:
             return None
         candidates = session.exec(
             select(Spool)
@@ -618,9 +636,11 @@ class BambuClient:
         best: Spool | None = None
         best_delta: float | None = None
         for candidate in candidates:
-            tolerance = max(50.0, candidate.total_weight_g * 0.15)
-            delta = abs(candidate.remaining_g - remaining)
-            if delta <= tolerance and (best_delta is None or delta < best_delta):
+            if candidate.total_weight_g <= 0:
+                continue
+            candidate_pct = candidate.remaining_g / candidate.total_weight_g * 100
+            delta = abs(candidate_pct - remain_pct)
+            if delta <= 15.0 and (best_delta is None or delta < best_delta):
                 best = candidate
                 best_delta = delta
         return best
@@ -679,6 +699,7 @@ class BambuClient:
                     if not tag:
                         continue
                     total = self._tray_weight(tray)
+                    remain_pct = self._tray_remain_percent(tray)
                     remaining = self._tray_remaining(tray, total)
                     spool = session.exec(
                         select(Spool).where(Spool.tag_uid == tag)
@@ -691,7 +712,7 @@ class BambuClient:
                         # is close to the AMS estimate; a partial tray must
                         # never consume a full library spool.
                         spool = self._match_untagged_spool(
-                            session, filament.id, remaining, printer.id
+                            session, filament.id, remain_pct, printer.id
                         )
                         if spool:
                             spool.tag_uid = tag
@@ -980,17 +1001,23 @@ class BambuClient:
         printer_id: uuid.UUID | None,
         slot: dict,
         used_spool_ids: set[uuid.UUID],
-        slot_filament: Filament | None,
+        filament_id: str | None,
+        filament_type: str | None,
     ) -> Spool | None:
         """Resolve an AMS mapping entry to the spool loaded in that tray."""
-        ams_id = slot.get("amsId", slot.get("ams"))
-        slot_id = slot.get("slotId", slot.get("slot"))
+        ams_id = slot.get("amsId")
+        if ams_id is None:
+            ams_id = slot.get("ams")
+        slot_id = slot.get("slotId")
+        if slot_id is None:
+            slot_id = slot.get("slot")
+
         if ams_id is not None and slot_id is not None:
             for unit in self._current_status.get("ams", []) or []:
                 try:
                     unit_id = int(unit.get("id"))
-                    tray_id_wanted = int(slot_id)
                     ams_id_wanted = int(ams_id)
+                    slot_id_wanted = int(slot_id)
                 except (TypeError, ValueError):
                     continue
                 if unit_id != ams_id_wanted:
@@ -1000,16 +1027,19 @@ class BambuClient:
                         tray_id = int(tray.get("id"))
                     except (TypeError, ValueError):
                         continue
-                    if tray_id != tray_id_wanted:
+                    if tray_id != slot_id_wanted:
                         continue
                     tag = self._real_tag(tray.get("tag_uid"))
-                    if not tag:
-                        continue
-                    spool = session.exec(
-                        select(Spool).where(Spool.tag_uid == tag)
-                    ).first()
-                    if spool and spool.id not in used_spool_ids:
-                        return spool
+                    if tag:
+                        spool = session.exec(
+                            select(Spool).where(Spool.tag_uid == tag)
+                        ).first()
+                        if spool and spool.id not in used_spool_ids:
+                            return spool
+                        # A tagged tray names one physical roll. If it is
+                        # missing or already claimed, do not charge another.
+                        return None
+                    break
 
         if printer_id:
             query = (
@@ -1022,15 +1052,21 @@ class BambuClient:
                     col(Spool.created_at).asc(),
                 )
             )
-            if slot_filament is not None:
-                query = query.where(Spool.filament_id == slot_filament.id)
-            elif slot.get("filamentId") or slot.get("filamentType"):
-                # The slot names a filament we do not know; do not charge an
-                # unrelated roll.
-                return None
+            if used_spool_ids:
+                query = query.where(col(Spool.id).not_in(used_spool_ids))
+            if filament_id:
+                # Match every colour that shares this preset, not one filament.
+                query = query.where(Filament.bambu_info_idx == filament_id)
+            elif filament_type:
+                query = query.where(
+                    func.lower(Filament.material) == filament_type.lower()
+                )
             spool = session.exec(query).first()
-            if spool and spool.id not in used_spool_ids:
+            if spool:
                 return spool
+            if filament_id or filament_type:
+                # The slot names a filament; do not charge an unrelated roll.
+                return None
 
         active_spool = self._active_spool(session)
         if (
@@ -1038,11 +1074,21 @@ class BambuClient:
             and active_spool.id not in used_spool_ids
             and not active_spool.remaining_unknown
         ):
-            if slot_filament is None:
-                if not (slot.get("filamentId") or slot.get("filamentType")):
-                    return active_spool
-                return None
-            if active_spool.filament_id == slot_filament.id:
+            if not (filament_id or filament_type):
+                return active_spool
+            filament = (
+                session.get(Filament, active_spool.filament_id)
+                if active_spool.filament_id
+                else None
+            )
+            if filament and (
+                (filament_id and filament.bambu_info_idx == filament_id)
+                or (
+                    not filament_id
+                    and filament_type
+                    and filament.material.lower() == filament_type.lower()
+                )
+            ):
                 return active_spool
         return None
 
@@ -1081,26 +1127,14 @@ class BambuClient:
 
             filament_id = slot.get("filamentId")  # e.g. "GFL99"
             filament_type = slot.get("filamentType")  # e.g. "PLA"
-            slot_filament = None
-            if filament_id:
-                slot_filament = session.exec(
-                    select(Filament)
-                    .where(Filament.bambu_info_idx == filament_id)
-                    .order_by(col(Filament.created_at).asc())
-                ).first()
-            if not slot_filament and filament_type:
-                slot_filament = session.exec(
-                    select(Filament)
-                    .where(func.lower(Filament.material) == filament_type.lower())
-                    .order_by(col(Filament.created_at).asc())
-                ).first()
 
             spool = self._spool_for_ams_slot(
                 session,
                 printer_id,
                 slot,
                 used_spool_ids,
-                slot_filament,
+                filament_id,
+                filament_type,
             )
             if not spool:
                 logger.warning(

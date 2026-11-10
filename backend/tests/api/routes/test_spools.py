@@ -811,3 +811,141 @@ def test_one_spool_is_not_charged_for_two_slots(db: Session) -> None:
     stored = db.get(Spool, spool.id)
     assert stored is not None
     assert stored.remaining_g == 900
+
+
+def test_ams_second_slot_uses_the_next_untagged_spool(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Two untagged",
+        color_hex="#556677",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    first = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    second = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    task = {
+        "amsDetailMapping": [
+            {"filamentId": "GFL99", "weight": 100},
+            {"filamentId": "GFL99", "weight": 50},
+        ]
+    }
+    client._deduct_filament_from_spools(db, task)
+    db.commit()
+
+    db.expire_all()
+    stored = sorted(
+        [
+            db.get(Spool, first.id).remaining_g,
+            db.get(Spool, second.id).remaining_g,
+        ]
+    )
+    assert stored == [900, 950]
+
+
+def test_a_claimed_tag_does_not_fall_back_to_another_spool(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Tagged only",
+        color_hex="#667788",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    tagged = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=950,
+        tag_uid="TAG-ONE",
+    )
+    active = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=950,
+        tag_uid="TAG-TWO",
+        active=True,
+    )
+    db.add(tagged)
+    db.add(active)
+    db.commit()
+    db.refresh(tagged)
+    db.refresh(active)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": [{"id": 0, "tray": [{"id": 0, "tag_uid": "TAG-ONE"}]}]
+    }
+    task = {
+        "amsDetailMapping": [
+            {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+            {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        ]
+    }
+    client._deduct_filament_from_spools(db, task)
+    db.commit()
+
+    db.expire_all()
+    assert db.get(Spool, tagged.id).remaining_g == 850
+    assert db.get(Spool, active.id).remaining_g == 950
+
+
+def test_legacy_overfull_spool_can_still_be_repaired(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    spool = Spool(
+        total_weight_g=1000,
+        remaining_g=5000,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    # A notes-only patch must not re-check the legacy weight invariant.
+    notes = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"notes": "legacy row"},
+    )
+    assert notes.status_code == 200, notes.text
+
+    weights = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"remaining_g": 4000},
+    )
+    assert weights.status_code == 422

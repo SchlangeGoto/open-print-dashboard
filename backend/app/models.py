@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import EmailStr, model_validator
+from pydantic import EmailStr, field_validator, model_validator
 from sqlalchemy import Index, UniqueConstraint, text
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -287,6 +287,12 @@ class SpoolActivateRequest(SQLModel):
 class BarcodeScanRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
     request_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("request_id")
+    @classmethod
+    def _normalize_request_id(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
+
     # Optional printed SKU, used to prefill the create-filament form.
     sku: str | None = Field(default=None, max_length=100)
     # Existing clients omit this and keep the old create-on-scan behavior.
@@ -306,6 +312,12 @@ class BarcodeScanRequest(SQLModel):
 class BarcodeConfirmRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
     request_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("request_id")
+    @classmethod
+    def _normalize_request_id(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
+
     filament: FilamentCreate
     total_weight_g: float | None = Field(default=None, gt=0)
     price_per_kg: float | None = Field(default=None, ge=0)

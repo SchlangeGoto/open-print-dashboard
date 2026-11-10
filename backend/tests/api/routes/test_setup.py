@@ -35,3 +35,21 @@ def test_progress_returns_the_step_state(
         "printer_configured",
         "setup_complete",
     }
+
+
+def test_skip_setup_marks_setup_complete(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/setup/skip", headers=superuser_token_headers
+    )
+    assert r.status_code == 200, r.text
+
+    status = client.get(f"{settings.API_V1_STR}/setup/status")
+    assert status.status_code == 200
+    assert status.json()["setup_complete"] is True
+
+
+def test_skip_setup_requires_auth(client: TestClient) -> None:
+    r = client.post(f"{settings.API_V1_STR}/setup/skip")
+    assert r.status_code == 401

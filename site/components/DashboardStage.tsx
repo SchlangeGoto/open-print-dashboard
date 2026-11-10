@@ -1,6 +1,6 @@
+/* eslint-disable @next/next/no-img-element -- static export serves pre-generated srcset variants */
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   motion,
@@ -38,6 +38,14 @@ const baseSpring = {
   mass: 0.2,
 };
 
+function variant(src: string, width: 1600 | 2400): string {
+  return src.replace(/\.jpg$/, `-${width}.jpg`);
+}
+
+function stageSrcSet(src: string): string {
+  return `${variant(src, 1600)} 1600w, ${variant(src, 2400)} 2400w, ${src} 3200w`;
+}
+
 export function DashboardStage({
   src,
   alt,
@@ -49,6 +57,7 @@ export function DashboardStage({
   const stageRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const [canTilt, setCanTilt] = useState(false);
+  const [showBackLayers, setShowBackLayers] = useState(false);
 
   const pointerX = useMotionValue(0);
   const pointerY = useMotionValue(0);
@@ -80,15 +89,24 @@ export function DashboardStage({
   const transform = useMotionTemplate`rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(${y}px) scale(${scale})`;
 
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 769px) and (pointer: fine)");
+    const tiltQuery = window.matchMedia("(min-width: 769px) and (pointer: fine)");
+    const layerQuery = window.matchMedia("(min-width: 769px)");
 
-    function update() {
-      setCanTilt(query.matches);
+    function updateTilt() {
+      setCanTilt(tiltQuery.matches);
+    }
+    function updateLayers() {
+      setShowBackLayers(layerQuery.matches);
     }
 
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    updateTilt();
+    updateLayers();
+    tiltQuery.addEventListener("change", updateTilt);
+    layerQuery.addEventListener("change", updateLayers);
+    return () => {
+      tiltQuery.removeEventListener("change", updateTilt);
+      layerQuery.removeEventListener("change", updateLayers);
+    };
   }, []);
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -117,33 +135,45 @@ export function DashboardStage({
           className="stage-inner"
           style={reduce || !canTilt ? undefined : { transform }}
         >
-          {backLayers.map((layer) => (
-            <div
-              key={layer.src}
-              className={`stage-layer ${layer.className}`}
-              aria-hidden="true"
-            >
-              <Image
-                src={layer.src}
-                alt=""
+          {showBackLayers
+            ? backLayers.map((layer) => (
+                <div
+                  key={layer.src}
+                  className={`stage-layer ${layer.className}`}
+                  aria-hidden="true"
+                >
+                  <img
+                    src={layer.src}
+                    srcSet={stageSrcSet(layer.src)}
+                    alt=""
+                    width={width}
+                    height={height}
+                    loading="lazy"
+                    sizes="(max-width: 768px) 0px, 800px"
+                    className="h-auto w-full"
+                  />
+                </div>
+              ))
+            : null}
+          <div className="stage-front frame">
+            <picture>
+              <source
+                media="(max-width: 768px)"
+                srcSet={`${variant(src, 1600)} 1600w`}
+                sizes="100vw"
+              />
+              <img
+                src={src}
+                srcSet={stageSrcSet(src)}
+                alt={alt}
                 width={width}
                 height={height}
                 loading="eager"
-                sizes="(max-width: 768px) 0px, 800px"
+                fetchPriority="high"
                 className="h-auto w-full"
+                sizes="(max-width: 768px) 100vw, 1200px"
               />
-            </div>
-          ))}
-          <div className="stage-front frame">
-            <Image
-              src={src}
-              alt={alt}
-              width={width}
-              height={height}
-              priority
-              className="h-auto w-full"
-              sizes="(max-width: 768px) 100vw, 1200px"
-            />
+            </picture>
           </div>
         </motion.div>
       </div>

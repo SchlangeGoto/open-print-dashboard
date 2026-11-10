@@ -321,3 +321,8 @@ re-opened.
 | Mobile logout waits for the in-flight refresh | `8f45e05` | Human #8 |
 | Lossy migration downgrades documented | `9edf618` | Human #5/#9 |
 | One scan = one spool (by design) | D-06 | Human #6 + CR #6 |
+| Production stack in the install instructions; dev key bypass removed | `cd1e34b` | Human #20 |
+| Setup guide lives at docs/SETUP.md | `21b2a2f` | Human #20 |
+| AMS switch flush; automatic Bambu re-login with visible state | `879878c` | Human #20 |
+| Finish updates bound to the task id; filament deducted once | `98733f0` | Human #20 |
+| Password-reset links single-use (`type`/`jti`, 1 h) | `99f5a4f` | Human #20 |

@@ -5,7 +5,7 @@
 | File | Use |
 | --- | --- |
 | `compose.yml` | Local development. Mounts source, runs `fastapi dev` and `next dev`, exposes PostgreSQL and Mailpit |
-| `compose.prod.yml` | Production built from source. `fastapi run`, `next start`, no source mounts, no database port, no Mailpit |
+| `compose.prod.yml` | Production built from source. `fastapi run`, standalone `node server.js`, no source mounts, no database port, no Mailpit |
 | `compose.ghcr.yml` | Production using published GHCR images. Caddy serves the frontend and proxies `/api` to the backend |
 | `compose.public.yml` | Public marketing site and demo, served from GHCR images through Caddy |
 

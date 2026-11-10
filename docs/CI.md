@@ -156,8 +156,8 @@ GHCR publishing.
 - **Dashboard**: `compose.prod.yml` builds from source. `compose.ghcr.yml`
   pulls the published backend/frontend images and runs Caddy on 80/443.
   See [`DEPLOYMENT.md`](DEPLOYMENT.md).
-- **Frontend image**: `frontend/Dockerfile.prod` runs `next build` and
-  `next start`. The release image is built with an empty
+- **Frontend image**: `frontend/Dockerfile.prod` runs `next build` with standalone output and
+  starts the self-contained `node server.js`. The release image is built with an empty
   `NEXT_PUBLIC_API_URL`, so the browser calls `/api/v1` on the same origin and
   Caddy proxies it to the backend.
 - **Container images**: `Release Containers` publishes backend, frontend, site,

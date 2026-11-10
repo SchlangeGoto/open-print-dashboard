@@ -14,7 +14,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    # No deployable version tag may be pushed from a branch that is not main.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the tag to be on main
+        run: |
+          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+            echo "Not a tag push; skipping the ancestry check."
+            exit 0
+          fi
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
   publish:
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -97,6 +120,9 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: release-containers-latest
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -109,10 +135,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Require the tag to be on main
+      - name: Check this is the newest semver release
+        id: release_tag
         run: |
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "eligible=false" >> "$GITHUB_OUTPUT"
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Not a semver release tag; latest unchanged."
+            exit 0
+          fi
+          git fetch --tags --force
+          newest=$(git tag --list 'v*' --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ "${GITHUB_REF_NAME}" != "${newest}" ]; then
+            echo "${newest} is newer than ${GITHUB_REF_NAME}; latest unchanged."
+            exit 0
+          fi
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -125,6 +163,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Promote the version tags to latest
+        if: steps.release_tag.outputs.eligible == 'true'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           for name in backend frontend demo site; do

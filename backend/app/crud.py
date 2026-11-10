@@ -290,7 +290,9 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
     return FilamentStats(
         remaining_g=remaining_g,
         total_g=total_g,
-        used_percent=round((1 - remaining_g / total_g) * 100, 1) if total_g > 0 else 0,
+        used_percent=(
+            max(0.0, round((1 - remaining_g / total_g) * 100, 1)) if total_g > 0 else 0
+        ),
         spool_count=spool_count,
         print_count=print_count,
         total_used_g=total_used_g,

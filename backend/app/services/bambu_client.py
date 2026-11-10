@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import paho.mqtt.client as mqtt
-from sqlalchemy import func, update
+from sqlalchemy import func, or_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, desc, select
 
@@ -541,16 +541,18 @@ class BambuClient:
             ).first()
         if not filament and color:
             # The AMS sometimes reports a different preset id than the box
-            # catalog. Fall back to brand + material + colour so a tray does
-            # not attach to another brand's filament.
+            # catalog. Fall back to brand + material + colour (+ series when
+            # the tray names one) so a tray does not attach to another brand's
+            # filament or collapse the white Support SKUs.
+            query = select(Filament).where(
+                func.lower(Filament.color_hex) == color.lower(),
+                func.lower(Filament.material) == material.lower(),
+                func.lower(Filament.brand) == brand.lower(),
+            )
+            if series:
+                query = query.where(func.lower(Filament.series) == series.lower())
             filament = session.exec(
-                select(Filament)
-                .where(
-                    func.lower(Filament.color_hex) == color.lower(),
-                    func.lower(Filament.material) == material.lower(),
-                    func.lower(Filament.brand) == brand.lower(),
-                )
-                .order_by(col(Filament.created_at).asc())
+                query.order_by(col(Filament.created_at).asc())
             ).first()
         if filament:
             return filament
@@ -565,6 +567,7 @@ class BambuClient:
         filament = Filament(
             brand=brand,
             material=material,
+            series=series or None,
             color_name=(
                 label
                 or BAMBU_COLOR_NAMES.get(color or "")
@@ -587,6 +590,7 @@ class BambuClient:
         session: Session,
         filament_id: uuid.UUID,
         remaining: float | None,
+        printer_id: uuid.UUID,
     ) -> Spool | None:
         """Return an untagged spool whose weight matches the AMS estimate.
 
@@ -601,16 +605,25 @@ class BambuClient:
             .where(
                 Spool.filament_id == filament_id,
                 col(Spool.tag_uid).is_(None),
-                col(Spool.printer_id).is_(None),
+                # A spool already assigned to this printer is still a valid
+                # candidate; a spool on another printer is not.
+                or_(
+                    col(Spool.printer_id).is_(None),
+                    Spool.printer_id == printer_id,
+                ),
                 col(Spool.remaining_unknown).is_(False),
             )
             .order_by(col(Spool.created_at).asc(), col(Spool.id).asc())
         ).all()
+        best: Spool | None = None
+        best_delta: float | None = None
         for candidate in candidates:
             tolerance = max(50.0, candidate.total_weight_g * 0.15)
-            if abs(candidate.remaining_g - remaining) <= tolerance:
-                return candidate
-        return None
+            delta = abs(candidate.remaining_g - remaining)
+            if delta <= tolerance and (best_delta is None or delta < best_delta):
+                best = candidate
+                best_delta = delta
+        return best
 
     def _sync_ams_trays(self, ams: dict, signature: str) -> None:
         if not self.serial:
@@ -678,7 +691,7 @@ class BambuClient:
                         # is close to the AMS estimate; a partial tray must
                         # never consume a full library spool.
                         spool = self._match_untagged_spool(
-                            session, filament.id, remaining
+                            session, filament.id, remaining, printer.id
                         )
                         if spool:
                             spool.tag_uid = tag
@@ -874,10 +887,13 @@ class BambuClient:
                         .limit(5)
                     ).all()
 
-                    if recent_spools:
-                        avg_price = sum(
-                            s.price_per_kg for s in recent_spools if s.price_per_kg
-                        ) / len(recent_spools)
+                    prices = [
+                        s.price_per_kg
+                        for s in recent_spools
+                        if s.price_per_kg and s.price_per_kg > 0
+                    ]
+                    if prices:
+                        avg_price = sum(prices) / len(prices)
                         estimated_cost = round((task["weight"] / 1000) * avg_price, 2)
                         logger.info(
                             f"Estimated cost: €{estimated_cost} (avg €{avg_price}/kg)"
@@ -958,6 +974,78 @@ class BambuClient:
         )
         return result.rowcount == 1
 
+    def _spool_for_ams_slot(
+        self,
+        session: Session,
+        printer_id: uuid.UUID | None,
+        slot: dict,
+        used_spool_ids: set[uuid.UUID],
+        slot_filament: Filament | None,
+    ) -> Spool | None:
+        """Resolve an AMS mapping entry to the spool loaded in that tray."""
+        ams_id = slot.get("amsId", slot.get("ams"))
+        slot_id = slot.get("slotId", slot.get("slot"))
+        if ams_id is not None and slot_id is not None:
+            for unit in self._current_status.get("ams", []) or []:
+                try:
+                    unit_id = int(unit.get("id"))
+                    tray_id_wanted = int(slot_id)
+                    ams_id_wanted = int(ams_id)
+                except (TypeError, ValueError):
+                    continue
+                if unit_id != ams_id_wanted:
+                    continue
+                for tray in unit.get("tray", []) or []:
+                    try:
+                        tray_id = int(tray.get("id"))
+                    except (TypeError, ValueError):
+                        continue
+                    if tray_id != tray_id_wanted:
+                        continue
+                    tag = self._real_tag(tray.get("tag_uid"))
+                    if not tag:
+                        continue
+                    spool = session.exec(
+                        select(Spool).where(Spool.tag_uid == tag)
+                    ).first()
+                    if spool and spool.id not in used_spool_ids:
+                        return spool
+
+        if printer_id:
+            query = (
+                select(Spool)
+                .join(Filament, Spool.filament_id == Filament.id)
+                .where(Spool.printer_id == printer_id)
+                .where(col(Spool.remaining_unknown).is_(False))
+                .order_by(
+                    col(Spool.active).desc(),
+                    col(Spool.created_at).asc(),
+                )
+            )
+            if slot_filament is not None:
+                query = query.where(Spool.filament_id == slot_filament.id)
+            elif slot.get("filamentId") or slot.get("filamentType"):
+                # The slot names a filament we do not know; do not charge an
+                # unrelated roll.
+                return None
+            spool = session.exec(query).first()
+            if spool and spool.id not in used_spool_ids:
+                return spool
+
+        active_spool = self._active_spool(session)
+        if (
+            active_spool
+            and active_spool.id not in used_spool_ids
+            and not active_spool.remaining_unknown
+        ):
+            if slot_filament is None:
+                if not (slot.get("filamentId") or slot.get("filamentType")):
+                    return active_spool
+                return None
+            if active_spool.filament_id == slot_filament.id:
+                return active_spool
+        return None
+
     def _deduct_filament_from_spools(self, session: Session, task: dict) -> None:
         """Deduct filament usage per color slot from the correct spools.
 
@@ -985,6 +1073,7 @@ class BambuClient:
                 )
             return
 
+        used_spool_ids: set[uuid.UUID] = set()
         for slot in ams_mapping:
             used_g = slot.get("weight", 0)
             if not used_g:
@@ -992,36 +1081,47 @@ class BambuClient:
 
             filament_id = slot.get("filamentId")  # e.g. "GFL99"
             filament_type = slot.get("filamentType")  # e.g. "PLA"
-
-            spool = None
-            if printer_id:
-                spool = session.exec(
-                    select(Spool)
-                    .join(Filament, Spool.filament_id == Filament.id)
+            slot_filament = None
+            if filament_id:
+                slot_filament = session.exec(
+                    select(Filament)
                     .where(Filament.bambu_info_idx == filament_id)
-                    .where(Spool.printer_id == printer_id)
-                    .where(col(Spool.remaining_unknown).is_(False))
-                    .order_by(
-                        col(Spool.active).desc(),
-                        col(Spool.created_at).asc(),
-                    )
+                    .order_by(col(Filament.created_at).asc())
+                ).first()
+            if not slot_filament and filament_type:
+                slot_filament = session.exec(
+                    select(Filament)
+                    .where(func.lower(Filament.material) == filament_type.lower())
+                    .order_by(col(Filament.created_at).asc())
                 ).first()
 
+            spool = self._spool_for_ams_slot(
+                session,
+                printer_id,
+                slot,
+                used_spool_ids,
+                slot_filament,
+            )
             if not spool:
-                spool = self._active_spool(session)
+                logger.warning(
+                    "No matching spool for slot %s (%s); skipped %sg",
+                    slot,
+                    filament_type,
+                    used_g,
+                )
+                continue
 
-            if spool and spool.remaining_unknown:
+            used_spool_ids.add(spool.id)
+            if spool.remaining_unknown:
                 logger.info(
                     "Skipped %sg deduction: spool %s has unknown weight",
                     used_g,
                     spool.id,
                 )
-            elif spool:
-                spool.remaining_g = max(0, spool.remaining_g - used_g)
-                spool.last_used_at = datetime.now(UTC)
-                logger.info(
-                    f"Deducted {used_g}g ({filament_type}) from spool {spool.id}"
-                )
+                continue
+            spool.remaining_g = max(0, spool.remaining_g - used_g)
+            spool.last_used_at = datetime.now(UTC)
+            logger.info(f"Deducted {used_g}g ({filament_type}) from spool {spool.id}")
 
     def _handle_info_update(self, info_data: dict) -> None:
         """Handle firmware version info."""

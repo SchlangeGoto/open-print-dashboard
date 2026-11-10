@@ -93,3 +93,14 @@ def test_list_active_and_delete_prints(
     assert deleted.status_code == 200, deleted.text
     db.expire_all()
     assert db.get(PrintJob, finished_id) is None
+
+
+def test_prints_rejects_invalid_pagination(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    for query in ("skip=-1", "limit=0", "limit=1001"):
+        r = client.get(
+            f"{settings.API_V1_STR}/prints/?{query}",
+            headers=superuser_token_headers,
+        )
+        assert r.status_code == 422, query

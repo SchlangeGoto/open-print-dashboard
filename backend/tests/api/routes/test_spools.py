@@ -598,3 +598,216 @@ def test_saving_the_same_finish_twice_deducts_once(db: Session, monkeypatch) -> 
     assert job.weight == 100
     # The production finish path writes the denormalised attribution.
     assert job.filament_id == filament.id
+
+
+def test_spool_rejects_remaining_above_total(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Overfill",
+        color_hex="#123456",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": str(filament.id),
+            "total_weight_g": 1000,
+            "remaining_g": 5000,
+        },
+    )
+    assert r.status_code == 422
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"remaining_g": 5000},
+    )
+    assert r.status_code == 422
+
+
+def test_spool_rejects_null_weights(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    spool = Spool(total_weight_g=1000, remaining_g=1000)
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"remaining_g": None},
+    )
+    assert r.status_code == 422
+
+
+def test_ams_slots_deduct_from_their_own_spools(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Two slots",
+        color_hex="#102030",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    first = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="SLOT-A",
+    )
+    second = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="SLOT-B",
+    )
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": [
+            {
+                "id": 0,
+                "tray": [
+                    {"id": 0, "tag_uid": "SLOT-A"},
+                    {"id": 1, "tag_uid": "SLOT-B"},
+                ],
+            }
+        ]
+    }
+    task = {
+        "amsDetailMapping": [
+            {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+            {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+        ]
+    }
+    client._deduct_filament_from_spools(db, task)
+    db.commit()
+
+    db.expire_all()
+    stored_first = db.get(Spool, first.id)
+    stored_second = db.get(Spool, second.id)
+    assert stored_first is not None and stored_first.remaining_g == 900
+    assert stored_second is not None and stored_second.remaining_g == 950
+
+
+def test_ams_slot_does_not_charge_a_different_material(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    pla = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="PLA only",
+        color_hex="#223344",
+        bambu_info_idx="GFL99",
+    )
+    db.add(pla)
+    db.commit()
+    db.refresh(pla)
+
+    spool = Spool(
+        filament_id=pla.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    task = {
+        "amsDetailMapping": [
+            {"filamentId": "GFG99", "filamentType": "PETG", "weight": 100}
+        ]
+    }
+    client._deduct_filament_from_spools(db, task)
+    db.commit()
+
+    db.expire_all()
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    assert stored.remaining_g == 1000
+
+
+def test_one_spool_is_not_charged_for_two_slots(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="One spool",
+        color_hex="#334455",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="ONLY-ONE",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": [{"id": 0, "tray": [{"id": 0, "tag_uid": "ONLY-ONE"}]}]
+    }
+    task = {
+        "amsDetailMapping": [
+            {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+            {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 100},
+        ]
+    }
+    client._deduct_filament_from_spools(db, task)
+    db.commit()
+
+    db.expire_all()
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    assert stored.remaining_g == 900

@@ -704,3 +704,90 @@ def test_ams_unknown_remaining_creates_an_unknown_spool(
     assert created.remaining_unknown is True
     assert created.remaining_g == 1000
     assert created.remaining_g != 0
+
+
+def test_support_skus_do_not_collapse(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    codes = ("6975337030409", "6975337038078")
+    for code in codes:
+        r = client.post(
+            f"{settings.API_V1_STR}/spools/scan/barcode",
+            headers=superuser_token_headers,
+            json={"code": code, "create": True},
+        )
+        assert r.status_code == 200, r.text
+
+    filaments = db.exec(select(Filament).where(Filament.material == "Support")).all()
+    by_series = {filament.series: filament for filament in filaments}
+    assert by_series["Support W"].spool_weight_g == 750
+    assert by_series["Support for ABS"].spool_weight_g == 1000
+
+    spools = db.exec(select(Spool).where(Spool.barcode.in_(codes))).all()
+    assert sorted(spool.total_weight_g for spool in spools) == [750, 1000]
+
+
+def test_scan_and_confirm_are_idempotent(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    scan_payload = {
+        "code": "6975337032380",
+        "create": True,
+        "request_id": "scan-request-1",
+    }
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json=scan_payload,
+    )
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json=scan_payload,
+    )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["spool"]["id"] == second.json()["spool"]["id"]
+
+    db.expire_all()
+    assert (
+        len(db.exec(select(Spool).where(Spool.barcode == "6975337032380")).all()) == 1
+    )
+
+    confirm_payload = {
+        "code": "TEST-IDEMPOTENT-CONFIRM",
+        "request_id": "confirm-request-1",
+        "filament": {
+            "brand": "Test",
+            "material": "PLA",
+            "color_name": "Idempotent",
+            "color_hex": "#112233",
+        },
+        "total_weight_g": 1000,
+    }
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json=confirm_payload,
+    )
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json=confirm_payload,
+    )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["spool"]["id"] == second.json()["spool"]["id"]
+    db.expire_all()
+    assert (
+        len(
+            db.exec(
+                select(Spool).where(Spool.barcode == "TEST-IDEMPOTENT-CONFIRM")
+            ).all()
+        )
+        == 1
+    )

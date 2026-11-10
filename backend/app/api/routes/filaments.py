@@ -64,6 +64,8 @@ def read_filaments(session: SessionDep) -> Any:
 
 @router.get("/stats/{filament_id}", response_model=FilamentStats)
 def read_filament_stats(filament_id: uuid.UUID, session: SessionDep) -> Any:
+    if not session.get(Filament, filament_id):
+        raise HTTPException(status_code=404, detail="Filament not found")
     return crud.get_filament_stats(session=session, filament_id=filament_id)
 
 

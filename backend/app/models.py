@@ -110,6 +110,9 @@ class RefreshToken(SQLModel, table=True):
 class FilamentBase(SQLModel):
     brand: str = Field(min_length=1, max_length=100)
     material: str = Field(min_length=1, max_length=50)
+    # Catalog series ("Support W", "PLA Matte", ...). Distinguishes products
+    # that share brand/material/colour, such as the white Support SKUs.
+    series: str | None = Field(default=None, max_length=50)
     color_name: str = Field(min_length=1, max_length=100)
     color_hex: str = Field(min_length=4, max_length=9)
     nozzle_temp_min: int | None = None
@@ -127,6 +130,7 @@ class FilamentCreate(FilamentBase):
 class FilamentUpdate(SQLModel):
     brand: str | None = Field(default=None, min_length=1, max_length=100)
     material: str | None = Field(default=None, min_length=1, max_length=50)
+    series: str | None = Field(default=None, max_length=50)
     color_name: str | None = Field(default=None, min_length=1, max_length=100)
     color_hex: str | None = Field(default=None, min_length=4, max_length=9)
     nozzle_temp_min: int | None = None
@@ -201,6 +205,12 @@ class SpoolBase(SQLModel):
 class SpoolCreate(SpoolBase):
     filament_id: uuid.UUID | None = None
 
+    @model_validator(mode="after")
+    def _remaining_within_total(self) -> "SpoolCreate":
+        if self.remaining_g > self.total_weight_g:
+            raise ValueError("remaining_g cannot exceed total_weight_g")
+        return self
+
 
 class SpoolUpdate(SQLModel):
     filament_id: uuid.UUID | None = None
@@ -216,8 +226,22 @@ class SpoolUpdate(SQLModel):
     last_used_at: datetime | None = None
     notes: str | None = Field(default=None, max_length=1000)
 
+    @model_validator(mode="after")
+    def _reject_null_non_nullable_fields(self) -> "SpoolUpdate":
+        for field in (
+            "total_weight_g",
+            "remaining_g",
+            "active",
+            "remaining_unknown",
+        ):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
+
 
 class Spool(SpoolBase, table=True):
+    # Client idempotency key for scan/confirm retries. Internal, not public.
+    request_id: str | None = Field(default=None, max_length=64)
     # Constraint that the AMS sync relies on: at most one active spool per
     # printer. Keep it declared on the model so autogenerate cannot drop it.
     __table_args__ = (
@@ -227,6 +251,7 @@ class Spool(SpoolBase, table=True):
             unique=True,
             postgresql_where=text("active"),
         ),
+        Index("uq_spool_request_id", "request_id", unique=True),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -261,6 +286,7 @@ class SpoolActivateRequest(SQLModel):
 
 class BarcodeScanRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
+    request_id: str | None = Field(default=None, max_length=64)
     # Optional printed SKU, used to prefill the create-filament form.
     sku: str | None = Field(default=None, max_length=100)
     # Existing clients omit this and keep the old create-on-scan behavior.
@@ -279,6 +305,7 @@ class BarcodeScanRequest(SQLModel):
 
 class BarcodeConfirmRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
+    request_id: str | None = Field(default=None, max_length=64)
     filament: FilamentCreate
     total_weight_g: float | None = Field(default=None, gt=0)
     price_per_kg: float | None = Field(default=None, ge=0)

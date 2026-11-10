@@ -1,7 +1,7 @@
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import col, func, select
 
 from app.api.deps import SessionDep, get_current_user
@@ -20,7 +20,11 @@ router = APIRouter(
 
 
 @router.get("/", response_model=PrintJobsPublic)
-def read_prints(session: SessionDep, skip: int = 0, limit: int = 500) -> Any:
+def read_prints(
+    session: SessionDep,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> Any:
     """Retrieve print jobs, most recent first."""
     count = session.exec(select(func.count()).select_from(PrintJob)).one()
     statement = (

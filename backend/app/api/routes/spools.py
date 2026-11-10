@@ -65,24 +65,27 @@ def _find_or_create_catalog_filament(
         ).first()
     if not filament:
         # Match an AMS-created filament whose preset id differs from the box
-        # catalog. Brand, material and colour together identify a product;
-        # matching on colour alone would bind a Bambu barcode to another
-        # brand's filament.
-        filament = session.exec(
-            select(Filament)
-            .where(
-                func.lower(Filament.color_hex) == data["color_hex"].lower(),
-                func.lower(Filament.material) == data["material"].lower(),
-                func.lower(Filament.brand) == data["brand"].lower(),
-            )
-            .order_by(col(Filament.created_at).asc())
-        ).first()
+        # catalog. Brand, material, colour and series identify a product;
+        # Support W/G/ABS all share brand/material/colour, so series is what
+        # keeps them apart.
+        series = (data.get("series") or "").strip()
+        query = select(Filament).where(
+            func.lower(Filament.color_hex) == data["color_hex"].lower(),
+            func.lower(Filament.material) == data["material"].lower(),
+            func.lower(Filament.brand) == data["brand"].lower(),
+        )
+        if series:
+            query = query.where(func.lower(Filament.series) == series.lower())
+        else:
+            query = query.where(col(Filament.series).is_(None))
+        filament = session.exec(query.order_by(col(Filament.created_at).asc())).first()
     if filament:
         return filament
 
     filament = Filament(
         brand=data["brand"],
         material=data["material"],
+        series=data.get("series") or None,
         color_name=data["color_name"],
         color_hex=data["color_hex"],
         nozzle_temp_min=data.get("nozzle_temp_min"),
@@ -137,6 +140,7 @@ def _create_barcode_spool(
     code: str,
     total_weight_g: float | None = None,
     price_per_kg: float | None = None,
+    request_id: str | None = None,
 ) -> Spool:
     weight = total_weight_g or filament.spool_weight_g or 1000
     spool = Spool(
@@ -146,6 +150,7 @@ def _create_barcode_spool(
         barcode=code,
         source="barcode",
         price_per_kg=price_per_kg,
+        request_id=request_id,
     )
     session.add(spool)
     session.commit()
@@ -186,6 +191,22 @@ def read_active_spool(session: SessionDep, printer_id: uuid.UUID | None = None) 
 def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     """Look up a packaging barcode and create a spool when it is known."""
     code = payload.code.strip()
+    if payload.request_id:
+        replay = session.exec(
+            select(Spool).where(Spool.request_id == payload.request_id)
+        ).first()
+        if replay:
+            filament = session.get(Filament, replay.filament_id)
+            return BarcodeScanResult(
+                found=filament is not None,
+                code=replay.barcode or code,
+                filament=(
+                    FilamentPublic.model_validate(filament) if filament else None
+                ),
+                spool=SpoolPublic.model_validate(replay),
+                created=False,
+                existing_spools=[SpoolPublic.model_validate(replay)],
+            )
     mapping = session.exec(
         select(FilamentBarcode).where(FilamentBarcode.code == code)
     ).first()
@@ -215,7 +236,30 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
             existing_spools=[SpoolPublic.model_validate(s) for s in existing],
         )
 
-    spool = _create_barcode_spool(session=session, filament=filament, code=code)
+    try:
+        spool = _create_barcode_spool(
+            session=session,
+            filament=filament,
+            code=code,
+            request_id=payload.request_id,
+        )
+    except IntegrityError:
+        # Two retries raced; the unique request_id decides. Return the winner.
+        session.rollback()
+        if not payload.request_id:
+            raise
+        spool = session.exec(
+            select(Spool).where(Spool.request_id == payload.request_id)
+        ).one()
+        filament = session.get(Filament, spool.filament_id)
+        return BarcodeScanResult(
+            found=True,
+            code=spool.barcode or code,
+            filament=(FilamentPublic.model_validate(filament) if filament else None),
+            spool=SpoolPublic.model_validate(spool),
+            created=False,
+            existing_spools=[SpoolPublic.model_validate(spool)],
+        )
     return BarcodeScanResult(
         found=True,
         code=code,
@@ -230,6 +274,22 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
 def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
     """Create a new filament from a scanned barcode and add its first spool."""
     code = payload.code.strip()
+    if payload.request_id:
+        replay = session.exec(
+            select(Spool).where(Spool.request_id == payload.request_id)
+        ).first()
+        if replay:
+            filament = session.get(Filament, replay.filament_id)
+            return BarcodeScanResult(
+                found=filament is not None,
+                code=replay.barcode or code,
+                filament=(
+                    FilamentPublic.model_validate(filament) if filament else None
+                ),
+                spool=SpoolPublic.model_validate(replay),
+                created=False,
+                existing_spools=[SpoolPublic.model_validate(replay)],
+            )
     mapping = session.exec(
         select(FilamentBarcode).where(FilamentBarcode.code == code)
     ).first()
@@ -241,13 +301,31 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
         session.flush()
         filament = _link_barcode(session=session, code=code, filament=candidate)
 
-    spool = _create_barcode_spool(
-        session=session,
-        filament=filament,
-        code=code,
-        total_weight_g=payload.total_weight_g,
-        price_per_kg=payload.price_per_kg,
-    )
+    try:
+        spool = _create_barcode_spool(
+            session=session,
+            filament=filament,
+            code=code,
+            total_weight_g=payload.total_weight_g,
+            price_per_kg=payload.price_per_kg,
+            request_id=payload.request_id,
+        )
+    except IntegrityError:
+        session.rollback()
+        if not payload.request_id:
+            raise
+        spool = session.exec(
+            select(Spool).where(Spool.request_id == payload.request_id)
+        ).one()
+        filament = session.get(Filament, spool.filament_id)
+        return BarcodeScanResult(
+            found=True,
+            code=spool.barcode or code,
+            filament=(FilamentPublic.model_validate(filament) if filament else None),
+            spool=SpoolPublic.model_validate(spool),
+            created=False,
+            existing_spools=[SpoolPublic.model_validate(spool)],
+        )
     return BarcodeScanResult(
         found=True,
         code=code,
@@ -312,6 +390,11 @@ def update_spool(
         raise HTTPException(
             status_code=422,
             detail="Load the spool into a printer before activating it",
+        )
+    if spool.remaining_g > spool.total_weight_g:
+        raise HTTPException(
+            status_code=422,
+            detail="remaining_g cannot exceed total_weight_g",
         )
     session.add(spool)
     session.commit()

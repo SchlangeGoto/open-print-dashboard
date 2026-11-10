@@ -84,3 +84,15 @@ def test_delete_filament(
         headers=superuser_token_headers,
     )
     assert r.status_code == 404
+
+
+def test_stats_returns_404_for_a_missing_filament(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    import uuid
+
+    r = client.get(
+        f"{settings.API_V1_STR}/filaments/stats/{uuid.uuid4()}",
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 404

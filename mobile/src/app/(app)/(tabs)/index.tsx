@@ -83,7 +83,11 @@ export default function SpoolsScreen() {
     const spools = data?.spools ?? [];
     return {
       count: spools.length,
-      remaining: spools.reduce((sum, spool) => sum + spool.remaining_g, 0),
+      remaining: spools.reduce(
+        (sum, spool) =>
+          spool.remaining_unknown ? sum : sum + spool.remaining_g,
+        0,
+      ),
       loaded: spools.filter((spool) => Boolean(spool.printer_id)).length,
     };
   }, [data]);

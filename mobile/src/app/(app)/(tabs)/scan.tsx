@@ -48,6 +48,7 @@ export default function ScanScreen() {
   const focusedRef = useRef(false);
   const resultRef = useRef<BarcodeScanResult | null>(null);
   const lastAttemptRef = useRef<{ code: string; at: number } | null>(null);
+  const typeRef = useRef<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,6 +79,7 @@ export default function ScanScreen() {
         focusedRef.current = false;
         resultRef.current = null;
         lastAttemptRef.current = null;
+        typeRef.current = null;
         setFocused(false);
         setPreviewReady(false);
         setTorch(false);
@@ -98,6 +100,7 @@ export default function ScanScreen() {
     // multiple decoded frames creating duplicate spools.
     scanLock.current = true;
     resultRef.current = null;
+    typeRef.current = type ?? null;
     setScanType(type ?? null);
     setResult(null);
     setBusy(true);
@@ -141,7 +144,11 @@ export default function ScanScreen() {
         return;
       }
 
-      const created = await api.scanBarcode(code, true, scanType ?? undefined);
+      const created = await api.scanBarcode(
+        code,
+        true,
+        typeRef.current ?? undefined,
+      );
       if (!focusedRef.current) return;
       const normalized: BarcodeScanResult = {
         ...created,
@@ -170,7 +177,11 @@ export default function ScanScreen() {
     setBusy(true);
     setError(null);
     try {
-      const created = await api.scanBarcode(code, true, scanType ?? undefined);
+      const created = await api.scanBarcode(
+        code,
+        true,
+        typeRef.current ?? undefined,
+      );
       if (!focusedRef.current) return;
       const normalized: BarcodeScanResult = {
         ...created,
@@ -219,6 +230,7 @@ export default function ScanScreen() {
   function resetScan() {
     resultRef.current = null;
     lastAttemptRef.current = null;
+    typeRef.current = null;
     setResult(null);
     setScanType(null);
     setError(null);
@@ -574,7 +586,9 @@ export default function ScanScreen() {
                   </View>
                   {result.spool ? (
                     <AppText variant="label" color={theme.colors.info}>
-                      {formatWeight(result.spool.remaining_g)} left
+                      {result.spool.remaining_unknown
+                        ? "Weight unknown"
+                        : `${formatWeight(result.spool.remaining_g)} left`}
                     </AppText>
                   ) : null}
                 </View>

@@ -24,9 +24,11 @@ interface PrinterRackRowProps {
 export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
   const theme = useTheme();
   const { printer, loadedSpool, filament } = row;
-  const pct = loadedSpool
-    ? percent(loadedSpool.remaining_g, loadedSpool.total_weight_g)
-    : 0;
+  const unknown = Boolean(loadedSpool?.remaining_unknown);
+  const pct =
+    loadedSpool && !unknown
+      ? percent(loadedSpool.remaining_g, loadedSpool.total_weight_g)
+      : 0;
   const statusColor = printer.online ? theme.colors.success : theme.colors.muted;
 
   return (
@@ -70,7 +72,9 @@ export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
       {loadedSpool ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${filament?.color_name ?? "Loaded spool"}, ${pct}% remaining`}
+          accessibilityLabel={`${filament?.color_name ?? "Loaded spool"}, ${
+            unknown ? "weight unknown" : `${pct}% remaining`
+          }`}
           onPress={onOpenSpool}
           style={({ pressed }) => [
             styles.loadedSpool,
@@ -92,7 +96,9 @@ export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
                 color={pct <= 15 ? theme.colors.danger : theme.colors.muted}
                 style={styles.readout}
               >
-                {formatWeight(loadedSpool.remaining_g)} left
+                {unknown
+                  ? "Weight unknown"
+                  : `${formatWeight(loadedSpool.remaining_g)} left`}
               </AppText>
             </View>
             <View style={styles.barRow}>
@@ -100,9 +106,11 @@ export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
                 <ProgressBar
                   value={pct}
                   color={
-                    pct <= 15
-                      ? theme.colors.danger
-                      : (filament?.color_hex ?? theme.colors.accent)
+                    unknown
+                      ? theme.colors.faint
+                      : pct <= 15
+                        ? theme.colors.danger
+                        : (filament?.color_hex ?? theme.colors.accent)
                   }
                   height={3}
                 />

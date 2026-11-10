@@ -119,14 +119,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authenticated");
       } catch (error) {
         if (epoch !== restoreEpoch.current) return;
-        // A 4xx means the server rejected this session (401 expired, 400
-        // deactivated, 404 deleted user). Only network failures and 5xx are
-        // retryable; a dead session can never become valid.
+        // Only the API's own verdicts end a session: 401 expired, 400
+        // deactivated, 404 deleted user. A WAF 403, a 408 or a 429 from the
+        // proxy must leave the session intact and stay retryable.
         if (
           error instanceof ApiError &&
-          error.status >= 400 &&
-          error.status < 500
+          (error.status === 400 ||
+            error.status === 401 ||
+            error.status === 404)
         ) {
+          apiClient.invalidateSession();
           sessionTokens = null;
           await clearStoredSession();
           if (epoch !== restoreEpoch.current) return;

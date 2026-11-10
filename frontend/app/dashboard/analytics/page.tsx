@@ -24,7 +24,6 @@ import {
   startOfMonth,
   startOfYear,
   subDays,
-  subMonths,
 } from "date-fns";
 import {
   CalendarDays,
@@ -236,7 +235,9 @@ function buildActivityData(range: Range, prints: any[], now: Date) {
   }
 
   if (range === "12m") {
-    const start = startOfMonth(subMonths(now, 11));
+    // Match the 365-day filter; the first month is partial, which aggregate()
+    // already limits to the filtered prints.
+    const start = startOfMonth(subDays(now, 365));
     return eachMonthOfInterval({ start, end: now }).map((date, index) => ({
       label: format(
         date,
@@ -614,7 +615,8 @@ export default function AnalyticsPage() {
           role="alert"
           className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
         >
-          Could not refresh analytics: {loadError}. Showing the last known data.
+          Could not refresh analytics: {loadError}
+          {prints.length > 0 ? ". Showing the last known data." : "."}
         </div>
       ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

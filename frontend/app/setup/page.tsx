@@ -61,6 +61,7 @@ export default function SetupPage() {
   const [cloudPrinters, setCloudPrinters] = useState<PrinterDevice[]>([]);
   const [selectedSerial, setSelectedSerial] = useState("");
   const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [printerLoadError, setPrinterLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -98,6 +99,7 @@ export default function SetupPage() {
 
   const loadCloudPrinters = useCallback(async () => {
     setLoadingPrinters(true);
+    setPrinterLoadError(null);
     try {
       const printers = await api.getPrinters();
       const available = printers.filter(
@@ -105,8 +107,13 @@ export default function SetupPage() {
       );
       setCloudPrinters(available);
       setSelectedSerial(available[0]?.serial ?? "");
-    } catch {
+    } catch (err) {
       setCloudPrinters([]);
+      setPrinterLoadError(
+        err instanceof Error
+          ? err.message
+          : "Could not load printers from Bambu Cloud",
+      );
     } finally {
       setLoadingPrinters(false);
     }
@@ -489,11 +496,11 @@ export default function SetupPage() {
                 </>
               ) : (
                 <>
-                  <Alert>
+                  <Alert variant={printerLoadError ? "destructive" : undefined}>
                     <Info />
                     <AlertDescription>
-                      No printers were found on this Bambu Lab account. Bind the
-                      printer to your account in Bambu Handy, then refresh.
+                      {printerLoadError ??
+                        "No printers were found on your Bambu Lab account. Bind the printer to your account in Bambu Handy, then refresh, or continue and add it later."}
                     </AlertDescription>
                   </Alert>
                   <Button
@@ -503,6 +510,14 @@ export default function SetupPage() {
                     onClick={loadCloudPrinters}
                   >
                     Refresh
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => router.push("/dashboard")}
+                  >
+                    Continue without a printer
                   </Button>
                 </>
               )}

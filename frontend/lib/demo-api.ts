@@ -451,7 +451,11 @@ export const demoApi: ApiShape = {
     let updated: any = null;
     const spools = getSpoolsRaw().map((spool) => {
       if (spool.id !== spoolId) return spool;
-      updated = { ...spool, ...data };
+      const patch = { ...data };
+      if (Object.prototype.hasOwnProperty.call(patch, "remaining_g")) {
+        patch.remaining_unknown = false;
+      }
+      updated = { ...spool, ...patch };
       return updated;
     });
     save("spools", spools);

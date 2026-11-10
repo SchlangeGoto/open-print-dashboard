@@ -186,14 +186,40 @@ There is no Vercel or Cloudflare dependency. The site and demo are self-hosted.
 
 ## Mobile releases (EAS)
 
-The mobile app is not part of the dashboard deployment. Release builds use
-[EAS Build](https://docs.expo.dev/build/introduction/), which signs Android and
-iOS artifacts in the cloud.
+The mobile app is not part of the dashboard deployment. Releases use
+[EAS Build](https://docs.expo.dev/build/introduction/), which compiles and signs
+the artifact in the cloud and stores the signing credentials.
+
+### Distribution model
+
+**Android ships as a signed APK. There is no Play Store step.** Sideloading an
+APK is allowed, so no Play Console account, no AAB, and no store review. Android
+may show a Play Protect warning on first install; the user confirms once.
+
+The `production` profile in `mobile/eas.json` still produces an AAB if the app
+is ever submitted to Play.
+
+**iOS cannot avoid Apple's signing rules.** There is no unsigned equivalent of
+"just install the APK":
+
+| Route | Cost | Limits |
+| --- | --- | --- |
+| Free Apple ID + AltStore/SideStore | $0 | 7-day expiry, 3 apps, re-sign weekly, needs a Windows/macOS helper |
+| Paid Apple Developer Program + ad hoc | $99/year | 100 devices, 12-month validity, install from a link |
+| TestFlight / App Store | $99/year + review | Public distribution |
+
+EAS signs iOS device builds with ad hoc provisioning, which requires the paid
+program. A free Apple ID cannot be used for cloud builds — that route signs
+locally with Xcode or a sideloading helper. Simulation builds need no Apple
+account, but need a Mac to run them.
+
+iOS is therefore **not** part of the tag workflow. Set it up separately once a
+paid Apple Developer account exists.
 
 ### One-time setup
 
 ```bash
-npm install -g eas-cli
+npm install -g eas-cli   # or: pnpm add -g eas-cli, if npm's prefix is /usr
 eas login
 cd mobile
 eas init                 # writes the Expo project ID into app.json
@@ -207,11 +233,29 @@ git push
 release tag. The release workflow checks out the tagged commit, so an
 uncommitted project ID cannot work.
 
-- Android: let EAS generate and store the upload keystore. Back it up in the
-  Expo dashboard.
-- iOS: an Apple Developer account is required. EAS prompts for the Apple login
-  and stores the credentials.
-- Create an Expo access token and add it as the `EXPO_TOKEN` repository secret.
+Android signing:
+
+```bash
+eas credentials -p android   # choose the production profile, let EAS generate
+```
+
+Back up the keystore. It is the Play upload key; losing it needs a Google
+support request to reset, not a lost app.
+
+Then create an Expo access token and add it as the `EXPO_TOKEN` repository
+secret:
+
+```bash
+gh secret set EXPO_TOKEN
+```
+
+iOS, only if a paid Apple Developer account exists:
+
+```bash
+eas credentials -p ios
+eas device:create            # register a device UDID, then rebuild
+eas build --platform ios --profile preview
+```
 
 ### Release
 
@@ -224,27 +268,28 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-`Release Mobile` builds the production Android **AAB** and iOS **IPA**, uploads
-them as workflow artifacts, and attaches them to the GitHub Release.
+`Release Android` builds a signed APK with the `preview` profile and attaches
+`openprint-dashboard-v0.2.0.apk` to the GitHub Release.
 
 Manual run:
 
 ```bash
-gh workflow run release-mobile.yml
+gh workflow run release-android.yml
 ```
 
-A signed **APK** for direct installation:
+Locally:
 
 ```bash
 cd mobile
 eas build --platform android --profile preview
 ```
 
-The separate `Build Mobile APK` workflow produces an unsigned/debug APK for
-testing; it is not a store artifact.
+The separate `Build Mobile APK` workflow produces an unsigned debug APK for
+testing. It is not a distribution artifact.
 
-The first EAS build fails until `eas init`, credentials, and `EXPO_TOKEN` are
-configured. That is expected.
+The first EAS build fails until `eas init`, the Android keystore, and
+`EXPO_TOKEN` are configured. That is expected.
+
 
 ## Health checks
 

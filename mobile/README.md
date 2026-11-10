@@ -165,8 +165,21 @@ Commit and push the `eas init` changes before tagging; the release workflow
 checks out the tagged commit.
 
 Create an Expo access token and add it as the `EXPO_TOKEN` repository secret.
-Android signing is managed by EAS (back up the keystore in the Expo dashboard);
-iOS needs an Apple Developer account and an EAS credential setup.
+Android signing is managed by EAS:
+
+```bash
+eas credentials -p android   # production profile; let EAS generate the keystore
+```
+
+Back up that keystore. Release builds are **signed APKs**; the app is sideloaded,
+so there is no Play Store step and no AAB. The `production` profile still builds
+an AAB if the app is ever submitted to Play.
+
+iOS is not part of the tag workflow. EAS signs an installable iOS build with ad
+hoc provisioning, which requires a paid Apple Developer account; a free Apple ID
+only supports local signing through Xcode or a sideloading tool. Use
+`eas build --platform ios --profile preview` after enrolling and registering
+devices with `eas device:create`.
 
 Set `expo.version` in `app.json` to the release version, commit it, and push
 before tagging. EAS `autoIncrement` changes build numbers, not the user-facing
@@ -179,10 +192,10 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The `Release Mobile` workflow builds a production Android **AAB** and iOS
-**IPA**, uploads them as artifacts, and attaches them to the GitHub Release.
+The `Release Android` workflow builds a signed APK, uploads it as an artifact,
+and attaches `openprint-dashboard-v0.2.0.apk` to the GitHub Release.
 
-A signed APK for direct install:
+Build one locally:
 
 ```bash
 eas build --platform android --profile preview

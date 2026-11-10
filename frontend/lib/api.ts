@@ -273,6 +273,8 @@ export interface BarcodeScanResult {
   filament: any | null;
   spool: any | null;
   suggested_filament: any | null;
+  created?: boolean;
+  existing_spools?: any[];
 }
 
 export interface PrinterInput {

@@ -257,22 +257,12 @@ export default function PrintersPage() {
             return (
               <Card
                 key={printer.serial}
-                role={printer.configured ? "button" : undefined}
-                tabIndex={printer.configured ? 0 : undefined}
                 onClick={() => {
                   if (printer.configured) setSelectedPrinter(printer);
                 }}
-                onKeyDown={(event) => {
-                  if (!printer.configured) return;
-                  if (event.target !== event.currentTarget) return;
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedPrinter(printer);
-                  }
-                }}
                 className={
                   printer.configured
-                    ? "cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                    ? "cursor-pointer transition-colors hover:ring-primary/40"
                     : undefined
                 }
               >

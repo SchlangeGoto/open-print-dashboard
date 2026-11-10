@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
-import { Printer as PrinterIcon, Thermometer } from "lucide-react";
+import { Eye, Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
 import {
@@ -386,17 +386,8 @@ export default function DashboardPage() {
               return (
                 <Card
                   key={dev.serial}
-                  role="button"
-                  tabIndex={0}
                   onClick={() => setSelectedPrinter(dev)}
-                  onKeyDown={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setSelectedPrinter(dev);
-                    }
-                  }}
-                  className="cursor-pointer gap-4 transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="cursor-pointer gap-4 transition-colors hover:ring-primary/40"
                 >
                   <CardContent className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -537,6 +528,18 @@ export default function DashboardPage() {
                       </button>
                     ) : null}
 
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedPrinter(dev);
+                        }}
+                      >
+                        <Eye /> Details
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               );

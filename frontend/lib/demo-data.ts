@@ -27,6 +27,7 @@ type DemoSpool = {
   filament_id: string;
   total_weight_g: number;
   remaining_g: number;
+  remaining_unknown?: boolean;
   tag_uid?: string | null;
   barcode?: string | null;
   source?: string | null;
@@ -453,6 +454,20 @@ export const DEMO_SPOOLS: DemoSpool[] = [
     created_at: isoDaysAgo(340, 12, 0),
     last_used_at: isoDaysAgo(20, 9, 0),
     notes: "Empty",
+  },
+  {
+    id: id(2, 14),
+    filament_id: id(1, 2),
+    total_weight_g: 1000,
+    remaining_g: 1000,
+    remaining_unknown: true,
+    source: "ams",
+    active: false,
+    price_per_kg: 24.99,
+    purchased_at: isoDaysAgo(2, 12, 0),
+    created_at: isoDaysAgo(2, 12, 0),
+    last_used_at: null,
+    notes: "Added from printer — weight unknown",
   },
 ];
 

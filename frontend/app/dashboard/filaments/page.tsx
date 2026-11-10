@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
-import { Palette, Pencil, Plus, Thermometer, Trash2 } from "lucide-react";
+import { Eye, Palette, Pencil, Plus, Thermometer, Trash2 } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -219,20 +219,22 @@ export default function FilamentsPage() {
             return (
               <Card
                 key={f.id}
-                role="button"
-                tabIndex={0}
                 onClick={() => setSelectedFilament(f)}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelectedFilament(f);
-                  }
-                }}
-                className="group relative cursor-pointer transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="group relative cursor-pointer transition-colors hover:ring-primary/40"
               >
                 <CardContent className="space-y-4">
                   <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={`View ${f.color_name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFilament(f);
+                      }}
+                    >
+                      <Eye />
+                    </Button>
                     <Button
                       variant="secondary"
                       size="icon-sm"

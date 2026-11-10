@@ -34,7 +34,6 @@ export default function FilamentModal({
   const stats = [
     { label: "In Stock", value: formatWeight(totalRemaining) },
     { label: "Spools", value: spools.length },
-    { label: "Diameter", value: filament?.diameter ? `${filament.diameter}mm` : "1.75mm" },
     {
       label: "Nozzle Temp",
       value:

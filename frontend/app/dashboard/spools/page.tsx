@@ -6,6 +6,7 @@ import { toast } from "@/lib/toast";
 import {
   Archive,
   Check,
+  Eye,
   Package,
   Pencil,
   Plus,
@@ -230,7 +231,7 @@ export default function SpoolsPage() {
       </div>
 
       {filaments.length === 0 ? (
-        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-300">
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300">
           Create a filament type first before adding spools.
         </div>
       ) : null}
@@ -272,17 +273,8 @@ export default function SpoolsPage() {
             return (
               <Card
                 key={s.id}
-                role="button"
-                tabIndex={0}
                 onClick={() => setSelectedSpool(s)}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelectedSpool(s);
-                  }
-                }}
-                className="group relative cursor-pointer gap-4 transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="group relative cursor-pointer gap-4 transition-colors hover:ring-primary/40"
               >
                 <CardContent className="flex flex-col gap-3">
                   <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-1">
@@ -301,6 +293,17 @@ export default function SpoolsPage() {
                   </div>
 
                   <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={`View ${fil?.color_name ?? "spool"}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSpool(s);
+                      }}
+                    >
+                      <Eye />
+                    </Button>
                     <Button
                       variant="secondary"
                       size="icon-sm"

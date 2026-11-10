@@ -495,7 +495,7 @@ export const demoApi: ApiShape = {
     );
   },
 
-  scanBarcode: (code) => {
+  scanBarcode: (code, create = true) => {
     const catalog = DEMO_BARCODES[code] ?? null;
     const map = getBarcodeMap();
     let filament = map[code]
@@ -521,7 +521,9 @@ export const demoApi: ApiShape = {
       found: true,
       code,
       filament,
-      spool: createBarcodeSpool(code, filament),
+      spool: create ? createBarcodeSpool(code, filament) : null,
+      created: false,
+      existing_spools: [],
       suggested_filament: null,
     });
   },

@@ -29,7 +29,16 @@ export function SpoolIndicator({
   const lowStock = pct < 0.15;
 
   return (
-    <div className={cn("relative inline-flex", className)} style={{ width: size, height: size }}>
+    <div
+      role="img"
+      aria-label={
+        unknown
+          ? "Spool with unknown remaining weight"
+          : `Spool ${Math.round(pct * 100)} percent full`
+      }
+      className={cn("relative inline-flex", className)}
+      style={{ width: size, height: size }}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <defs>
           <radialGradient id={`spool-fill-${color.replace("#","")}`} cx="40%" cy="35%" r="65%">
@@ -84,7 +93,6 @@ export function SpoolIndicator({
         <span
           className="absolute inset-0 flex items-center justify-center font-semibold text-muted-foreground"
           style={{ fontSize: Math.max(12, size * 0.18) }}
-          aria-label="Remaining weight unknown"
         >
           ?
         </span>

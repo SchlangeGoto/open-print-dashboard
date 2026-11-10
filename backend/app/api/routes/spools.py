@@ -243,7 +243,7 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
         return BarcodeScanResult(
             found=False,
             code=code,
-            suggested_filament=parse_bambu_sku(code),
+            suggested_filament=parse_bambu_sku(payload.sku),
         )
 
     existing = _existing_barcode_spools(session=session, code=code)

@@ -243,6 +243,8 @@ class SpoolScanResult(SQLModel):
 
 class BarcodeScanRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
+    # Optional printed SKU, used to prefill the create-filament form.
+    sku: str | None = Field(default=None, max_length=100)
     # Existing clients omit this and keep the old create-on-scan behavior.
     # The mobile app first sends create=false to check for a duplicate.
     create: bool = True

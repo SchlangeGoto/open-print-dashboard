@@ -144,7 +144,7 @@ def test_ams_links_barcode_spool_by_tag(
     ams_client = BambuClient()
     ams_client.serial = printer.serial
     ams_client._current_status = {"tray_now": 0, "ams": ams}
-    ams_client._sync_ams_trays(ams)
+    ams_client._sync_ams_trays(ams, "test")
 
     db.expire_all()
     linked = db.get(Spool, spool.id)
@@ -216,7 +216,7 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
     ams_client = BambuClient()
     ams_client.serial = printer.serial
     ams_client._current_status = {"tray_now": 0, "ams": ams}
-    ams_client._sync_ams_trays(ams)
+    ams_client._sync_ams_trays(ams, "test")
 
     db.expire_all()
     rows = db.exec(
@@ -464,3 +464,22 @@ def test_scan_normalizes_a_gtin14(
 
     assert r.status_code == 200, r.text
     assert r.json()["found"] is True
+
+
+def test_unknown_barcode_uses_the_optional_sku(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={
+            "code": "TEST-UNKNOWN-SKU",
+            "sku": "A01-A2-1.75-1000-SPL",
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["found"] is False
+    assert data["suggested_filament"]["series"] == "PLA Matte"
+    assert data["suggested_filament"]["spool_weight_g"] == 1000

@@ -25,31 +25,56 @@ from tests.utils.utils import (
     get_superuser_token_headers,
 )
 
+CLEANUP_MODELS = (
+    PrintJob,
+    Spool,
+    Printer,
+    Filament,
+    AppSetting,
+    RefreshToken,
+    User,
+)
+
+
+def _clear(session: Session) -> None:
+    for model in CLEANUP_MODELS:
+        session.execute(delete(model))
+    session.commit()
+
+
+def _ensure_superuser(session: Session) -> None:
+    if not crud.get_user_by_email(session=session, email=TEST_SUPERUSER_EMAIL):
+        crud.create_user(
+            session=session,
+            user_create=UserCreate(
+                email=TEST_SUPERUSER_EMAIL,
+                password=TEST_SUPERUSER_PASSWORD,
+                is_superuser=True,
+            ),
+        )
+
 
 @pytest.fixture(scope="session", autouse=True)
 def db() -> Generator[Session]:
+    database = engine.url.database or ""
+    if not database.endswith("_test"):
+        raise RuntimeError(
+            f"Refusing to run tests against {database!r}: set TEST_DATABASE_URL "
+            "to a database whose name ends in _test (scripts/test.sh does this)."
+        )
     with Session(engine) as session:
         init_db(session)
-        # Ensure a superuser exists for the test suite, even when the
-        # environment does not bootstrap one.
-        if not crud.get_user_by_email(session=session, email=TEST_SUPERUSER_EMAIL):
-            crud.create_user(
-                session=session,
-                user_create=UserCreate(
-                    email=TEST_SUPERUSER_EMAIL,
-                    password=TEST_SUPERUSER_PASSWORD,
-                    is_superuser=True,
-                ),
-            )
+        _ensure_superuser(session)
         yield session
-        session.execute(delete(PrintJob))
-        session.execute(delete(Spool))
-        session.execute(delete(Printer))
-        session.execute(delete(Filament))
-        session.execute(delete(AppSetting))
-        session.execute(delete(RefreshToken))
-        session.execute(delete(User))
-        session.commit()
+        _clear(session)
+
+
+@pytest.fixture(autouse=True)
+def clean_db(db: Session) -> Generator[None]:
+    """Keep tests independent without ever touching a non-test database."""
+    yield
+    _clear(db)
+    _ensure_superuser(db)
 
 
 @pytest.fixture(scope="module")
@@ -58,12 +83,12 @@ def client() -> Generator[TestClient]:
         yield c
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def superuser_token_headers(client: TestClient) -> dict[str, str]:
     return get_superuser_token_headers(client)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def normal_user_token_headers(client: TestClient, db: Session) -> dict[str, str]:
     return authentication_token_from_email(
         client=client, email=settings.EMAIL_TEST_USER, db=db

@@ -16,7 +16,11 @@ concurrency:
 
 env:
   SECRET_KEY: changethis
-  DATABASE_URL: postgresql://opd:changethis@localhost:5432/openprintdashboard
+  # Tests delete rows. Keep them on a dedicated database whose name ends in
+  # _test; test.sh refuses anything else.
+  POSTGRES_DB: openprintdashboard_test
+  DATABASE_URL: postgresql://opd:changethis@localhost:5432/openprintdashboard_test
+  TEST_DATABASE_URL: postgresql://opd:changethis@localhost:5432/openprintdashboard_test
   SMTP_HOST: localhost
   SMTP_PORT: "1025"
   SMTP_TLS: "false"

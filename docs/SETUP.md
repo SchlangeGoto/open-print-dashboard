@@ -148,10 +148,23 @@ If you don't want migrations at all, uncomment `SQLModel.metadata.create_all(eng
 
 Backend (from `backend`):
 
+Create the test database once (the development database is never touched):
+
+```bash
+docker compose exec db createdb -U opd openprintdashboard_test
+export TEST_DATABASE_URL=postgresql://opd:changethis@localhost:5432/openprintdashboard_test
+DATABASE_URL=$TEST_DATABASE_URL uv run bash scripts/prestart.sh
+```
+
+Then:
+
 ```bash
 uv run bash scripts/lint.sh    # mypy + ruff
-uv run bash scripts/test.sh    # pytest + coverage (requires PostgreSQL)
+uv run bash scripts/test.sh    # pytest + coverage
 ```
+
+`scripts/test.sh` refuses to run unless `TEST_DATABASE_URL` names a database
+ending in `_test`, and the test suite clears rows between tests.
 
 Frontend (from `frontend`):
 

@@ -1,4 +1,4 @@
-import { Redirect, Stack } from "expo-router";
+import { Redirect, Stack, usePathname } from "expo-router";
 
 import { LoadingScreen } from "@/components/loading-screen";
 import { useAuth } from "@/lib/auth";
@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/theme";
 
 export default function AppLayout() {
   const { status } = useAuth();
+  const pathname = usePathname();
   const theme = useTheme();
 
   if (status === "loading") {
@@ -18,7 +19,7 @@ export default function AppLayout() {
     return <Redirect href="/connection-error" />;
   }
   if (status !== "authenticated") {
-    return <Redirect href="/login" />;
+    return <Redirect href={{ pathname: "/login", params: { next: pathname } }} />;
   }
 
   return (

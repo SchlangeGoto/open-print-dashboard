@@ -93,7 +93,13 @@ export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
               </AppText>
               <AppText
                 variant="monoSmall"
-                color={pct <= 15 ? theme.colors.danger : theme.colors.muted}
+                color={
+                  unknown
+                    ? theme.colors.muted
+                    : pct <= 15
+                      ? theme.colors.danger
+                      : theme.colors.muted
+                }
                 style={styles.readout}
               >
                 {unknown
@@ -116,7 +122,7 @@ export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
                 />
               </View>
               <AppText variant="monoSmall" muted style={styles.readout}>
-                {pct}%
+                {unknown ? "—" : `${pct}%`}
               </AppText>
             </View>
           </View>

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -53,6 +53,7 @@ export default function ScanConfirmScreen() {
   );
   const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!code) {
@@ -72,7 +73,8 @@ export default function ScanConfirmScreen() {
   }
 
   async function handleCreate() {
-    if (!code) return;
+    if (!code || busyRef.current) return;
+    busyRef.current = true;
     const normalizedHex = normalizeHex(colorHex);
     const weightValue = Number(weight.replace(",", "."));
     const priceValue = price.trim()
@@ -130,6 +132,7 @@ export default function ScanConfirmScreen() {
     } catch (err) {
       setError(formatError(err));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }

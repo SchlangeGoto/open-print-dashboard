@@ -181,6 +181,27 @@ export default function SpoolDetailScreen() {
       >
         <View style={styles.headerPadding}>{header}</View>
 
+        {error && data ? (
+          <View
+            style={[
+              styles.banner,
+              {
+                backgroundColor: `${theme.colors.danger}18`,
+                borderColor: `${theme.colors.danger}55`,
+              },
+            ]}
+          >
+            <Ionicons
+              name="warning-outline"
+              size={16}
+              color={theme.colors.danger}
+            />
+            <AppText variant="caption" color={theme.colors.danger}>
+              {error} Showing the last known data.
+            </AppText>
+          </View>
+        ) : null}
+
         <LinearGradient
           colors={[color, theme.colors.surface]}
           start={{ x: 0, y: 0 }}

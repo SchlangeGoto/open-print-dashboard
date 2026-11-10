@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import {
   Keyboard,
@@ -22,7 +22,9 @@ import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function LoginScreen() {
   const { status, serverUrl, login } = useAuth();
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const router = useRouter();
+  const target = (next && next.startsWith("/") ? next : "/") as Href;
   const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +39,7 @@ export default function LoginScreen() {
     return <Redirect href="/connection-error" />;
   }
   if (status === "authenticated") {
-    return <Redirect href="/" />;
+    return <Redirect href={target} />;
   }
 
   async function handleLogin() {
@@ -51,7 +53,7 @@ export default function LoginScreen() {
     setError(null);
     try {
       await login(email, password);
-      router.replace("/");
+      router.replace(target);
     } catch (err) {
       setError(formatError(err));
     } finally {

@@ -47,7 +47,11 @@ export default function ScanScreen() {
   const scanLock = useRef(false);
   const focusedRef = useRef(false);
   const resultRef = useRef<BarcodeScanResult | null>(null);
-  const lastAttemptRef = useRef<{ code: string; at: number } | null>(null);
+  const lastAttemptRef = useRef<{
+    code: string;
+    at: number;
+    attempts: number;
+  } | null>(null);
   const typeRef = useRef<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
@@ -217,8 +221,12 @@ export default function ScanScreen() {
     // same frame forever. Ignore the same code for a short window instead.
     const now = Date.now();
     const last = lastAttemptRef.current;
-    if (last && last.code === normalized && now - last.at < 1500) return;
-    lastAttemptRef.current = { code: normalized, at: now };
+    const attempts = last?.code === normalized ? last.attempts + 1 : 1;
+    if (last?.code === normalized) {
+      const delay = Math.min(15_000, 1500 * 2 ** Math.min(attempts - 1, 4));
+      if (now - last.at < delay) return;
+    }
+    lastAttemptRef.current = { code: normalized, at: now, attempts };
 
     void handleCode(data, scan.type).catch((err) => {
       if (focusedRef.current) {

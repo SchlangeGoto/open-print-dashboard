@@ -2,6 +2,13 @@ import { DEMO_AVAILABLE, isDemoActive } from "@/lib/demo";
 
 const API_ROOT = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1`;
 
+// A blackholed connection must not leave the polling guard stuck forever.
+const REQUEST_TIMEOUT_MS = 10_000;
+
+function timeoutSignal(): AbortSignal {
+  return AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+}
+
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 const ACCESS_TOKEN_EXPIRES_AT_KEY = "access_token_expires_at";
@@ -113,6 +120,7 @@ async function refreshAccessToken(force = false): Promise<string | null> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
+        signal: timeoutSignal(),
       });
     } catch {
       // Keep the session on a temporary network failure.
@@ -159,7 +167,11 @@ async function fetchWithAuth(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, {
+    ...options,
+    headers,
+    signal: options.signal ?? timeoutSignal(),
+  });
 
   // Only refresh for this app's own token challenge. Other 401s (for example
   // an unlinked Bambu Cloud account) must not sign the user out.
@@ -172,7 +184,11 @@ async function fetchWithAuth(
     if (newToken) {
       const retryHeaders = new Headers(options.headers);
       retryHeaders.set("Authorization", `Bearer ${newToken}`);
-      return fetch(url, { ...options, headers: retryHeaders });
+      return fetch(url, {
+        ...options,
+        headers: retryHeaders,
+        signal: options.signal ?? timeoutSignal(),
+      });
     }
   }
 
@@ -292,6 +308,7 @@ const apiImpl = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
+      signal: timeoutSignal(),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -324,6 +341,7 @@ const apiImpl = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ refresh_token: refreshToken }),
           keepalive: true,
+          signal: timeoutSignal(),
         });
         revoked = res.ok;
       }

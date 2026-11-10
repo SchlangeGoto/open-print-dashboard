@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "@/lib/toast";
 import {
@@ -61,6 +61,7 @@ export default function SpoolsPage() {
   const [filaments, setFilaments] = useState<any[]>([]);
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,24 +91,29 @@ export default function SpoolsPage() {
       : false,
   );
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const [sp, fil, devices] = await Promise.all([
         api.getSpools(),
         api.getFilaments(),
-        api.getPrinters().catch(() => []),
+        api.getPrinters(),
       ]);
       setSpools(sp);
       setFilaments(fil);
       setPrinters(devices);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Could not reach the server",
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   function getFilament(id: string | null) {
     return filaments.find((f) => f.id === id);
@@ -229,11 +235,30 @@ export default function SpoolsPage() {
         </div>
       ) : null}
 
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Could not refresh: {loadError}. Showing the last known data.
+        </div>
+      ) : null}
+
       {spools.length === 0 ? (
         <EmptyState
           icon={Package}
-          title="No spools"
-          description="Add spools to track your filament usage per roll."
+          title={loadError ? "Could not load spools" : "No spools"}
+          description={
+            loadError ??
+            "Add spools to track your filament usage per roll."
+          }
+          action={
+            loadError ? (
+              <Button variant="outline" onClick={() => void load()}>
+                Try again
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

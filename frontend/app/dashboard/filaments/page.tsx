@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
 import { Palette, Pencil, Plus, Thermometer, Trash2 } from "lucide-react";
 
@@ -62,6 +62,7 @@ export default function FilamentsPage() {
   const [filaments, setFilaments] = useState<any[]>([]);
   const [spoolsByFilament, setSpoolsByFilament] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyFilament });
@@ -69,25 +70,33 @@ export default function FilamentsPage() {
   const [selectedFilament, setSelectedFilament] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
-      const fils = await api.getFilaments();
-      setFilaments(fils);
+      // One request instead of one /filaments/{id}/spools call per filament.
+      const [fils, allSpools] = await Promise.all([
+        api.getFilaments(),
+        api.getSpools(),
+      ]);
       const spoolMap: Record<string, any[]> = {};
-      await Promise.all(
-        fils.map(async (f: any) => {
-          spoolMap[f.id] = await api.getFilamentSpools(f.id).catch(() => []);
-        }),
-      );
+      for (const spool of allSpools) {
+        if (!spool.filament_id) continue;
+        (spoolMap[spool.filament_id] ??= []).push(spool);
+      }
+      setFilaments(fils);
       setSpoolsByFilament(spoolMap);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Could not reach the server",
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   function openCreate() {
     setForm({ ...emptyFilament });
@@ -170,15 +179,33 @@ export default function FilamentsPage() {
         </Button>
       </div>
 
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Could not refresh: {loadError}. Showing the last known data.
+        </div>
+      ) : null}
+
       {filaments.length === 0 ? (
         <EmptyState
           icon={Palette}
-          title="No filaments"
-          description="Add your first filament type to start tracking inventory."
+          title={loadError ? "Could not load filaments" : "No filaments"}
+          description={
+            loadError ??
+            "Add your first filament type to start tracking inventory."
+          }
           action={
-            <Button onClick={openCreate}>
-              <Plus /> Add Filament
-            </Button>
+            loadError ? (
+              <Button variant="outline" onClick={() => void load()}>
+                Try again
+              </Button>
+            ) : (
+              <Button onClick={openCreate}>
+                <Plus /> Add Filament
+              </Button>
+            )
           }
         />
       ) : (

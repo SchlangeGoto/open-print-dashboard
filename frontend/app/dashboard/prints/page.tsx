@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import { ChevronDown, ChevronUp, ChevronsUpDown, History, Trash2 } from "lucide-react";
 
@@ -83,6 +83,7 @@ export default function PrintsPage() {
   const [spools, setSpools] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("finished_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -91,24 +92,29 @@ export default function PrintsPage() {
   const [filamentFilter, setFilamentFilter] = useState<string>("all");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const [jobs, spoolList, filamentList] = await Promise.all([
         api.getAllPrintJobs(),
-        api.getSpools().catch(() => []),
-        api.getFilaments().catch(() => []),
+        api.getSpools(),
+        api.getFilaments(),
       ]);
       setPrints(jobs);
       setSpools(spoolList);
       setFilaments(filamentList);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Could not reach the server",
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -254,11 +260,27 @@ export default function PrintsPage() {
         </Select>
       </div>
 
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Could not refresh: {loadError}. Showing the last known data.
+        </div>
+      ) : null}
+
       {filtered.length === 0 ? (
         <EmptyState
           icon={History}
-          title="No prints"
-          description="No print jobs match this filter."
+          title={loadError ? "Could not load prints" : "No prints"}
+          description={loadError ?? "No print jobs match this filter."}
+          action={
+            loadError ? (
+              <Button variant="outline" onClick={() => void load()}>
+                Try again
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <Card className="overflow-hidden p-0">

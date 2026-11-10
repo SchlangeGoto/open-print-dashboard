@@ -341,6 +341,7 @@ export default function AnalyticsPage() {
   const [filaments, setFilaments] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [range, setRange] = useState<Range>("all");
   const [metric, setMetric] = useState<Metric>("count");
   const [printerFilter, setPrinterFilter] = useState("all");
@@ -349,15 +350,20 @@ export default function AnalyticsPage() {
   const load = useCallback(async () => {
     try {
       const [jobs, devices, filamentList, spoolList] = await Promise.all([
-        api.getAllPrintJobs().catch(() => []),
-        api.getPrinters().catch(() => []),
-        api.getFilaments().catch(() => []),
-        api.getSpools().catch(() => []),
+        api.getAllPrintJobs(),
+        api.getPrinters(),
+        api.getFilaments(),
+        api.getSpools(),
       ]);
       setPrints(jobs);
       setPrinters(devices);
       setFilaments(filamentList);
       setSpools(spoolList);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Could not reach the server",
+      );
     } finally {
       setLoading(false);
     }
@@ -603,6 +609,14 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Could not refresh analytics: {loadError}. Showing the last known data.
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-bold">Analytics</h1>

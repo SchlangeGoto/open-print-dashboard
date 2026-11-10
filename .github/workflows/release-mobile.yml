@@ -58,7 +58,7 @@ jobs:
             curl -fL "$url" -o "artifacts/$name"
           done
           ls -lh artifacts
-          [ "$(ls artifacts | wc -l)" -ge 2 ] || { echo "Expected Android and iOS artifacts" >&2; exit 1; }
+          [ "$(find artifacts -maxdepth 1 -type f | wc -l)" -ge 2 ] || { echo "Expected Android and iOS artifacts" >&2; exit 1; }
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

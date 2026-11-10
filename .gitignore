@@ -100,3 +100,10 @@ mobile/dist-*/
 
 # Local agent config (OpenCode), intentionally not committed
 .opencode/
+
+# Android/iOS signing material — never commit. EAS stores the real copy.
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+mobile/credentials.json

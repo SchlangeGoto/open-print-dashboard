@@ -49,11 +49,13 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
         extra_data["hashed_password"] = hashed_password
     db_user.sqlmodel_update(user_data, update=extra_data)
     session.add(db_user)
-    session.commit()
     if password_changed:
         # A password change must invalidate every existing session, including
-        # when an admin resets another user's password.
+        # when an admin resets another user's password. Do it in the same
+        # transaction so a failure cannot leave the password changed with live
+        # refresh tokens.
         revoke_user_refresh_tokens(session=session, user_id=db_user.id)
+    session.commit()
     session.refresh(db_user)
     return db_user
 
@@ -102,7 +104,8 @@ def revoke_user_refresh_tokens(*, session: Session, user_id: uuid.UUID) -> None:
     for token in tokens:
         token.revoked_at = now
         session.add(token)
-    session.commit()
+    # The caller commits; revocation and the password change must be one
+    # transaction.
 
 
 # ────────────────────────────────────────────────────────────

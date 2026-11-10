@@ -144,8 +144,8 @@ def update_password_me(
         )
     current_user.hashed_password = get_password_hash(body.new_password)
     session.add(current_user)
-    session.commit()
     crud.revoke_user_refresh_tokens(session=session, user_id=current_user.id)
+    session.commit()
     return Message(message="Password updated successfully")
 
 

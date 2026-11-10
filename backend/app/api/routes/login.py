@@ -142,11 +142,8 @@ def refresh_access_token(session: SessionDep, body: RefreshTokenRequest) -> Toke
     if not stored:
         raise _refresh_error("Invalid refresh token")
 
-    if _as_utc(stored.expires_at) <= now:
-        session.delete(stored)
-        session.commit()
-        raise _refresh_error("Refresh token expired")
-
+    # Check revocation before expiry: a rotated token that has also expired is
+    # still evidence of reuse and must trigger the same response.
     if stored.revoked_at is not None:
         revoked_at = _as_utc(stored.revoked_at)
         grace = timedelta(seconds=settings.REFRESH_TOKEN_REUSE_GRACE_SECONDS)
@@ -157,6 +154,11 @@ def refresh_access_token(session: SessionDep, body: RefreshTokenRequest) -> Toke
         _revoke_all_refresh_tokens(session, stored.user_id, now)
         session.commit()
         raise _refresh_error("Refresh token reuse detected")
+
+    if _as_utc(stored.expires_at) <= now:
+        session.delete(stored)
+        session.commit()
+        raise _refresh_error("Refresh token expired")
 
     user = session.get(User, stored.user_id)
     if not user or not user.is_active:
@@ -236,7 +238,6 @@ def reset_password(session: SessionDep, body: NewPassword) -> Message:
         db_user=user,
         user_in=UserUpdate(password=body.new_password),
     )
-    crud.revoke_user_refresh_tokens(session=session, user_id=user.id)
     return Message(message="Password updated successfully")
 
 

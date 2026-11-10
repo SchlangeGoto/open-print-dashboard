@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
@@ -126,9 +126,7 @@ def test_refresh_token_after_logout(client: TestClient) -> None:
     assert r.status_code == 401
 
 
-def test_expired_refresh_token_is_rejected(
-    client: TestClient, db: Session
-) -> None:
+def test_expired_refresh_token_is_rejected(client: TestClient, db: Session) -> None:
     user = crud.get_user_by_email(session=db, email=TEST_SUPERUSER_EMAIL)
     assert user
     raw_token = generate_refresh_token()
@@ -209,9 +207,7 @@ def test_reset_password(client: TestClient, db: Session) -> None:
 
     crud.create_user(
         session=db,
-        user_create=UserCreate(
-            email=email, password=password, full_name="Test User"
-        ),
+        user_create=UserCreate(email=email, password=password, full_name="Test User"),
     )
     token = generate_password_reset_token(email=email)
     data = {"new_password": new_password, "token": token}
@@ -226,17 +222,13 @@ def test_reset_password(client: TestClient, db: Session) -> None:
     assert verified
 
 
-def test_reset_password_revokes_refresh_tokens(
-    client: TestClient, db: Session
-) -> None:
+def test_reset_password_revokes_refresh_tokens(client: TestClient, db: Session) -> None:
     email = random_email()
     password = random_lower_string()
     new_password = random_lower_string()
     crud.create_user(
         session=db,
-        user_create=UserCreate(
-            email=email, password=password, full_name="Test User"
-        ),
+        user_create=UserCreate(email=email, password=password, full_name="Test User"),
     )
     tokens = login(client, email, password)
 
@@ -261,3 +253,40 @@ def test_reset_password_invalid_token(client: TestClient) -> None:
     assert "detail" in response
     assert r.status_code == 400
     assert response["detail"] == "Invalid token"
+
+
+def test_expired_reused_token_still_triggers_reuse_detection(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tokens = login(client, TEST_SUPERUSER_EMAIL, TEST_SUPERUSER_PASSWORD)
+    r = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    rotated = r.json()
+
+    # A rotated token that also expired is still evidence of reuse.
+    db.expire_all()
+    row = db.exec(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(tokens["refresh_token"])
+        )
+    ).first()
+    assert row is not None
+    row.expires_at = datetime.now(UTC) - timedelta(days=1)
+    db.add(row)
+    db.commit()
+
+    monkeypatch.setattr(settings, "REFRESH_TOKEN_REUSE_GRACE_SECONDS", 0)
+    r = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert r.status_code == 401
+    assert "reuse" in r.json()["detail"].lower()
+
+    r = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": rotated["refresh_token"]},
+    )
+    assert r.status_code == 401

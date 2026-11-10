@@ -26,3 +26,8 @@ def test_encrypt_uses_dedicated_key_when_configured(monkeypatch) -> None:
     assert security.decrypt_secret(ciphertext) is None
     monkeypatch.setattr(settings, "BAMBU_CREDENTIALS_KEY", "dedicated-key")
     assert security.decrypt_secret(ciphertext) == "value"
+
+
+def test_plaintext_value_is_treated_as_absent(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "BAMBU_CREDENTIALS_KEY", None)
+    assert security.decrypt_secret("user@example.com") is None

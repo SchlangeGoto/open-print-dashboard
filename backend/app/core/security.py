@@ -96,7 +96,9 @@ def decrypt_secret(value: str) -> str | None:
     for fernet in _decrypt_candidates():
         try:
             return fernet.decrypt(value.encode()).decode()
-        except InvalidToken:
+        except (InvalidToken, ValueError):
+            # InvalidToken for a wrong key; ValueError for a value that is not
+            # a Fernet token at all (for example a legacy plaintext setting).
             continue
     logger.warning("Could not decrypt a stored secret; treating it as absent")
     return None

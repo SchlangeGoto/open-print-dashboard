@@ -17,6 +17,9 @@ def normalize_barcode(code: str) -> str:
         value = value[len(GTIN_PREFIX) :]
     if len(value) == 14 and value.startswith("0") and value.isdigit():
         value = value[1:]
+    # UPC-A (12 digits) is the same product as EAN-13 with a leading zero.
+    if len(value) == 12 and value.isdigit():
+        value = f"0{value}"
     return value
 
 

@@ -8,10 +8,12 @@ def test_normalize_barcode_strips_gtin_wrappers() -> None:
     assert normalize_barcode("06975337032380") == "6975337032380"
     assert normalize_barcode("]E06975337032380") == "6975337032380"
     assert normalize_barcode(" 6975337032380 ") == "6975337032380"
+    assert normalize_barcode("036000291452") == "0036000291452"
 
 
 def test_ean13_check_digit() -> None:
     assert is_valid_ean13("6975337032380")
+    assert is_valid_ean13("0036000291452")
     assert not is_valid_ean13("6975337032381")
     assert ean13_check_digit("697533703238") == 0
 

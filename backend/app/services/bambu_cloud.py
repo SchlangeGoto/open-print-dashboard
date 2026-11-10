@@ -17,6 +17,10 @@ logger = logging.getLogger("uvicorn.error")
 
 BASE_URL = "https://api.bambulab.com"
 
+# Every cloud call must be bounded: a stalled TLS connection would pin a
+# request worker or the print-job save thread indefinitely.
+DEFAULT_TIMEOUT = 15
+
 # Cover images are only ever fetched from Bambu Lab content hosts. Anything
 # else is refused so the endpoint cannot be used as an SSRF proxy.
 ALLOWED_COVER_HOSTS = ("bblmw.com", "bambulab.com")
@@ -87,7 +91,11 @@ class BambuCloudClient:
         if resp.status_code == 403 and "cloudflare" in resp.text.lower():
             logger.debug("Cloudflare detected, using cloudscraper")
             scraper = cloudscraper.create_scraper()
-            resp = scraper.post(f"{BASE_URL}/v1/user-service/user/login", json=payload)
+            resp = scraper.post(
+                f"{BASE_URL}/v1/user-service/user/login",
+                json=payload,
+                timeout=30,
+            )
             if resp.status_code == 403 and "cloudflare" in resp.text.lower():
                 raise CloudflareError()
 
@@ -122,7 +130,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/design-user-service/my/preference",
             headers=self._headers(),
-            timeout=15,
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         self.user_id = resp.json()["uid"]
@@ -134,7 +142,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/iot-service/api/user/bind",
             headers=self._headers(),
-            timeout=15,
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json().get("devices", [])
@@ -146,7 +154,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/user-service/my/tasks",
             headers=self._headers(),
             params={"limit": limit},
-            timeout=15,
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json().get("hits", [])
@@ -184,6 +192,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/iot-service/api/slicer/setting",
             headers=self._headers(),
             params={"version": "1.0"},
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
@@ -200,6 +209,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/user-service/my/projects",
             headers=self._headers(),
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json().get("projects", [])
@@ -213,6 +223,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/design-user-service/my/preference",
             headers=self._headers(),
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -236,7 +247,7 @@ class BambuCloudClient:
             return None
         try:
             with requests.get(
-                url, timeout=10, allow_redirects=False, stream=True
+                url, timeout=DEFAULT_TIMEOUT, allow_redirects=False, stream=True
             ) as resp:
                 resp.raise_for_status()
                 content = bytearray()
@@ -259,6 +270,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/iot-service/api/user/device/version",
             headers=self._headers(),
             params={"dev_id": device_id},
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         devices = resp.json().get("devices", [])
@@ -274,7 +286,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/iot-service/api/user/print",
             headers=self._headers(),
             params={"force": "true"},
-            timeout=15,
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json().get("devices", [])
@@ -290,6 +302,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/iot-service/api/user/ttcode",
             headers=self._headers(),
             json={"dev_id": device_id},
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
@@ -300,6 +313,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/iot-service/api/user/project/{project_id}",
             headers=self._headers(),
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
@@ -313,6 +327,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/iot-service/api/slicer/setting/{setting_id}",
             headers=self._headers(),
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
@@ -324,6 +339,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/user-service/my/messages",
             headers=self._headers(),
             params={"limit": limit},
+            timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json().get("hits", [])
@@ -335,6 +351,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/iot-service/api/user/device/info",
             headers=self._headers(),
             json={"dev_id": device_id, "name": name},
+            timeout=DEFAULT_TIMEOUT,
         )
         return resp.json().get("message") == "success"
 
@@ -346,7 +363,7 @@ class BambuCloudClient:
             resp = requests.get(
                 f"{BASE_URL}/v1/design-user-service/my/preference",
                 headers=self._headers(),
-                timeout=10,
+                timeout=DEFAULT_TIMEOUT,
             )
             return resp.status_code == 200
         except requests.RequestException:

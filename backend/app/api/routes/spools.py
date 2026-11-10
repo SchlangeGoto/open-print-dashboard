@@ -50,20 +50,32 @@ def _unload_other_spools(
 def _find_or_create_catalog_filament(
     *, session: SessionDep, data: dict[str, Any]
 ) -> Filament:
-    filament = session.exec(
-        select(Filament).where(
-            Filament.bambu_info_idx == data.get("bambu_info_idx"),
-            func.lower(Filament.color_hex) == data["color_hex"].lower(),
-        )
-    ).first()
+    info_idx = data.get("bambu_info_idx")
+    filament = None
+    if info_idx:
+        # ``bambu_info_idx`` is nullable; ``== None`` would compile to IS NULL
+        # and collapse unrelated products that share a colour.
+        filament = session.exec(
+            select(Filament)
+            .where(
+                Filament.bambu_info_idx == info_idx,
+                func.lower(Filament.color_hex) == data["color_hex"].lower(),
+            )
+            .order_by(col(Filament.created_at).asc())
+        ).first()
     if not filament:
         # Match an AMS-created filament whose preset id differs from the box
-        # catalog by colour + material.
+        # catalog. Brand, material and colour together identify a product;
+        # matching on colour alone would bind a Bambu barcode to another
+        # brand's filament.
         filament = session.exec(
-            select(Filament).where(
+            select(Filament)
+            .where(
                 func.lower(Filament.color_hex) == data["color_hex"].lower(),
                 func.lower(Filament.material) == data["material"].lower(),
+                func.lower(Filament.brand) == data["brand"].lower(),
             )
+            .order_by(col(Filament.created_at).asc())
         ).first()
     if filament:
         return filament

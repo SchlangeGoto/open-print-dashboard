@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
@@ -377,3 +378,64 @@ def test_link_barcode_tolerates_a_concurrent_insert(db: Session) -> None:
     ).first()
     assert mapping is not None
     assert mapping.filament_id == winner.id
+
+
+def test_catalog_match_does_not_cross_brands(db: Session) -> None:
+    from app.api.routes.spools import _find_or_create_catalog_filament
+
+    color = f"#{uuid.uuid4().hex[:6]}"
+    sunlu = Filament(
+        brand="Sunlu",
+        material="PLA",
+        color_name="Green",
+        color_hex=color,
+        bambu_info_idx=None,
+    )
+    db.add(sunlu)
+    db.commit()
+    db.refresh(sunlu)
+
+    filament = _find_or_create_catalog_filament(
+        session=db,
+        data={
+            "brand": "Bambu Lab",
+            "material": "PLA",
+            "color_name": "Green",
+            "color_hex": color,
+            "bambu_info_idx": None,
+            "spool_weight_g": 1000,
+        },
+    )
+
+    assert filament.id != sunlu.id
+    assert filament.brand == "Bambu Lab"
+
+
+def test_catalog_fallback_matches_the_same_brand(db: Session) -> None:
+    from app.api.routes.spools import _find_or_create_catalog_filament
+
+    color = f"#{uuid.uuid4().hex[:6]}"
+    bambu = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Green",
+        color_hex=color,
+        bambu_info_idx=None,
+    )
+    db.add(bambu)
+    db.commit()
+    db.refresh(bambu)
+
+    filament = _find_or_create_catalog_filament(
+        session=db,
+        data={
+            "brand": "Bambu Lab",
+            "material": "PLA",
+            "color_name": "Green",
+            "color_hex": color,
+            "bambu_info_idx": None,
+            "spool_weight_g": 1000,
+        },
+    )
+
+    assert filament.id == bambu.id

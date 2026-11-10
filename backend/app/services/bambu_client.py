@@ -405,20 +405,28 @@ class BambuClient:
             else "Unknown"
         )
 
-        filament = session.exec(
-            select(Filament).where(
-                Filament.bambu_info_idx == info_idx,
-                func.lower(Filament.color_hex) == (color or "").lower(),
-            )
-        ).first()
+        filament = None
+        if info_idx:
+            filament = session.exec(
+                select(Filament)
+                .where(
+                    Filament.bambu_info_idx == info_idx,
+                    func.lower(Filament.color_hex) == (color or "").lower(),
+                )
+                .order_by(col(Filament.created_at).asc())
+            ).first()
         if not filament and color:
             # The AMS sometimes reports a different preset id than the box
-            # catalog. Fall back to colour + material for the same spool.
+            # catalog. Fall back to brand + material + colour so a tray does
+            # not attach to another brand's filament.
             filament = session.exec(
-                select(Filament).where(
+                select(Filament)
+                .where(
                     func.lower(Filament.color_hex) == color.lower(),
                     func.lower(Filament.material) == material.lower(),
+                    func.lower(Filament.brand) == brand.lower(),
                 )
+                .order_by(col(Filament.created_at).asc())
             ).first()
         if filament:
             return filament

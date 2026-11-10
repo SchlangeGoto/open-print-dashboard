@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  differenceInCalendarDays,
   differenceInMonths,
   eachDayOfInterval,
   eachMonthOfInterval,
@@ -431,10 +432,7 @@ export default function AnalyticsPage() {
   const previousDays = previousBounds
     ? Math.max(
         1,
-        Math.ceil(
-          (previousBounds.end.getTime() - previousBounds.start.getTime()) /
-            86400000,
-        ),
+        differenceInCalendarDays(previousBounds.end, previousBounds.start) + 1,
       )
     : 0;
 

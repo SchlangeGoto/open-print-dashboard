@@ -94,7 +94,7 @@ export default function PrintsPage() {
   async function load() {
     try {
       const [jobs, spoolList, filamentList] = await Promise.all([
-        api.getPrintJobs(),
+        api.getAllPrintJobs(),
         api.getSpools().catch(() => []),
         api.getFilaments().catch(() => []),
       ]);

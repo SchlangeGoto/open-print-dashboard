@@ -3,6 +3,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.models import Printer
 
 
 def _serial() -> str:
@@ -96,3 +97,15 @@ def test_duplicate_serial_race_returns_409(
     )
 
     assert second.status_code == 409, second.text
+
+
+def test_stale_gcode_state_does_not_mark_a_printer_online() -> None:
+    from app.api.routes.printers import _serialize_printers
+
+    printer = Printer(name="Stale state", serial="test-stale-state")
+    result = _serialize_printers(
+        printer=printer,
+        status={"connected": False, "gcode_state": "RUNNING"},
+    )
+
+    assert result.online is False

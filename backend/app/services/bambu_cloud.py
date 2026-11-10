@@ -117,6 +117,8 @@ class BambuCloudClient:
 
     def get_user_id(self) -> str:
         """Fetch and cache the current user's Bambu Cloud user id."""
+        if self.user_id:
+            return self.user_id
         resp = requests.get(
             f"{BASE_URL}/v1/design-user-service/my/preference",
             headers=self._headers(),

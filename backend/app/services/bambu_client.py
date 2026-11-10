@@ -287,10 +287,16 @@ class BambuClient:
                 self.client.disconnect()
 
     def _on_disconnect(
-        self, client, userdata, rc, properties=None, reason_code=None
+        self,
+        client,
+        userdata,
+        disconnect_flags,
+        reason_code,
+        properties=None,
     ) -> None:
         self._connected = False
-        if rc in (4, 5):
+        code = getattr(reason_code, "value", reason_code)
+        if code in (4, 5):
             self._auth_error = True
             try:
                 # Stop the reconnect loop so the MqttThread can back off.
@@ -302,10 +308,10 @@ class BambuClient:
             self._watchdog.join(timeout=5)
             self._watchdog = None
 
-        if rc == 0:
+        if code == 0:
             logger.info("Disconnected cleanly")
         else:
-            logger.warning(f"Disconnected unexpectedly (rc={rc})")
+            logger.warning(f"Disconnected unexpectedly (reason={code})")
 
     def _on_message(self, client, userdata, message) -> None:
         try:

@@ -22,6 +22,7 @@ class PrinterService:
         # Only the dict operations are guarded; connecting happens outside the
         # lock because it can block on the network.
         self._lock = threading.Lock()
+        self._reconnect_timers: dict[str, threading.Timer] = {}
 
     def get_token(self) -> str | None:
         return self.cloud_client.token
@@ -65,6 +66,7 @@ class PrinterService:
                 printer.serial,
                 exc,
             )
+            self._schedule_reconnect(printer.serial)
             return
         client.configure(
             settings.BAMBU_CLOUD_MQTT_HOST,
@@ -103,8 +105,28 @@ class PrinterService:
         with self._lock:
             clients = list(self.clients.values())
             self.clients.clear()
+            timers = list(self._reconnect_timers.values())
+            self._reconnect_timers.clear()
+        for timer in timers:
+            timer.cancel()
         for client in clients:
             client.disconnect()
+
+    def _schedule_reconnect(self, serial: str, delay: float = 60.0) -> None:
+        """Retry a cloud connection that failed transiently."""
+        with self._lock:
+            if serial in self._reconnect_timers:
+                return
+
+            def run() -> None:
+                with self._lock:
+                    self._reconnect_timers.pop(serial, None)
+                self.reload_printer(serial)
+
+            timer = threading.Timer(delay, run)
+            timer.daemon = True
+            self._reconnect_timers[serial] = timer
+        timer.start()
 
     def reload(self) -> None:
         self.disconnect()

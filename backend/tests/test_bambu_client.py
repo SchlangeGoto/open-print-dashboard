@@ -95,3 +95,47 @@ def test_ams_signature_ignores_sensor_values() -> None:
 
     assert client._ams_signature_for(first) == client._ams_signature_for(second)
     assert client._ams_signature_for(first) != client._ams_signature_for(changed)
+
+
+def test_on_disconnect_reads_a_version2_reason_code() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.bambu_client import BambuClient
+
+    client = BambuClient()
+    mqtt = MagicMock()
+    client.client = mqtt
+
+    client._on_disconnect(mqtt, None, None, SimpleNamespace(value=5), None)
+
+    assert client._auth_error is True
+    mqtt.disconnect.assert_called_once()
+
+
+def test_get_user_id_is_cached(monkeypatch) -> None:
+    from app.services.bambu_cloud import BambuCloudClient
+
+    client = BambuCloudClient()
+    client.token = "token"
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {"uid": "user-1"}
+
+    calls = {"count": 0}
+
+    def fake_get(*_args, **_kwargs):
+        calls["count"] += 1
+        return Response()
+
+    monkeypatch.setattr("app.services.bambu_cloud.requests.get", fake_get)
+
+    assert client.get_user_id() == "user-1"
+    assert client.get_user_id() == "user-1"
+    assert calls["count"] == 1

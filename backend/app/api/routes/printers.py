@@ -67,7 +67,7 @@ def _serialize_printers(
     status = status or (statuses or {}).get(serial)
     connected = bool(status and status.get("connected"))
     cloud_online = bool(cloud_device and cloud_device.get("online"))
-    online = connected or cloud_online or bool(status and status.get("gcode_state"))
+    online = connected or cloud_online
 
     return PrinterPublic(
         id=printer.id if printer else None,

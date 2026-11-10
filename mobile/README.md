@@ -26,7 +26,7 @@ refresh-token auth.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22.13+
 - The backend reachable from the phone
 - Expo Go for quick development, or a development build for camera behavior
   closest to production
@@ -71,7 +71,7 @@ Then check:
 - the computer firewall allows TCP `8081` (Metro) and `8000` (backend)
 - as a last resort, `npx expo start -c --tunnel`
 
-Settings → App & build shows the loaded build tag (`in-app-scanner-fix`), so a
+Settings → App & build shows the loaded build tag (`shelf-index-2`), so a
 stale bundle is visible.
 
 ```bash

@@ -48,6 +48,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Generate Expo route types
+        run: npx expo customize tsconfig.json
+
       - name: Typecheck
         run: npm run typecheck
 

@@ -387,7 +387,7 @@ class BambuClient:
             remain = float(tray.get("remain") or 0)
         except (TypeError, ValueError):
             remain = 0
-        if remain <= 0:
+        if remain < 0:
             return total
         return max(0.0, min(total, total * remain / 100))
 

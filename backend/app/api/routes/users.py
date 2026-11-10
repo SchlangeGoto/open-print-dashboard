@@ -67,10 +67,14 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     if settings.emails_enabled and user_in.email:
         # Send a setup link instead of the password the admin chose. Anyone
         # with access to the message should not receive a working credential.
+        jti = uuid.uuid4().hex
+        user.password_reset_jti = jti
+        session.add(user)
+        session.commit()
         email_data = generate_reset_password_email(
             email_to=user_in.email,
             email=user_in.email,
-            token=generate_password_reset_token(email=user_in.email),
+            token=generate_password_reset_token(email=user_in.email, jti=jti),
         )
         send_email(
             email_to=user_in.email,

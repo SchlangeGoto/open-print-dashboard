@@ -209,7 +209,11 @@ def recover_password(email: str, session: SessionDep) -> Message:
     # Always return the same response to prevent email enumeration attacks.
     # Only send an email if the user actually exists and email is configured.
     if user and settings.emails_enabled:
-        password_reset_token = generate_password_reset_token(email=email)
+        jti = uuid.uuid4().hex
+        user.password_reset_jti = jti
+        session.add(user)
+        session.commit()
+        password_reset_token = generate_password_reset_token(email=email, jti=jti)
         email_data = generate_reset_password_email(
             email_to=user.email, email=email, token=password_reset_token
         )
@@ -228,16 +232,23 @@ def reset_password(session: SessionDep, body: NewPassword) -> Message:
     """
     Reset password.
     """
-    email = verify_password_reset_token(token=body.token)
-    if not email:
+    payload = verify_password_reset_token(token=body.token)
+    if not payload:
         raise HTTPException(status_code=400, detail="Invalid token")
-    user = crud.get_user_by_email(session=session, email=email)
+    user = crud.get_user_by_email(session=session, email=payload["email"])
     if not user:
         # Don't reveal that the user doesn't exist - use the same error as an
         # invalid token.
         raise HTTPException(status_code=400, detail="Invalid token")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    if user.password_reset_jti is None or user.password_reset_jti != payload["jti"]:
+        # Already used, superseded by a newer link, or issued before the
+        # account was recreated with this email.
+        raise HTTPException(status_code=400, detail="Invalid token")
+    # Burn the link in the same transaction as the password change.
+    user.password_reset_jti = None
+    session.add(user)
     crud.update_user(
         session=session,
         db_user=user,
@@ -261,7 +272,11 @@ def recover_password_html_content(email: str, session: SessionDep) -> Any:
             status_code=404,
             detail="The user with this email does not exist in the system.",
         )
-    password_reset_token = generate_password_reset_token(email=email)
+    jti = uuid.uuid4().hex
+    user.password_reset_jti = jti
+    session.add(user)
+    session.commit()
+    password_reset_token = generate_password_reset_token(email=email, jti=jti)
     email_data = generate_reset_password_email(
         email_to=user.email, email=email, token=password_reset_token
     )

@@ -68,6 +68,9 @@ class User(UserBase, table=True):
     # Access tokens issued before this instant are rejected. Set on password
     # change and reuse detection, not on a single-device logout.
     sessions_revoked_at: datetime | None = None
+    # The id of the newest password-reset token. A reset burns it, so an old
+    # link cannot be reused after the password changed.
+    password_reset_jti: str | None = Field(default=None, max_length=64)
 
 
 class UserPublic(UserBase):

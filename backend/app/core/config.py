@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     EMAILS_FROM_EMAIL: EmailStr | None = None
     EMAILS_FROM_NAME: str | None = None
-    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
+    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 1
 
     @model_validator(mode="after")
     def _set_default_emails_from(self) -> "Settings":

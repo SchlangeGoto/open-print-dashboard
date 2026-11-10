@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -28,6 +29,17 @@ def login(client: TestClient, email: str, password: str) -> dict[str, str]:
     )
     assert r.status_code == 200
     return r.json()
+
+
+def issue_reset_token(db: Session, email: str) -> str:
+    """Issue a reset token the way the recovery endpoint does."""
+    user = crud.get_user_by_email(session=db, email=email)
+    assert user
+    jti = uuid.uuid4().hex
+    user.password_reset_jti = jti
+    db.add(user)
+    db.commit()
+    return generate_password_reset_token(email=email, jti=jti)
 
 
 def test_get_access_token(client: TestClient) -> None:
@@ -209,7 +221,7 @@ def test_reset_password(client: TestClient, db: Session) -> None:
         session=db,
         user_create=UserCreate(email=email, password=password, full_name="Test User"),
     )
-    token = generate_password_reset_token(email=email)
+    token = issue_reset_token(db, email)
     data = {"new_password": new_password, "token": token}
 
     r = client.post(f"{settings.API_V1_STR}/reset-password/", json=data)
@@ -222,6 +234,66 @@ def test_reset_password(client: TestClient, db: Session) -> None:
     assert verified
 
 
+def test_reset_password_token_is_single_use(client: TestClient, db: Session) -> None:
+    email = random_email()
+    password = random_lower_string()
+    new_password = random_lower_string()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(email=email, password=password),
+    )
+    token = issue_reset_token(db, email)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/reset-password/",
+        json={"new_password": new_password, "token": token},
+    )
+    assert r.status_code == 200
+
+    # The same link must not work a second time.
+    r = client.post(
+        f"{settings.API_V1_STR}/reset-password/",
+        json={"new_password": random_lower_string(), "token": token},
+    )
+    assert r.status_code == 400
+
+
+def test_a_newer_reset_token_supersedes_the_old_one(
+    client: TestClient, db: Session
+) -> None:
+    email = random_email()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(email=email, password=random_lower_string()),
+    )
+    old_token = issue_reset_token(db, email)
+    issue_reset_token(db, email)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/reset-password/",
+        json={"new_password": random_lower_string(), "token": old_token},
+    )
+    assert r.status_code == 400
+
+
+def test_an_access_token_is_not_a_password_reset_token(
+    client: TestClient, db: Session
+) -> None:
+    email = random_email()
+    password = random_lower_string()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(email=email, password=password),
+    )
+    access_token = login(client, email, password)["access_token"]
+
+    r = client.post(
+        f"{settings.API_V1_STR}/reset-password/",
+        json={"new_password": random_lower_string(), "token": access_token},
+    )
+    assert r.status_code == 400
+
+
 def test_reset_password_revokes_refresh_tokens(client: TestClient, db: Session) -> None:
     email = random_email()
     password = random_lower_string()
@@ -232,7 +304,7 @@ def test_reset_password_revokes_refresh_tokens(client: TestClient, db: Session) 
     )
     tokens = login(client, email, password)
 
-    token = generate_password_reset_token(email=email)
+    token = issue_reset_token(db, email)
     r = client.post(
         f"{settings.API_V1_STR}/reset-password/",
         json={"new_password": new_password, "token": token},
@@ -308,7 +380,7 @@ def test_access_token_is_rejected_after_a_password_change(
     me = f"{settings.API_V1_STR}/users/me"
     assert client.get(me, headers=headers).status_code == 200
 
-    reset_token = generate_password_reset_token(email=email)
+    reset_token = issue_reset_token(db, email)
     r = client.post(
         f"{settings.API_V1_STR}/reset-password/",
         json={"new_password": new_password, "token": reset_token},

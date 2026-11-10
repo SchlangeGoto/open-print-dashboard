@@ -99,24 +99,42 @@ def generate_new_account_email(email_to: str, username: str) -> EmailData:
     return EmailData(html_content=html_content, subject=subject)
 
 
-def generate_password_reset_token(email: str) -> str:
+def generate_password_reset_token(email: str, jti: str) -> str:
     delta = timedelta(hours=settings.EMAIL_RESET_TOKEN_EXPIRE_HOURS)
     now = datetime.now(UTC)
     expires = now + delta
     exp = expires.timestamp()
     encoded_jwt = jwt.encode(
-        {"exp": exp, "nbf": now, "sub": email},
+        {
+            "exp": exp,
+            "nbf": now,
+            "sub": email,
+            "type": "password_reset",
+            "jti": jti,
+        },
         settings.SECRET_KEY,
         algorithm=security.ALGORITHM,
     )
     return encoded_jwt
 
 
-def verify_password_reset_token(token: str) -> str | None:
+def verify_password_reset_token(token: str) -> dict[str, str] | None:
+    """Return the token's email and id, or None when it is not usable.
+
+    ``type`` keeps access tokens from being accepted here, and ``jti`` lets the
+    reset endpoint check that this is the token the server last issued and burn
+    it after use.
+    """
     try:
         decoded_token = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
         )
-        return str(decoded_token["sub"])
     except InvalidTokenError:
         return None
+    if decoded_token.get("type") != "password_reset":
+        return None
+    email = decoded_token.get("sub")
+    jti = decoded_token.get("jti")
+    if not email or not jti:
+        return None
+    return {"email": str(email), "jti": str(jti)}

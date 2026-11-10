@@ -1,0 +1,77 @@
+name: Release Mobile
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-mobile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8
+        with:
+          eas-version: 27.x
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production Android and iOS
+        run: eas build --platform all --profile production --non-interactive --wait --json > eas-build.json
+
+      - name: Show build result
+        run: cat eas-build.json
+
+      - name: Download artifacts
+        run: |
+          mkdir -p artifacts
+          jq -r '.[].artifacts | (.buildUrl // .applicationArchiveUrl // .url) // empty' eas-build.json | while read -r url; do
+            [ -n "$url" ] || continue
+            name=$(basename "${url%%\?*}")
+            curl -fL "$url" -o "artifacts/$name"
+          done
+          ls -lh artifacts
+          [ "$(find artifacts -maxdepth 1 -type f | wc -l)" -ge 2 ] || { echo "Expected Android and iOS artifacts" >&2; exit 1; }
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mobile-release
+          path: mobile/artifacts
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber

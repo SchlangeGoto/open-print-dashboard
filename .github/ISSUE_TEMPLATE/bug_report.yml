@@ -1,0 +1,76 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please remove secrets, printer access codes, and
+        personal data from logs before posting.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I open the spools page, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the stack with ...
+        2. Open ...
+        3. Click ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Backend / API
+        - Frontend dashboard
+        - Mobile app
+        - Marketing site
+        - Docker / deployment
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0 or commit SHA
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser, Docker version, printer model, deployment type.
+      placeholder: |
+        OS:
+        Browser:
+        Docker:
+        Printer:
+        Self-hosted or managed:
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Backend logs, browser console, or Compose output. Remove secrets.
+      render: shell

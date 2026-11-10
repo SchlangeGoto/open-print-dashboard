@@ -35,7 +35,12 @@ function load<T>(name: string, fallback: T): T {
 
 function save<T>(name: string, value: T): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(demoStorageKey(name), JSON.stringify(value));
+  try {
+    localStorage.setItem(demoStorageKey(name), JSON.stringify(value));
+  } catch {
+    // Demo state is best-effort; quota or blocked storage must not break the
+    // UI.
+  }
 }
 
 function newId(): string {
@@ -249,6 +254,16 @@ export const demoApi: ApiShape = {
     save(
       "printers",
       getPrintersRaw().filter((printer) => printer.id !== printerId),
+    );
+    // Match ON DELETE SET NULL: unload the printer's spools instead of
+    // leaving them active on a printer that no longer exists.
+    save(
+      "spools",
+      getSpoolsRaw().map((spool) =>
+        spool.printer_id === printerId
+          ? { ...spool, printer_id: null, active: false }
+          : spool,
+      ),
     );
     return delay({ message: "Printer removed (demo mode)" });
   },

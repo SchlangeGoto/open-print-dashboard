@@ -138,8 +138,12 @@ export default function PrintersPage() {
     );
   }
 
-  const selectedLoadedSpool = selectedPrinter?.id
-    ? spools.find((spool) => spool.printer_id === selectedPrinter.id)
+  const currentSelectedPrinter = selectedPrinter
+    ? (printers.find((item) => item.serial === selectedPrinter.serial) ??
+      selectedPrinter)
+    : null;
+  const selectedLoadedSpool = currentSelectedPrinter?.id
+    ? spools.find((spool) => spool.printer_id === currentSelectedPrinter.id)
     : null;
   const selectedLoadedFilament = selectedLoadedSpool
     ? filaments.find(
@@ -428,16 +432,16 @@ export default function PrintersPage() {
         </div>
       )}
 
-      {selectedPrinter ? (
+      {currentSelectedPrinter ? (
         <PrinterModal
-          printer={selectedPrinter}
-          status={selectedPrinter.status}
-          activePrint={activePrintFor(selectedPrinter.serial)}
+          printer={currentSelectedPrinter}
+          status={currentSelectedPrinter.status}
+          activePrint={activePrintFor(currentSelectedPrinter.serial)}
           loadedSpool={selectedLoadedSpool}
           loadedFilament={selectedLoadedFilament}
-          firmware={firmware[selectedPrinter.serial]}
+          firmware={firmware[currentSelectedPrinter.serial]}
           onClose={() => setSelectedPrinter(null)}
-          onSettings={() => openSettings(selectedPrinter)}
+          onSettings={() => openSettings(currentSelectedPrinter)}
           onPrintClick={(print) => {
             setSelectedPrinter(null);
             setSelectedPrint(print);

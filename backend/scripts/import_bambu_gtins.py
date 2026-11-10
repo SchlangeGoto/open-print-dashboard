@@ -115,15 +115,15 @@ NOISE_RE = re.compile(
     r"\s*(?:\((?:abolished|discarded)\)|\(with[^)]*spool\)|（with[^）]*spool）)",
     re.IGNORECASE,
 )
-WEIGHT_RE = re.compile(
-    r"(\d+(?:\.\d+)?)\s*(kg|千克|g|克|grams?)\b", re.IGNORECASE
-)
+WEIGHT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|千克|g|克|grams?)\b", re.IGNORECASE)
 
 
 def normalize(text: str) -> str:
     text = text.strip()
     text = re.sub(r"^\(zh\)\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"^3d\s*print(?:ing)?\s*filament\s*[:\-]?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"^3d\s*print(?:ing)?\s*filament\s*[:\-]?\s*", "", text, flags=re.IGNORECASE
+    )
     text = re.sub(r"^(?:bambu|bamboo)\s+lab\s+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^bamb[uo]?\s+", "", text, flags=re.IGNORECASE)
     return text.strip()
@@ -154,6 +154,7 @@ def parse_weight(text: str) -> float:
         if 1100 <= amount <= 1600:
             return 1000.0
     return 1000.0
+
 
 def parse_description(raw: str) -> dict[str, Any] | None:
     text = NOISE_RE.sub("", raw)
@@ -186,7 +187,9 @@ def parse_description(raw: str) -> dict[str, Any] | None:
     color = re.sub(r"\s+", " ", color).strip()
 
     weight = parse_weight(raw)
-    refill = bool(re.search(r"\brefill\b|without\s+(?:bambu\s+)?(?:reusable\s+)?spool", raw, re.I))
+    refill = bool(
+        re.search(r"\brefill\b|without\s+(?:bambu\s+)?(?:reusable\s+)?spool", raw, re.I)
+    )
     info_idx = SERIES_IDS.get(series)
     if series == "PC" and color.lower().startswith("clear"):
         info_idx = "GFC00"
@@ -215,6 +218,12 @@ def main() -> None:
     )
     if start is None:
         raise SystemExit("GTIN12 header not found")
+
+    existing_payload: dict[str, Any] = {}
+    if OUT_PATH.exists():
+        existing_payload = json.loads(OUT_PATH.read_text())
+    existing_barcodes = existing_payload.get("barcodes", {})
+    existing_meta = existing_payload.get("_meta", {})
 
     catalog: dict[str, dict[str, Any]] = {}
     for row in rows[start + 1 :]:
@@ -257,8 +266,15 @@ def main() -> None:
         "refill": False,
     }
 
+    # This script only imports GTINs. Keep hex colours and metadata from the
+    # enrichment step instead of nulling them when it runs on its own.
+    for barcode, entry in catalog.items():
+        if not entry.get("color_hex"):
+            entry["color_hex"] = existing_barcodes.get(barcode, {}).get("color_hex")
+
     payload = {
         "_meta": {
+            **existing_meta,
             "source": SOURCE_URL,
             "snapshot": "2026-11-08",
             "count": len(catalog),

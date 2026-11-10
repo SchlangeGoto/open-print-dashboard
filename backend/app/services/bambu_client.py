@@ -171,6 +171,8 @@ class BambuClient:
         self._current_status: dict = {}
         self._ams_signature: str | None = None
         self._last_ams_sync = 0.0
+        self._ams_failures = 0
+        self._ams_retry_after = 0.0
         self._ams_lock = threading.Lock()
 
         self.client: mqtt.Client | None = None
@@ -208,6 +210,8 @@ class BambuClient:
         self._current_status = {}
         self._ams_signature = None
         self._last_ams_sync = 0.0
+        self._ams_failures = 0
+        self._ams_retry_after = 0.0
 
     def connect(self) -> None:
         """Set up the MQTT client and start the background thread."""
@@ -403,7 +407,11 @@ class BambuClient:
         if ams:
             signature = self._ams_signature_for(ams)
             now = time.time()
-            if signature != self._ams_signature and now - self._last_ams_sync > 2:
+            if (
+                signature != self._ams_signature
+                and now >= self._ams_retry_after
+                and now - self._last_ams_sync > 2
+            ):
                 self._ams_signature = signature
                 self._last_ams_sync = now
                 threading.Thread(
@@ -609,8 +617,15 @@ class BambuClient:
             return
         with self._ams_lock:
             ok = self._sync_ams_trays_inner(ams)
-        if not ok and self._ams_signature == signature:
-            # Let the next identical report retry a failed sync.
+        if ok:
+            self._ams_failures = 0
+            self._ams_retry_after = 0.0
+        elif self._ams_signature == signature:
+            # Let the next identical report retry, but back off so a permanent
+            # failure does not hit the database every two seconds.
+            self._ams_failures += 1
+            delay = min(300.0, 30.0 * (2 ** (self._ams_failures - 1)))
+            self._ams_retry_after = time.time() + delay
             self._ams_signature = None
 
     def _sync_ams_trays_inner(self, ams: dict) -> bool:
@@ -985,6 +1000,11 @@ class BambuClient:
                     .join(Filament, Spool.filament_id == Filament.id)
                     .where(Filament.bambu_info_idx == filament_id)
                     .where(Spool.printer_id == printer_id)
+                    .where(col(Spool.remaining_unknown).is_(False))
+                    .order_by(
+                        col(Spool.active).desc(),
+                        col(Spool.created_at).asc(),
+                    )
                 ).first()
 
             if not spool:

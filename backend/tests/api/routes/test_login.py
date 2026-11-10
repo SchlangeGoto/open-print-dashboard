@@ -393,3 +393,43 @@ def test_access_token_is_rejected_after_a_password_change(
     new_tokens = login(client, email, new_password)
     new_headers = {"Authorization": f"Bearer {new_tokens['access_token']}"}
     assert client.get(me, headers=new_headers).status_code == 200
+
+
+def test_password_recovery_token_can_be_reset(
+    client: TestClient, db: Session, monkeypatch
+) -> None:
+    import re
+
+    email = random_email()
+    password = random_lower_string()
+    new_password = random_lower_string()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(email=email, password=password),
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_send_email(*, email_to: str, subject: str, html_content: str) -> None:
+        _ = subject
+        captured["to"] = email_to
+        captured["html"] = html_content
+
+    monkeypatch.setattr("app.api.routes.login.send_email", fake_send_email)
+
+    r = client.post(f"{settings.API_V1_STR}/password-recovery/{email}")
+    assert r.status_code == 200, r.text
+    assert captured["to"] == email
+
+    match = re.search(r"token=([^\"&<\s]+)", captured["html"])
+    assert match, captured["html"]
+    token = match.group(1)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/reset-password/",
+        json={"new_password": new_password, "token": token},
+    )
+    assert r.status_code == 200, r.text
+
+    tokens = login(client, email, new_password)
+    assert tokens["access_token"]

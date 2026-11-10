@@ -207,11 +207,7 @@ def main() -> None:
             unmatched.append((barcode, series, color))
             continue
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", hex_value):
-            hex_value = (
-                global_hex.get(color)
-                or GENERIC_HEX.get(color)
-                or "#9CA3AF"
-            )
+            hex_value = global_hex.get(color) or GENERIC_HEX.get(color) or "#9CA3AF"
 
         entry["color_hex"] = hex_value
         entry["series"] = entry.get("series") or series
@@ -223,9 +219,7 @@ def main() -> None:
         display_name = display_name.replace("\u200b", "")
         display_name = display_name.replace("Grey", "Gray")
         display_name = re.sub(r"\s+", " ", display_name).strip()
-        entry["color_name"] = DISPLAY_COLOR_ALIASES.get(
-            (series, color), display_name
-        )
+        entry["color_name"] = DISPLAY_COLOR_ALIASES.get((series, color), display_name)
         cleaned[barcode] = entry
 
     payload["barcodes"] = dict(sorted(cleaned.items()))

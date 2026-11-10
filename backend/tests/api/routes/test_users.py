@@ -74,3 +74,11 @@ def test_get_existing_user(
     )
     assert r.status_code == 200
     assert r.json()["email"] == email
+
+
+def test_normal_user_cannot_list_users(
+    client: TestClient, normal_user_token_headers: dict[str, str]
+) -> None:
+    r = client.get(f"{settings.API_V1_STR}/users/", headers=normal_user_token_headers)
+
+    assert r.status_code == 403

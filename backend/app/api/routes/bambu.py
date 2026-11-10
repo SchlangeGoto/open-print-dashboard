@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import SQLModel
 
 from app import crud
-from app.api.deps import SessionDep, get_current_user
+from app.api.deps import SessionDep, get_current_active_superuser
 from app.core.bambu_exceptions import (
     CloudflareError,
     CodeExpiredError,
@@ -21,7 +21,7 @@ logger = logging.getLogger("uvicorn.error")
 router = APIRouter(
     prefix="/bambu",
     tags=["bambu"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_active_superuser)],
 )
 
 

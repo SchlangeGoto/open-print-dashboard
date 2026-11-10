@@ -112,11 +112,15 @@ class Settings(BaseSettings):
 
         key = secrets.token_hex(32)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(key + "\n")
+        # Write atomically: a crash mid-write must not leave a truncated key
+        # that the next start replaces, invalidating every session.
+        tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp_path.write_text(key + "\n")
         try:
-            path.chmod(0o600)
+            tmp_path.chmod(0o600)
         except OSError:
             pass
+        os.replace(tmp_path, path)
         data["SECRET_KEY"] = key
         logger.warning(
             "No usable SECRET_KEY configured; generated one at %s. Keep this "

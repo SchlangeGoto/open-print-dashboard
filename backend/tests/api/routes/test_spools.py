@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import Filament, Printer, PrintJob, Spool
@@ -541,3 +541,58 @@ def test_activating_without_a_printer_is_rejected(
     stored = db.get(Spool, spool.id)
     assert stored is not None
     assert stored.active is False
+
+
+def test_saving_the_same_finish_twice_deducts_once(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Deduction Test",
+        color_hex="#010203",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+        printer_id=printer.id,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    task = {
+        "id": "task-deduct-1",
+        "title": "Deduction test",
+        "status": 3,
+        "weight": 100,
+        "costTime": 600,
+        "startTime": None,
+        "endTime": None,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda task_id: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("task-deduct-1")
+    client._save_print_job("task-deduct-1")
+
+    db.expire_all()
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    assert stored.remaining_g == 900
+
+    job = db.exec(
+        select(PrintJob).where(PrintJob.bambu_task_id == "task-deduct-1")
+    ).one()
+    assert job.filament_deducted_at is not None
+    assert job.weight == 100

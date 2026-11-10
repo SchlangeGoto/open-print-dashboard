@@ -25,7 +25,11 @@ def read_prints(session: SessionDep, skip: int = 0, limit: int = 500) -> Any:
     count = session.exec(select(func.count()).select_from(PrintJob)).one()
     statement = (
         select(PrintJob)
-        .order_by(col(PrintJob.finished_at).desc())
+        .order_by(
+            col(PrintJob.finished_at).desc().nullslast(),
+            col(PrintJob.created_at).desc(),
+            col(PrintJob.id).desc(),
+        )
         .offset(skip)
         .limit(limit)
     )

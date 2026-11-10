@@ -204,6 +204,17 @@ class BambuClient:
         """Stop all threads and disconnect cleanly."""
         if self._mqtt_thread:
             self._mqtt_thread.stop()
+
+        # Stop paho's network loop before joining. Otherwise the thread is
+        # parked in loop_forever() and join() burns its full timeout.
+        if self.client:
+            try:
+                self.client.disconnect()
+                self.client.loop_stop()
+            except Exception as e:
+                logger.debug(f"Error during disconnect: {e}")
+
+        if self._mqtt_thread:
             self._mqtt_thread.join(timeout=5)
             self._mqtt_thread = None
 
@@ -212,15 +223,7 @@ class BambuClient:
             self._watchdog.join(timeout=5)
             self._watchdog = None
 
-        if self.client:
-            try:
-                self.client.loop_stop()
-                self.client.disconnect()
-            except Exception as e:
-                logger.debug(f"Error during disconnect: {e}")
-            finally:
-                self.client = None
-
+        self.client = None
         self._connected = False
         logger.info("Disconnected from printer")
 

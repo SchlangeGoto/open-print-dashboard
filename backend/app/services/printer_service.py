@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from sqlmodel import Session
 
@@ -17,6 +18,10 @@ class PrinterService:
     def __init__(self, cloud_client: BambuCloudClient) -> None:
         self.clients: dict[str, BambuClient] = {}
         self.cloud_client = cloud_client
+        # ``clients`` is touched from request threads and the MQTT threads.
+        # Only the dict operations are guarded; connecting happens outside the
+        # lock because it can block on the network.
+        self._lock = threading.Lock()
 
     def get_token(self) -> str | None:
         return self.cloud_client.token
@@ -38,6 +43,10 @@ class PrinterService:
             save_cloud_credentials(self.cloud_client.email, self.cloud_client.password)
 
     def _connect(self, printer: Printer) -> None:
+        with self._lock:
+            if printer.serial in self.clients:
+                return
+
         client = BambuClient()
 
         token = self.cloud_client.token or get_cloud_token()
@@ -68,8 +77,19 @@ class PrinterService:
         if not client.is_configured:
             logger.info("Printer %s is not configured — MQTT skipped", printer.serial)
             return
-        self.clients[printer.serial] = client
-        client.connect()
+
+        # Another thread may have connected this printer while the user id was
+        # being resolved. Only the winner is registered and started.
+        with self._lock:
+            if printer.serial in self.clients:
+                return
+            self.clients[printer.serial] = client
+        try:
+            client.connect()
+        except Exception:
+            with self._lock:
+                self.clients.pop(printer.serial, None)
+            raise
 
     def configure_and_connect(self) -> None:
         """Load all configured printers and start one MQTT client per printer."""
@@ -77,21 +97,22 @@ class PrinterService:
             printers = crud.get_printers(session=session)
 
         for printer in printers:
-            if printer.serial in self.clients:
-                continue
             self._connect(printer)
 
     def disconnect(self) -> None:
-        for client in self.clients.values():
+        with self._lock:
+            clients = list(self.clients.values())
+            self.clients.clear()
+        for client in clients:
             client.disconnect()
-        self.clients.clear()
 
     def reload(self) -> None:
         self.disconnect()
         self.configure_and_connect()
 
     def reload_printer(self, serial: str) -> None:
-        client = self.clients.pop(serial, None)
+        with self._lock:
+            client = self.clients.pop(serial, None)
         if client:
             client.disconnect()
 
@@ -101,7 +122,8 @@ class PrinterService:
             self._connect(printer)
 
     def get_client(self, serial: str) -> BambuClient | None:
-        return self.clients.get(serial)
+        with self._lock:
+            return self.clients.get(serial)
 
     def get_status(self, serial: str) -> dict:
         client = self.get_client(serial)
@@ -110,7 +132,9 @@ class PrinterService:
         return client.get_status()
 
     def get_statuses(self) -> dict[str, dict]:
-        return {serial: client.get_status() for serial, client in self.clients.items()}
+        with self._lock:
+            clients = list(self.clients.items())
+        return {serial: client.get_status() for serial, client in clients}
 
 
 printer_service = PrinterService(BambuCloudClient())

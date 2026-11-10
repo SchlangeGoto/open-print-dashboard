@@ -341,3 +341,4 @@ re-opened.
 | Printer screenshot refreshed to the current copy | `40c189c` | Human #20 |
 | AMS adoption matched by remaining weight; unknown percentages tracked | `9224ba5` | Product D-13 |
 | Unknown spool weight shown as unknown on web and mobile | `1b709f5` | Product D-13 |
+| Unknown-weight edit keeps the flag; scan create passes the symbology; mobile 4xx narrowed | `84652f7`, `8198400` | Human #20 |

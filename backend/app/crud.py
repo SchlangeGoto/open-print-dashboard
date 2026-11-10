@@ -159,12 +159,7 @@ def create_printer(*, session: Session, printer_in: PrinterCreate) -> Printer:
 def update_printer(
     *, session: Session, printer: Printer, printer_in: PrinterUpdate
 ) -> Printer:
-    data = printer_in.model_dump(exclude_unset=True)
-    # The API never returns the stored access code, so an empty value from the
-    # edit form means "keep the current one" rather than "clear it".
-    if not data.get("access_code"):
-        data.pop("access_code", None)
-    printer.sqlmodel_update(data)
+    printer.sqlmodel_update(printer_in.model_dump(exclude_unset=True))
     printer.updated_at = get_datetime_utc()
     session.add(printer)
     session.commit()

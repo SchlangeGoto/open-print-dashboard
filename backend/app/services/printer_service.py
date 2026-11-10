@@ -6,7 +6,7 @@ from app import crud
 from app.core.config import settings
 from app.core.db import engine
 from app.core.store import get_cloud_token, save_cloud_credentials, save_cloud_token
-from app.models import Printer, PrinterCreate
+from app.models import Printer
 from app.services.bambu_client import BambuClient
 from app.services.bambu_cloud import BambuCloudClient
 
@@ -40,39 +40,30 @@ class PrinterService:
     def _connect(self, printer: Printer) -> None:
         client = BambuClient()
 
-        if printer.connection_mode == "cloud":
-            token = self.cloud_client.token or get_cloud_token()
-            if not token:
-                logger.info(
-                    "Printer %s uses Bambu Cloud but no account is connected",
-                    printer.serial,
-                )
-                return
-            self.cloud_client.token = token
-            try:
-                user_id = self.cloud_client.get_user_id()
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Could not resolve the Bambu Cloud user id for %s: %s",
-                    printer.serial,
-                    exc,
-                )
-                return
-            client.configure(
-                settings.BAMBU_CLOUD_MQTT_HOST,
+        token = self.cloud_client.token or get_cloud_token()
+        if not token:
+            logger.info(
+                "Printer %s needs a Bambu Cloud account, but none is connected",
                 printer.serial,
-                mode="cloud",
-                username=f"u_{user_id}",
-                password=token,
-                port=settings.BAMBU_CLOUD_MQTT_PORT,
             )
-        else:
-            client.configure(
-                printer.ip,
+            return
+        self.cloud_client.token = token
+        try:
+            user_id = self.cloud_client.get_user_id()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Could not resolve the Bambu Cloud user id for %s: %s",
                 printer.serial,
-                printer.access_code,
-                mode="lan",
+                exc,
             )
+            return
+        client.configure(
+            settings.BAMBU_CLOUD_MQTT_HOST,
+            printer.serial,
+            username=f"u_{user_id}",
+            password=token,
+            port=settings.BAMBU_CLOUD_MQTT_PORT,
+        )
 
         if not client.is_configured:
             logger.info("Printer %s is not configured — MQTT skipped", printer.serial)
@@ -84,23 +75,6 @@ class PrinterService:
         """Load all configured printers and start one MQTT client per printer."""
         with Session(engine) as session:
             printers = crud.get_printers(session=session)
-            if (
-                not printers
-                and settings.PRINTER_IP
-                and settings.PRINTER_SERIAL
-                and settings.PRINTER_ACCESS_CODE
-            ):
-                printer = crud.create_printer(
-                    session=session,
-                    printer_in=PrinterCreate(
-                        name=settings.PRINTER_SERIAL,
-                        serial=settings.PRINTER_SERIAL,
-                        ip=settings.PRINTER_IP,
-                        access_code=settings.PRINTER_ACCESS_CODE,
-                        connection_mode="lan",
-                    ),
-                )
-                printers = [printer]
 
         for printer in printers:
             if printer.serial in self.clients:
@@ -111,13 +85,6 @@ class PrinterService:
         for client in self.clients.values():
             client.disconnect()
         self.clients.clear()
-
-    def disconnect_cloud(self) -> None:
-        """Disconnect only the cloud clients, leaving LAN printers running."""
-        for serial, client in list(self.clients.items()):
-            if client.mode == "cloud":
-                client.disconnect()
-                del self.clients[serial]
 
     def reload(self) -> None:
         self.disconnect()

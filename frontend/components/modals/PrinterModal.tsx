@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Network, Settings2, Thermometer } from "lucide-react";
+import { Cloud, Settings2, Thermometer } from "lucide-react";
 
 import type { Printer } from "@/lib/api";
 import { formatWeight, isPrintingStatus } from "@/lib/utils";
@@ -127,17 +127,8 @@ export default function PrinterModal({
             <span>{printer.model ?? "Bambu Lab printer"}</span>
             <span className="font-mono">{printer.serial}</span>
             <span className="inline-flex items-center gap-1">
-              {printer.connection_mode === "cloud" ? (
-                <>
-                  <Cloud className="size-3" /> Bambu Cloud
-                </>
-              ) : (
-                <>
-                  <Network className="size-3" /> LAN
-                </>
-              )}
+              <Cloud className="size-3" /> Bambu Cloud
             </span>
-            {printer.ip ? <span className="font-mono">{printer.ip}</span> : null}
             {!printer.configured ? <span>Not configured</span> : null}
           </DialogDescription>
         </DialogHeader>
@@ -146,8 +137,8 @@ export default function PrinterModal({
           <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-center">
             <p className="text-sm font-medium">Connection not configured</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Add the local IP address and access code to start monitoring this
-              printer.
+              Add this printer to the dashboard to start monitoring it through
+              your Bambu Cloud account.
             </p>
             <Button className="mt-4" size="sm" onClick={onSettings}>
               <Settings2 /> Configure printer

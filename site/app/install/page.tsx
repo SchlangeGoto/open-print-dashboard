@@ -21,16 +21,8 @@ openssl rand -hex 32   # copy the output into SECRET_KEY`,
 
 const credentials = [
   {
-    value: "IP address",
-    where: "Printer touchscreen, Settings, Network, IP Address",
-  },
-  {
     value: "Serial number",
     where: "Settings, Device, Serial Number (also on the sticker on the back)",
-  },
-  {
-    value: "Access code",
-    where: "Settings, Network, Access Code (LAN mode must be enabled)",
   },
 ];
 
@@ -151,7 +143,7 @@ export default function InstallPage() {
               {[
                 ["1", "Create account", "Your local admin. No external identity provider."],
                 ["2", "Connect Bambu Lab", "Used for account and history sync. Encrypted at rest."],
-                ["3", "Add printer", "IP, serial and access code from the touchscreen."],
+                ["3", "Add printer", "Pick it from the list on your Bambu account."],
               ].map(([number, title, body]) => (
                 <div
                   key={number}
@@ -171,7 +163,7 @@ export default function InstallPage() {
 
           <section className="border-t border-[var(--color-rule)] py-10">
             <h2 className="text-xl font-semibold tracking-tight">
-              Finding your printer credentials
+              Finding your printer
             </h2>
             <div className="mt-4 overflow-hidden rounded-lg border border-[var(--color-rule)]">
               <table className="w-full text-left text-sm">
@@ -242,8 +234,8 @@ docker compose up -d --build`}</code>
                 <strong className="text-[var(--color-ink)]">
                   The printer is offline.
                 </strong>{" "}
-                Check the IP address, make sure LAN mode is enabled, and confirm
-                the access code from the touchscreen.
+                Check that it is online in Bambu Handy, and that your Bambu Lab
+                account is connected in Settings.
               </p>
               <p>
                 <strong className="text-[var(--color-ink)]">
@@ -282,8 +274,7 @@ docker compose up -d --build`}</code>
                 "Docker Engine and Docker Compose",
                 "Git",
                 "A Bambu Lab account",
-                "Printer IP, serial and access code",
-                "The printer on your local network",
+                "A printer bound to that account in Bambu Handy",
               ].map((item) => (
                 <li key={item} className="flex gap-2.5">
                   <Check className="mt-0.5 size-4 shrink-0 text-[var(--color-success)]" />

@@ -11,9 +11,6 @@ def _create_printer(db: Session) -> Printer:
     printer = Printer(
         name="Test printer",
         serial=f"test-{uuid.uuid4().hex}",
-        ip="127.0.0.1",
-        access_code="00000000",
-        connection_mode="lan",
     )
     db.add(printer)
     db.commit()

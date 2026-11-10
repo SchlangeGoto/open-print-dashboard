@@ -148,9 +148,6 @@ export const DEMO_PRINTER_RECORDS = [
     name: "X1 Carbon",
     serial: X1C_DEVICE_ID,
     model: "Bambu Lab X1 Carbon",
-    ip: null,
-    access_code: null,
-    connection_mode: "cloud",
     configured: true,
     online: true,
     status: DEMO_CLOUD_STATUS[0],
@@ -162,9 +159,6 @@ export const DEMO_PRINTER_RECORDS = [
     name: "P1S Garage",
     serial: P1S_DEVICE_ID,
     model: "Bambu Lab P1S",
-    ip: "192.168.1.43",
-    access_code: "87654321",
-    connection_mode: "lan",
     configured: true,
     online: true,
     status: DEMO_CLOUD_STATUS[1],
@@ -176,9 +170,6 @@ export const DEMO_PRINTER_RECORDS = [
     name: "A1 Mini",
     serial: A1_MINI_DEVICE_ID,
     model: "Bambu Lab A1 mini",
-    ip: null,
-    access_code: null,
-    connection_mode: "cloud",
     configured: false,
     online: false,
     status: null,
@@ -712,16 +703,7 @@ export const DEMO_PRINTS: DemoPrint[] = [
 export const DEMO_SETTINGS = [
   { key: "bambu_cloud_email", value: "demo@bambu.example" },
   { key: "bambu_cloud_token", value: "demo-token" },
-  { key: "printer_ip", value: "192.168.1.42" },
-  { key: "printer_serial", value: X1C_DEVICE_ID },
-  { key: "printer_access_code", value: "12345678" },
 ];
-
-export const DEMO_PRINTER_CONFIG = {
-  ip: "192.168.1.42",
-  serial: X1C_DEVICE_ID,
-  access_code: "12345678",
-};
 
 export const DEMO_BAMBU_PROFILE = {
   uid: "demo_uid",

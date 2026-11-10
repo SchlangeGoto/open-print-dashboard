@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import EmailStr, field_validator, model_validator
+from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -307,64 +307,31 @@ class SettingUpdate(SQLModel):
     value: str
 
 
-class PrinterConfig(SQLModel):
-    ip: str | None = None
-    serial: str | None = None
-    access_code: str | None = None
-
-
 # ────────────────────────────────────────────────────────────
 # Printers
 # ────────────────────────────────────────────────────────────
-CONNECTION_MODES = ("cloud", "lan")
-
-
 class PrinterBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     serial: str = Field(min_length=1, max_length=100)
-    # LAN fields are only required when connection_mode is "lan". Cloud
-    # printers are reached through the authenticated Bambu Cloud MQTT broker.
-    ip: str | None = Field(default=None, max_length=100)
-    access_code: str | None = Field(default=None, max_length=100)
-    connection_mode: str = Field(default="cloud", max_length=20)
-
-    @field_validator("connection_mode")
-    @classmethod
-    def _validate_connection_mode(cls, value: str) -> str:
-        if value not in CONNECTION_MODES:
-            raise ValueError(
-                f"connection_mode must be one of: {', '.join(CONNECTION_MODES)}"
-            )
-        return value
 
 
 class PrinterCreate(PrinterBase):
-    @model_validator(mode="after")
-    def _validate_lan_credentials(self) -> "PrinterCreate":
-        if self.connection_mode == "lan" and not (self.ip and self.access_code):
-            raise ValueError("LAN printers require an IP address and access code")
-        return self
+    pass
 
 
 class PrinterUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    ip: str | None = Field(default=None, max_length=100)
-    access_code: str | None = Field(default=None, max_length=100)
-    connection_mode: str | None = Field(default=None, max_length=20)
-
-    @field_validator("connection_mode")
-    @classmethod
-    def _validate_connection_mode(cls, value: str | None) -> str | None:
-        if value is not None and value not in CONNECTION_MODES:
-            raise ValueError(
-                f"connection_mode must be one of: {', '.join(CONNECTION_MODES)}"
-            )
-        return value
 
 
 class Printer(PrinterBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     serial: str = Field(unique=True, index=True, max_length=100)
+    # Deprecated LAN columns, kept for one release. Local MQTT is retired and
+    # every printer connects through Bambu Cloud. A follow-up migration drops
+    # these; nothing reads or writes them anymore.
+    ip: str | None = Field(default=None, max_length=100)
+    access_code: str | None = Field(default=None, max_length=100)
+    connection_mode: str = Field(default="cloud", max_length=20)
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     updated_at: datetime | None = Field(default_factory=get_datetime_utc)
 
@@ -374,9 +341,6 @@ class PrinterPublic(SQLModel):
     name: str
     serial: str
     model: str | None = None
-    ip: str | None = None
-    access_code: str | None = None
-    connection_mode: str = "cloud"
     online: bool = False
     configured: bool = False
     status: dict[str, Any] | None = None

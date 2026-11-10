@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Cloud, Network, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Cloud, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 
 import { api, type Printer } from "@/lib/api";
@@ -42,13 +42,9 @@ export default function PrinterSettingsModal({
   onSaved,
 }: Props) {
   const isEdit = Boolean(printer?.id);
-  const isCloud = isEdit && printer?.connection_mode === "cloud";
   const [form, setForm] = useState({
     name: printer?.name ?? "",
     serial: printer?.serial ?? "",
-    ip: printer?.ip ?? "",
-    // The API never returns the stored code; an empty value keeps it.
-    access_code: "",
   });
   const [saving, setSaving] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -59,21 +55,12 @@ export default function PrinterSettingsModal({
     setSaving(true);
     try {
       if (isEdit && printer?.id) {
-        await api.updatePrinter(
-          printer.id,
-          isCloud
-            ? { name: form.name }
-            : {
-                name: form.name,
-                ip: form.ip,
-                access_code: form.access_code,
-              },
-        );
+        await api.updatePrinter(printer.id, { name: form.name });
         toast.success("Printer settings saved");
       } else {
         await api.createPrinter({
-          ...form,
-          connection_mode: "lan",
+          name: form.name,
+          serial: form.serial,
         });
         toast.success("Printer added");
       }
@@ -118,13 +105,11 @@ export default function PrinterSettingsModal({
       <Dialog open onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Printer settings" : "Add LAN printer"}</DialogTitle>
+            <DialogTitle>{isEdit ? "Printer settings" : "Add printer"}</DialogTitle>
             <DialogDescription>
-              {isCloud
-                ? "This printer is monitored through Bambu Cloud. No local IP or access code is needed."
-                : isEdit
-                  ? "Update the local connection details for this printer."
-                  : "Printers on your Bambu account appear in the list automatically. Use this form for a printer on your local network."}
+              {isEdit
+                ? "Rename this printer. It is monitored through Bambu Cloud."
+                : "Add a printer from your Bambu Lab account."}
             </DialogDescription>
           </DialogHeader>
 
@@ -158,52 +143,9 @@ export default function PrinterSettingsModal({
             </div>
 
             <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-              {isCloud ? (
-                <>
-                  <Cloud className="size-4 shrink-0" />
-                  Bambu Cloud connection
-                </>
-              ) : (
-                <>
-                  <Network className="size-4 shrink-0" />
-                  LAN connection · the printer must be reachable from this server
-                </>
-              )}
+              <Cloud className="size-4 shrink-0" />
+              Bambu Cloud connection
             </div>
-
-            {!isCloud ? (
-              <>
-                <Field>
-                  <FieldLabel htmlFor="printer-ip">Printer IP</FieldLabel>
-                  <Input
-                    id="printer-ip"
-                    placeholder="192.168.0.100"
-                    value={form.ip}
-                    onChange={(event) =>
-                      setForm({ ...form, ip: event.target.value })
-                    }
-                    required
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="printer-access-code">
-                    Access code
-                  </FieldLabel>
-                  <Input
-                    id="printer-access-code"
-                    placeholder={
-                      isEdit ? "Leave blank to keep the current code" : "12345678"
-                    }
-                    value={form.access_code}
-                    onChange={(event) =>
-                      setForm({ ...form, access_code: event.target.value })
-                    }
-                    required={!isEdit}
-                  />
-                </Field>
-              </>
-            ) : null}
 
             <DialogFooter className="gap-2 sm:justify-between">
               {isEdit ? (

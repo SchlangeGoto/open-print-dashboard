@@ -55,8 +55,7 @@ export function PrinterRackRow({ row, onOpenSpool }: PrinterRackRowProps) {
           <MetaLine
             items={[
               printer.model ?? "Bambu Lab printer",
-              printer.ip,
-              printer.configured ? null : "Cloud only",
+              printer.configured ? "Bambu Cloud" : "Not added",
             ]}
           />
         </View>

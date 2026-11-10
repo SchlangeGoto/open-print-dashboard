@@ -98,6 +98,6 @@ def delete_session(session: SessionDep) -> Any:
     global _pending_login
     _pending_login = False
     crud.clear_cloud_credentials(session=session)
-    printer_service.disconnect_cloud()
+    printer_service.disconnect()
     printer_service.cloud_client.reset_session()
     return Message(message="Bambu Lab session cleared")

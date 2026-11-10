@@ -95,8 +95,6 @@ def test_ams_links_barcode_spool_by_tag(
     printer = Printer(
         name="AMS Link Test",
         serial=random_lower_string(),
-        ip="127.0.0.1",
-        access_code="12345678",
     )
     filament = Filament(
         brand="Bambu Lab",
@@ -165,8 +163,6 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
     printer = Printer(
         name="AMS FIFO Test",
         serial=random_lower_string(),
-        ip="127.0.0.1",
-        access_code="12345678",
     )
     filament = Filament(
         brand="Bambu Lab",

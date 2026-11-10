@@ -8,7 +8,6 @@ import {
   Check,
   ChevronRight,
   Cloud,
-  ExternalLink,
   FlaskConical,
   Info,
   Printer,
@@ -62,11 +61,6 @@ export default function SetupPage() {
   const [cloudPrinters, setCloudPrinters] = useState<PrinterDevice[]>([]);
   const [selectedSerial, setSelectedSerial] = useState("");
   const [loadingPrinters, setLoadingPrinters] = useState(false);
-  const [showLanForm, setShowLanForm] = useState(false);
-  const [printerIp, setPrinterIp] = useState("");
-  const [printerSerial, setPrinterSerial] = useState("");
-  const [printerAccessCode, setPrinterAccessCode] = useState("");
-  const [showPrinterHelp, setShowPrinterHelp] = useState(false);
 
   useEffect(() => {
     api
@@ -96,16 +90,12 @@ export default function SetupPage() {
     try {
       const printers = await api.getPrinters();
       const available = printers.filter(
-        (printer) =>
-          printer.connection_mode === "cloud" &&
-          !printer.configured &&
-          !printer.id,
+        (printer) => !printer.configured && !printer.id,
       );
       setCloudPrinters(available);
       setSelectedSerial(available[0]?.serial ?? "");
-      setShowLanForm(available.length === 0);
     } catch {
-      setShowLanForm(true);
+      setCloudPrinters([]);
     } finally {
       setLoadingPrinters(false);
     }
@@ -202,31 +192,10 @@ export default function SetupPage() {
       await api.createPrinter({
         name: device.name,
         serial: device.serial,
-        connection_mode: "cloud",
       });
       setStep("done");
     } catch (err: any) {
       setError(err.message || "Failed to add printer");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePrinterSetup(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setBusy(true);
-    try {
-      await api.createPrinter({
-        name: printerSerial,
-        serial: printerSerial,
-        connection_mode: "lan",
-        ip: printerIp,
-        access_code: printerAccessCode,
-      });
-      setStep("done");
-    } catch (err: any) {
-      setError(err.message || "Failed to save printer settings");
     } finally {
       setBusy(false);
     }
@@ -526,113 +495,6 @@ export default function SetupPage() {
                   </Button>
                 </>
               )}
-
-              <div className="space-y-3 border-t pt-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => setShowLanForm((value) => !value)}
-                >
-                  <Info />
-                  {showLanForm
-                    ? "Hide LAN setup"
-                    : "Connect a LAN printer instead"}
-                </Button>
-
-                {showLanForm ? (
-                  <div className="space-y-4">
-                    <p className="text-xs text-muted-foreground">
-                      LAN mode is optional. It works without Bambu Cloud, but the
-                      printer must be on the same network as this server and may
-                      need LAN-only mode with Developer Mode enabled.
-                    </p>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() => setShowPrinterHelp((value) => !value)}
-                    >
-                      <Info />
-                      Where do I find these values? Click to expand.
-                    </Button>
-
-                    {showPrinterHelp ? (
-                      <div className="space-y-2 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
-                        <p>
-                          <strong className="text-foreground">Printer IP:</strong>{" "}
-                          Found in your printer&apos;s network settings or your
-                          router&apos;s DHCP client list.
-                        </p>
-                        <p>
-                          <strong className="text-foreground">
-                            Serial Number:
-                          </strong>{" "}
-                          On the printer → Settings → Device → Serial Number, or
-                          on the sticker on the back.
-                        </p>
-                        <p>
-                          <strong className="text-foreground">Access Code:</strong>{" "}
-                          On the printer → Settings → Network → Access Code.
-                        </p>
-                        <a
-                          href="https://wiki.bambulab.com/en/general/find-sn"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary hover:underline"
-                        >
-                          Bambu Lab Wiki — Finding serial number
-                          <ExternalLink className="size-3" />
-                        </a>
-                      </div>
-                    ) : null}
-
-                    <form onSubmit={handlePrinterSetup} className="space-y-4">
-                      <Field>
-                        <FieldLabel htmlFor="ip">Printer IP Address</FieldLabel>
-                        <Input
-                          id="ip"
-                          placeholder="192.168.0.100"
-                          value={printerIp}
-                          onChange={(e) => setPrinterIp(e.target.value)}
-                          required
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="serial">
-                          Printer Serial Number
-                        </FieldLabel>
-                        <Input
-                          id="serial"
-                          placeholder="03919C462700XXX"
-                          value={printerSerial}
-                          onChange={(e) => setPrinterSerial(e.target.value)}
-                          required
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="access-code">Access Code</FieldLabel>
-                        <Input
-                          id="access-code"
-                          placeholder="12345678"
-                          value={printerAccessCode}
-                          onChange={(e) => setPrinterAccessCode(e.target.value)}
-                          required
-                        />
-                      </Field>
-
-                      <LoadingButton
-                        type="submit"
-                        loading={busy}
-                        className="w-full"
-                      >
-                        Finish setup with LAN <Check />
-                      </LoadingButton>
-                    </form>
-                  </div>
-                ) : null}
-              </div>
 
               {error ? (
                 <Alert variant="destructive">

@@ -1,6 +1,5 @@
 import json
 import logging
-import ssl
 import threading
 import time
 import uuid
@@ -83,8 +82,8 @@ class MqttThread(threading.Thread):
                 self._client.client.loop_forever()
                 logger.debug("loop_forever exited cleanly")
                 if self._client._auth_error:
-                    # Bad token or access code. Retrying quickly makes Bambu
-                    # rate-limit the account, so back off before trying again.
+                    # Bad token. Retrying quickly makes Bambu rate-limit the
+                    # account, so back off before trying again.
                     logger.warning("MQTT authentication failed — retrying in 60s")
                     if self._stop_event.wait(60):
                         break
@@ -128,11 +127,9 @@ class BambuClient:
         self.host: str | None = None
         self.port = 8883
         self.serial: str | None = None
-        self.access_code: str | None = None
-        self.mode = "lan"
         self.username: str | None = None
         self.password: str | None = None
-        self.keepalive = 5
+        self.keepalive = 60
 
         self._client_id = f"open-print-{uuid.uuid4()}"
         self._connected = False
@@ -148,37 +145,27 @@ class BambuClient:
 
     @property
     def is_configured(self) -> bool:
-        if not (self.host and self.serial):
-            return False
-        if self.mode == "cloud":
-            return bool(self.username and self.password)
-        return bool(self.access_code)
+        return bool(self.host and self.serial and self.username and self.password)
 
     def configure(
         self,
         host: str | None,
         serial: str | None,
-        access_code: str | None = None,
         *,
-        mode: str = "lan",
         username: str | None = None,
         password: str | None = None,
         port: int = 8883,
     ) -> None:
-        """Set the connection parameters and reset the cached status.
+        """Set the Bambu Cloud MQTT parameters and reset the cached status.
 
-        ``mode="cloud"`` connects to Bambu's cloud MQTT broker with the
-        account's ``u_<uid>`` username and access token. ``mode="lan"``
-        connects directly to the printer with its access code.
+        The client connects to Bambu's cloud MQTT broker with the account's
+        ``u_<uid>`` username and access token. Local/LAN MQTT is retired.
         """
         self.host = host
         self.port = port
         self.serial = serial
-        self.access_code = access_code
-        self.mode = mode
         self.username = username
         self.password = password
-        self.keepalive = 60 if mode == "cloud" else 5
         self._connected = False
         self._auth_error = False
         self._last_seen = None
@@ -199,19 +186,10 @@ class BambuClient:
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         )
 
-        if self.mode == "cloud":
-            # Bambu's broker uses a publicly trusted certificate.
-            self.client.tls_set()
-            self.client.username_pw_set(self.username, password=self.password)
-            self.client.reconnect_delay_set(min_delay=5, max_delay=120)
-        else:
-            # The printer's certificate is self-signed.
-            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-            self.client.tls_set_context(context)
-            self.client.username_pw_set("bblp", password=self.access_code)
-            self.client.reconnect_delay_set(min_delay=1, max_delay=5)
+        # Bambu's broker uses a publicly trusted certificate.
+        self.client.tls_set()
+        self.client.username_pw_set(self.username, password=self.password)
+        self.client.reconnect_delay_set(min_delay=5, max_delay=120)
 
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
@@ -220,7 +198,7 @@ class BambuClient:
         self._last_seen = time.monotonic()
         self._mqtt_thread = MqttThread(self)
         self._mqtt_thread.start()
-        logger.info("MQTT thread started for %s (%s)", self.host, self.mode)
+        logger.info("MQTT thread started for %s", self.host)
 
     def disconnect(self) -> None:
         """Stop all threads and disconnect cleanly."""
@@ -248,7 +226,7 @@ class BambuClient:
 
     def _on_connect(self, client, userdata, flags, rc, properties=None) -> None:
         if rc == 0:
-            logger.info("Connected to %s MQTT broker at %s", self.mode, self.host)
+            logger.info("Connected to the Bambu Cloud MQTT broker at %s", self.host)
             self._connected = True
             self._auth_error = False
             self._last_seen = time.monotonic()
@@ -266,8 +244,7 @@ class BambuClient:
             self._connected = False
             self._auth_error = rc in (4, 5)
             logger.error(
-                "MQTT connection failed (%s): %s",
-                self.mode,
+                "MQTT connection failed: %s",
                 codes.get(rc, rc),
             )
             if self._auth_error and self.client is not None:

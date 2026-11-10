@@ -56,13 +56,12 @@ def _serialize_printers(
     elif cloud_device is not None:
         serial = str(cloud_device.get("dev_id"))
     else:
-        raise ValueError("A local or cloud printer is required")
+        raise ValueError("A printer or cloud device is required")
 
     status = status or (statuses or {}).get(serial)
     connected = bool(status and status.get("connected"))
     cloud_online = bool(cloud_device and cloud_device.get("online"))
     online = connected or cloud_online or bool(status and status.get("gcode_state"))
-    connection_mode = printer.connection_mode if printer else "cloud"
 
     return PrinterPublic(
         id=printer.id if printer else None,
@@ -75,11 +74,6 @@ def _serialize_printers(
         ),
         serial=serial,
         model=cloud_device.get("dev_model_name") if cloud_device else None,
-        ip=printer.ip if printer and connection_mode == "lan" else None,
-        # Write-only: the MQTT password of a configured printer is never
-        # returned to a client.
-        access_code=None,
-        connection_mode=connection_mode,
         online=online,
         configured=printer is not None,
         status={**status, "dev_id": serial} if status else None,
@@ -217,17 +211,6 @@ def update_printer(
     printer = crud.get_printer(session=session, printer_id=printer_id)
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
-
-    changes = printer_in.model_dump(exclude_unset=True)
-    connection_mode = changes.get("connection_mode", printer.connection_mode)
-    ip = changes.get("ip", printer.ip)
-    # The API never returns the stored code, so an empty value means "keep it".
-    access_code = changes.get("access_code") or printer.access_code
-    if connection_mode == "lan" and not (ip and access_code):
-        raise HTTPException(
-            status_code=422,
-            detail="LAN printers require an IP address and access code",
-        )
 
     printer = crud.update_printer(
         session=session, printer=printer, printer_in=printer_in

@@ -82,8 +82,8 @@ class Settings(BaseSettings):
     BAMBU_CLOUD_MQTT_HOST: str = "us.mqtt.bambulab.com"
     BAMBU_CLOUD_MQTT_PORT: int = 8883
 
-    # Optional LAN printer bootstrap. Normally configured through the setup
-    # wizard and stored in the database.
+    # Deprecated: LAN mode is retired and these are no longer read. Kept for
+    # one release so existing .env files keep loading, then removed.
     PRINTER_IP: str | None = None
     PRINTER_SERIAL: str | None = None
     PRINTER_ACCESS_CODE: str | None = None

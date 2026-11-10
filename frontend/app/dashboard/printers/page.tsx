@@ -87,7 +87,6 @@ export default function PrintersPage() {
       await api.createPrinter({
         name: printer.name,
         serial: printer.serial,
-        connection_mode: "cloud",
       });
       toast.success("Printer added");
       await load();
@@ -140,9 +139,6 @@ export default function PrintersPage() {
           <Button variant="outline" size="sm" onClick={load}>
             <RefreshCw /> Refresh
           </Button>
-          <Button size="sm" onClick={() => openSettings(null)}>
-            <Plus /> Add LAN printer
-          </Button>
         </div>
       </div>
 
@@ -150,12 +146,7 @@ export default function PrintersPage() {
         <EmptyState
           icon={PrinterIcon}
           title="No printers"
-          description="Printers on your Bambu Lab account appear here. You can also connect one on your local network."
-          action={
-            <Button onClick={() => openSettings(null)}>
-              <Plus /> Add LAN printer
-            </Button>
-          }
+          description="Printers on your Bambu Lab account appear here. Bind the printer in Bambu Handy, then refresh."
         />
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">

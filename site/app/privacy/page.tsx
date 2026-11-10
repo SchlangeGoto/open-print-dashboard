@@ -68,7 +68,7 @@ export default function PrivacyPage() {
             <p className="mt-3">
               When you run OpenPrintDash yourself, the application, database,
               print history, filament and spool data live on your server. Your
-              printer access code and Bambu Cloud credentials are encrypted at
+              Bambu Cloud credentials are encrypted at
               rest with a key derived from your{" "}
               <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
                 SECRET_KEY

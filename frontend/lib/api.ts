@@ -231,16 +231,11 @@ export interface SetupStatus {
   setup_complete: boolean;
 }
 
-export type PrinterConnectionMode = "cloud" | "lan";
-
 export interface Printer {
   id: string | null;
   name: string;
   serial: string;
   model: string | null;
-  ip: string | null;
-  access_code: string | null;
-  connection_mode: PrinterConnectionMode;
   online: boolean;
   configured: boolean;
   status: any | null;
@@ -259,16 +254,10 @@ export interface BarcodeScanResult {
 export interface PrinterInput {
   name: string;
   serial: string;
-  connection_mode?: PrinterConnectionMode;
-  ip?: string | null;
-  access_code?: string | null;
 }
 
 export interface PrinterUpdateInput {
   name?: string;
-  connection_mode?: PrinterConnectionMode;
-  ip?: string | null;
-  access_code?: string | null;
 }
 
 interface ListResponse<T> {

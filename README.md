@@ -76,12 +76,12 @@ say so plainly. Your dashboard data stays on your hardware.
 | Data | PostgreSQL 16 |
 | Native | Expo · React Native |
 | Deploy | Docker · Docker Compose · GHCR |
-| Printer connection | Bambu Cloud account (default); optional LAN/MQTT mode |
+| Printer connection | Bambu Cloud account |
 
 ## Quick start
 
-You need Docker and Docker Compose, a Bambu Lab printer on your network, and the
-printer's IP address, serial number and access code.
+You need Docker and Docker Compose, and a Bambu Lab account with your printer
+bound to it in Bambu Handy.
 
 ```bash
 git clone https://github.com/SchlangeGoto/open-print-dashboard.git
@@ -108,13 +108,11 @@ Create account  →  Connect Bambu Lab  →  Add printer
 > **Just looking?** The [live demo](https://demo.openprintdash.app) runs the real
 > dashboard with seeded data and no backend.
 
-### Finding printer credentials
+### Finding the serial number
 
-| Value | Where to find it |
-| --- | --- |
-| **IP address** | Printer touchscreen → Settings → Network → IP address, or your router's DHCP list |
-| **Serial number** | Printer touchscreen → Settings → Device → Serial number, or the sticker on the back |
-| **Access code** | Printer touchscreen → Settings → Network → Access code; LAN mode must be enabled |
+Printers on your Bambu Lab account are listed by name, so you usually do not
+need the serial number. It is on the printer touchscreen under Settings →
+Device, or on the sticker on the back.
 
 Official guide: [Bambu Lab Wiki — finding the serial number](https://wiki.bambulab.com/en/general/find-sn).
 

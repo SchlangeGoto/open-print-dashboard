@@ -57,8 +57,6 @@ export interface Printer {
   name: string;
   serial: string;
   model: string | null;
-  ip: string | null;
-  access_code: string | null;
   online: boolean;
   configured: boolean;
   status: Record<string, unknown> | null;

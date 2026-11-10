@@ -32,7 +32,7 @@ const faqs = [
   },
   {
     q: "Where are my printer credentials stored?",
-    a: "Access codes and Bambu Cloud credentials are encrypted at rest with a key derived from your SECRET_KEY. They are sent to Bambu Cloud only when you use cloud features.",
+    a: "Bambu Cloud credentials are encrypted at rest with a key derived from your SECRET_KEY. They are sent to Bambu Cloud only to monitor your printers.",
   },
   {
     q: "How do updates work?",
@@ -298,7 +298,7 @@ export default function HomePage() {
             {[
               ["Stack", "Next.js, FastAPI and PostgreSQL in one Docker stack."],
               ["Data", "History, spools and costs in your own database."],
-              ["Secrets", "Access codes and cloud credentials, encrypted at rest."],
+              ["Secrets", "Bambu Cloud credentials, encrypted at rest."],
               ["Cloud", "Bambu Cloud for account and history sync. No telemetry."],
             ].map(([term, value]) => (
               <div
@@ -335,9 +335,8 @@ export default function HomePage() {
               Install it in one Docker stack.
             </h2>
             <p className="mt-5 text-base leading-7 text-[var(--color-light-muted)]">
-              You need Docker, Docker Compose, a Bambu Lab account and your
-              printer IP address and access code. The setup wizard walks you
-              through the rest.
+              You need Docker, Docker Compose and a Bambu Lab account with your
+              printer bound to it. The setup wizard walks you through the rest.
             </p>
             <div className="mt-6 flex flex-wrap gap-4 text-sm">
               <Link

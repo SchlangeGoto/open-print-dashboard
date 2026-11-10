@@ -210,8 +210,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| S-02 | `frontend/lib/api.ts` (`storeTokens`) | The 90-day refresh token lives in `localStorage`; XSS or an extension gets a renewable credential that survives reload. | Move it to an httpOnly cookie scoped to the refresh endpoint, or shorten the lifetime and document the risk. | Human #7 · 09 Nov 20:18 UTC · code reading |
-| S-03 | `backend/app/api/deps.py` | Access tokens are stateless: after logout, password change or reuse detection a stolen token works until it expires (60 min). Logout is per-device (D-10); the real exposure is password change and reuse detection. | Add `users.sessions_revoked_at` and reject tokens whose `iat` predates it. | Human #7 · 09 Nov 20:18 UTC |
 | S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 90-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
 
 ### 2.2 Printer and cloud backend
@@ -219,28 +217,21 @@ These open issues should be solved as part of the epic, not separately:
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
-| P-12 | `backend/app/alembic/versions/f3a9c1d7b2e4_*`, `d9e3a1c5b7f2_*` | Downgrades are lossy: the first drops the printer table without restoring `appsetting`, the second blanks LAN credentials. | Document them as lossy or restore the previous rows. Low priority now that LAN is gone. | Human #5 + #9 · 09 Nov 20:18 UTC |
 
 ### 2.3 Spools, barcodes and filaments
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. By design, every scan adds a spool (D-06); the risk is an accidental retry, not a missing server-side dedupe. | Keep the mobile lookup-first flow as the guard and document “one scan = one spool”. Do not add server-side dedupe. | Human #6 + CR #6 · 10 Nov 09:21 UTC · resolved by D-06 |
 
 ### 2.4 Frontend
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| F-12 | `frontend/app/dashboard/printers/page.tsx` | The details modal receives the object captured on click; the list polls every 10 s, so temperatures and progress freeze while it is open. | Look the printer up by serial from the current list when rendering. | CR #5 · 10 Nov 09:21 UTC |
-| F-13 | `frontend/lib/demo-api.ts` (`save`) | `localStorage.setItem` has no try/catch; quota or blocked storage throws inside every mutating demo method. | Wrap the call and surface a toast. | CR #5 · 10 Nov 09:21 UTC |
-| F-14 | `frontend/lib/demo-api.ts` (`deletePrinter`) | Removes the printer but leaves spools with `printer_id` pointing at it, so demo spools render "Loaded on" a deleted printer. | Unload the spools, matching `ON DELETE SET NULL`. | Human #5 + CR #5 · 10 Nov 09:21 UTC |
 
 ### 2.5 Mobile
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| M-02 | `mobile/src/app/(app)/scan-confirm.tsx` | Confirm is not idempotent; a retry after an ambiguous failure adds a second spool. | Make the backend accept a request id, or retry via `scanBarcode(code, false)` first. | Human #8 + CR #8 · 10 Nov 09:21 UTC |
-| M-05 | `mobile/src/lib/api.ts` (`logout`) | Bumps the epoch but does not await `refreshPromise`; a racing refresh rotates the token and logout revokes the old one, leaving the new token valid for 90 days. | Await or cancel the in-flight refresh at the top of logout. | Human #8 · 09 Nov 20:18 UTC |
 
 ### 2.6 CI, demo and infrastructure
 
@@ -324,3 +315,9 @@ re-opened.
 | Print status and single-worker docs | `c0c25d0` | Product D-03/D-12 |
 | Maskable icon safe zone | `8d4a005` | Human #6 |
 | Mobile Node/build-tag docs; CI route types | `5ce724f` | Human #8 + CR #8/#9 |
+| Access tokens rejected after a session revocation | `a78136b` | Human #7 |
+| Refresh lifetime shortened; localStorage risk documented | `4faf8da` | Human #7 |
+| Printer modal freshness; demo storage hardening | `36632a5` | CR #5 + Human #5 |
+| Mobile logout waits for the in-flight refresh | `8f45e05` | Human #8 |
+| Lossy migration downgrades documented | `9edf618` | Human #5/#9 |
+| One scan = one spool (by design) | D-06 | Human #6 + CR #6 |

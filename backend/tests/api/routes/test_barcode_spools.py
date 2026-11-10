@@ -439,3 +439,28 @@ def test_catalog_fallback_matches_the_same_brand(db: Session) -> None:
     )
 
     assert filament.id == bambu.id
+
+
+def test_scan_rejects_an_invalid_ean13_check_digit(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337032381"},
+    )
+
+    assert r.status_code == 422
+
+
+def test_scan_normalizes_a_gtin14(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "06975337032380", "create": False},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["found"] is True

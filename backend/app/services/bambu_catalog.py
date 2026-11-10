@@ -7,10 +7,15 @@ create-filament confirmation flow instead of guessing.
 """
 
 import json
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+from app.core.barcodes import normalize_barcode
+
+logger = logging.getLogger("uvicorn.error")
 
 _CATALOG_PATH = Path(__file__).resolve().parent.parent / "data/bambu_barcodes.json"
 
@@ -92,14 +97,22 @@ _SKU_RE = re.compile(
 def _catalog() -> dict[str, dict[str, Any]]:
     try:
         payload = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Could not load the barcode catalog: %s", exc)
         return {}
-    return payload.get("barcodes", {})
+    if not isinstance(payload, dict):
+        logger.warning("Barcode catalog root is not an object; ignoring it")
+        return {}
+    barcodes = payload.get("barcodes")
+    if not isinstance(barcodes, dict):
+        logger.warning("Barcode catalog has no barcodes object; ignoring it")
+        return {}
+    return barcodes
 
 
 def lookup_barcode(code: str) -> dict[str, Any] | None:
     """Return catalog data for a known Bambu packaging barcode."""
-    cleaned = code.strip()
+    cleaned = normalize_barcode(code)
     entry = _catalog().get(cleaned)
     override = BAMBU_BARCODES.get(cleaned)
     if not entry and not override:

@@ -2,12 +2,25 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator
 from sqlmodel import Field, Relationship, SQLModel
+
+from app.core.barcodes import is_valid_ean13, normalize_barcode
 
 
 def get_datetime_utc() -> datetime:
     return datetime.now(UTC)
+
+
+def _normalize_barcode_field(value: str) -> str:
+    normalized = normalize_barcode(value)
+    if (
+        len(normalized) == 13
+        and normalized.isdigit()
+        and not is_valid_ean13(normalized)
+    ):
+        raise ValueError("Invalid EAN-13 check digit")
+    return normalized
 
 
 # ────────────────────────────────────────────────────────────
@@ -234,12 +247,22 @@ class BarcodeScanRequest(SQLModel):
     # The mobile app first sends create=false to check for a duplicate.
     create: bool = True
 
+    @field_validator("code")
+    @classmethod
+    def _validate_code(cls, value: str) -> str:
+        return _normalize_barcode_field(value)
+
 
 class BarcodeConfirmRequest(SQLModel):
     code: str = Field(min_length=1, max_length=100)
     filament: FilamentCreate
     total_weight_g: float | None = Field(default=None, gt=0)
     price_per_kg: float | None = Field(default=None, ge=0)
+
+    @field_validator("code")
+    @classmethod
+    def _validate_code(cls, value: str) -> str:
+        return _normalize_barcode_field(value)
 
 
 class BarcodeScanResult(SQLModel):

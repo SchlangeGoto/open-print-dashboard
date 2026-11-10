@@ -143,7 +143,7 @@ export default function SpoolDetailScreen() {
     (printer) => printer.id && printer.id === spool.printer_id,
   );
   const otherPrinters = printers.filter(
-    (printer) => printer.id !== spool.printer_id,
+    (printer) => printer.id !== null && printer.id !== spool.printer_id,
   );
   const sourceLabel =
     spool.source === "ams"
@@ -312,15 +312,15 @@ export default function SpoolDetailScreen() {
                 </View>
               ))}
             </View>
-          ) : printers.length === 0 ? (
+          ) : (
             <AppText variant="caption" muted>
-              No printers configured. Add one from the web dashboard.
+              {printers.length === 0
+                ? "No printers configured. Add one from the web dashboard."
+                : currentPrinter
+                  ? "No other printers to load into."
+                  : "No other configured printers. Add the printer from the web dashboard first."}
             </AppText>
-          ) : currentPrinter ? (
-            <AppText variant="caption" muted>
-              No other printers to load into.
-            </AppText>
-          ) : null}
+          )}
         </Card>
 
         <Card style={styles.section}>

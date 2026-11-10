@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -64,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<UserPublic | null>(null);
   const [serverUrl, setServerUrlState] = useState<string | null>(null);
+  const restoreEpoch = useRef(0);
 
   useEffect(() => {
     sessionExpiredHandler = () => {
@@ -77,8 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const restore = useCallback(async () => {
+    const epoch = ++restoreEpoch.current;
     try {
       const storedUrl = await loadStoredServerUrl();
+      if (epoch !== restoreEpoch.current) return;
       if (!storedUrl) {
         sessionServerUrl = null;
         setServerUrlState(null);
@@ -90,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setServerUrlState(storedUrl);
 
       const storedSession = await loadStoredSession();
+      if (epoch !== restoreEpoch.current) return;
       if (!storedSession) {
         sessionTokens = null;
         setStatus("logged-out");
@@ -98,13 +103,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       sessionTokens = storedSession;
       try {
-        const me = await apiClient.getMe();
+        // A routable-but-unreachable server must not hold the loading screen
+        // for the full 20 s request timeout.
+        const me = await Promise.race([
+          apiClient.getMe(),
+          new Promise<never>((_, reject) => {
+            setTimeout(
+              () => reject(new Error("restore probe timed out")),
+              5_000,
+            );
+          }),
+        ]);
+        if (epoch !== restoreEpoch.current) return;
         setUser(me);
         setStatus("authenticated");
       } catch (error) {
+        if (epoch !== restoreEpoch.current) return;
         if (error instanceof ApiError && error.status === 401) {
           sessionTokens = null;
           await clearStoredSession();
+          if (epoch !== restoreEpoch.current) return;
           setUser(null);
           setStatus("logged-out");
         } else {
@@ -113,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch {
+      if (epoch !== restoreEpoch.current) return;
       setStatus("needs-server");
     }
   }, []);
@@ -124,12 +143,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [restore]);
 
   const login = useCallback(async (email: string, password: string) => {
+    restoreEpoch.current += 1;
     const me = await apiClient.login(email, password);
     setUser(me);
     setStatus("authenticated");
   }, []);
 
   const logout = useCallback(async () => {
+    restoreEpoch.current += 1;
     try {
       await apiClient.logout();
     } finally {
@@ -139,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setServerUrl = useCallback(async (input: string) => {
+    restoreEpoch.current += 1;
     const normalized = normalizeServerUrl(input);
     if (normalized === sessionServerUrl) {
       setServerUrlState(normalized);

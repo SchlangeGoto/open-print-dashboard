@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { BrandLockup } from "@/components/brand-lockup";
+import { LoadingScreen } from "@/components/loading-screen";
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
@@ -25,12 +26,24 @@ export default function ServerSetupScreen() {
   const params = useLocalSearchParams<{ edit?: string }>();
   const isEdit = params.edit === "1";
   const theme = useTheme();
-  const [url, setUrl] = useState(serverUrl ?? "");
+  const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Show the stored URL until the user starts editing. This avoids an effect
+  // and still picks up the value when the context finishes loading.
+  const url = draft ?? serverUrl ?? "";
+
+  if (status === "loading") {
+    return <LoadingScreen message="Checking your session…" />;
+  }
   if (status === "authenticated" && !isEdit) {
     return <Redirect href="/" />;
+  }
+
+  function goBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
   }
 
   async function handleConnect() {
@@ -43,7 +56,7 @@ export default function ServerSetupScreen() {
       if (changed || !isEdit) {
         router.replace("/login");
       } else {
-        router.back();
+        goBack();
       }
     } catch (err) {
       setError(formatError(err));
@@ -68,7 +81,7 @@ export default function ServerSetupScreen() {
               title="Cancel"
               variant="ghost"
               size="sm"
-              onPress={() => router.back()}
+              onPress={goBack}
             />
           ) : null}
         </View>
@@ -88,7 +101,7 @@ export default function ServerSetupScreen() {
           <TextField
             label="Server URL"
             value={url}
-            onChangeText={setUrl}
+            onChangeText={setDraft}
             placeholder="https://print.example.com"
             autoCapitalize="none"
             autoCorrect={false}

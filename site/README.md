@@ -26,24 +26,43 @@ python3 -m http.server 3200 --directory out
 
 ## Deploy
 
-Cloudflare Pages or any static host:
+The site is self-hosted. It ships as a container image (`site/Dockerfile`) and
+is served by Caddy through `compose.public.yml`. `Release Containers` publishes
+`ghcr.io/schlangengoto/open-print-dashboard/site` on `v*` tags.
 
-- Build command: `npm run build`
-- Output directory: `out`
-- Environment: `NEXT_PUBLIC_DEMO_URL=https://demo.openprintdash.app`
+```bash
+export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+export IMAGE_TAG=0.2.0
+export SITE_DOMAIN=openprintdash.app
+export DEMO_DOMAIN=demo.openprintdash.app
 
-`www.openprintdash.app` should 301 to `openprintdash.app`.
+docker compose -f compose.public.yml pull
+docker compose -f compose.public.yml up -d
+```
+
+Point both domains at the server and open ports 80/443. Caddy handles TLS.
+There is no Vercel or Cloudflare dependency.
+
+The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
+`https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, build the image
+with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
+
+For a local check:
+
+```bash
+npm run build
+python3 -m http.server 3200 --directory out
+```
+
+`www.openprintdash.app` should 301 to `openprintdash.app` at the DNS/proxy
+layer.
 
 ## Demo deployment
 
-The site links to `demo.openprintdash.app`. That deployment is the app frontend
-built with `NEXT_PUBLIC_DEMO_MODE=true`, no backend required:
-
-```bash
-cd frontend
-NEXT_PUBLIC_DEMO_MODE=true npm run build
-npm run start -- --port 3100
-```
+The demo is the app frontend built with `NEXT_PUBLIC_DEMO_MODE=true`, no backend
+required. `Release Containers` publishes it as
+`ghcr.io/schlangengoto/open-print-dashboard/demo`; `compose.public.yml` serves
+it at `DEMO_DOMAIN`.
 
 The demo runs on seeded data and stores edits in the browser only.
 

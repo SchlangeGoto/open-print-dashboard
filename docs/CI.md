@@ -25,6 +25,8 @@ This repository uses GitHub Actions for three kinds of work:
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
+| Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
+| Release Mobile | `.github/workflows/release-mobile.yml` | Tags `v*`, manual | EAS production AAB + IPA; uploads artifacts and GitHub Release assets |
 | Dependabot | `.github/dependabot.yml` | Weekly | Grouped npm, uv, GitHub Actions, and Docker updates |
 
 The test and build workflows cancel superseded runs on the same ref, have a
@@ -126,7 +128,9 @@ job instead. Do **not** require `CodeRabbit`; it is advisory.
 
 ### Local OpenCode review
 
-OpenCode is not used in CI. For a local review with your own key/model:
+OpenCode is not used in CI. The `/pr-review` command is installed locally at
+`~/.config/opencode/commands/pr-review.md`; it is intentionally not committed to
+the repository.
 
 ```text
 /pr-review 10
@@ -138,33 +142,35 @@ on it.
 
 ## Secrets and variables
 
-There are no review secrets in the repository. CodeRabbit is a GitHub App, and
-the local OpenCode review uses your local credentials. The only tokens used by
-CI are the automatic `GITHUB_TOKEN` and the standard provider keys for the
-build/test workflows where applicable.
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `EXPO_TOKEN` | Secret | EAS Build for `Release Mobile` |
+| `IMAGE_PREFIX` | Variable | GHCR prefix, `ghcr.io/schlangengoto/open-print-dashboard` |
+
+There are no review secrets. CodeRabbit is a GitHub App, and the local OpenCode
+review uses your local credentials. `GITHUB_TOKEN` is used automatically for
+GHCR publishing.
 
 ## Builds and deployment
 
-- **Dashboard**: the deployable artifact is the Docker image. Use
-  `compose.prod.yml` for production; `compose.yml` is the development stack.
+- **Dashboard**: `compose.prod.yml` builds from source. `compose.ghcr.yml`
+  pulls the published backend/frontend images and runs Caddy on 80/443.
   See [`DEPLOYMENT.md`](DEPLOYMENT.md).
 - **Frontend image**: `frontend/Dockerfile.prod` runs `next build` and
-  `next start`. `NEXT_PUBLIC_API_URL` is baked in at build time.
-- **Mobile APK**: `Build Mobile APK` is a manual workflow. It produces a
-  **debug** APK, signed with the debug keystore. It is for testing, not store
-  distribution.
-- **iOS**: no IPA build is configured. That needs macOS or EAS Build.
-- **Site**: CI builds the static export; deployment is handled outside this
-  repository.
-- **Images**: CI builds Docker images but does not push them to a registry.
-  Publishing to GHCR is a possible next step.
-
-### Why the mobile APK is manual
-
-A release APK/AAB needs a signing keystore and store metadata. Those secrets
-should not run on pull requests. For release builds, use EAS Build with an
-`EXPO_TOKEN`, or add a tag-triggered workflow with a keystore stored as a
-secret.
+  `next start`. The release image is built with an empty
+  `NEXT_PUBLIC_API_URL`, so the browser calls `/api/v1` on the same origin and
+  Caddy proxies it to the backend.
+- **Container images**: `Release Containers` publishes backend, frontend, site,
+  and demo images to GHCR on `v*` tags. The dashboard stack uses
+  `compose.ghcr.yml`; the public site and demo use `compose.public.yml`.
+- **Mobile debug APK**: `Build Mobile APK` is manual and produces a debug APK
+  for testing, not a store artifact.
+- **Mobile release**: `Release Mobile` runs EAS Build for production Android
+  **AAB** and iOS **IPA** on tags, uploads artifacts, and attaches them to the
+  GitHub Release. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the one-time EAS
+  setup.
+- **Site and demo**: both are self-hosted from GHCR images through
+  `compose.public.yml` and Caddy. There is no Vercel or Cloudflare dependency.
 
 ## Hardening backlog
 
@@ -179,8 +185,7 @@ stricter security requirements:
   workflow that provides a required check must also run on `merge_group`.
 - **Use reusable workflows or repository templates** if this project grows into
   several repositories. For one repository, separate workflows are clearer.
-- **Add release automation** (tagged releases, changelog, signed artifacts)
-  when there is a release cadence.
+- **Add a changelog/tagging policy** if releases become frequent.
 
 ## Copilot and GitHub Agents
 
@@ -192,8 +197,8 @@ stricter security requirements:
 - The repository **Agents** tab is GitHub Copilot's cloud coding agent. Custom
   agents are Copilot profiles in `.github/agents/*.agent.md`. They are
   Copilot-specific and are **not** used by this repository.
-- The local OpenCode agent configuration lives in `.opencode/agents/` and
-  `.opencode/commands/`. Do not put OpenCode agents in `.github/agents/`; that
+- The local OpenCode agent configuration lives in `~/.config/opencode/`, not in
+  this repository. Do not put OpenCode agents in `.github/agents/`; that
   directory is for Copilot.
 
 ## Troubleshooting
@@ -210,3 +215,11 @@ stricter security requirements:
   not need to finish before merging.
 - **Dependency review fails**: enable the dependency graph or check the new
   dependency's advisory. The graph is enabled for this repository.
+- **Release Containers fails**: check that `IMAGE_PREFIX` is lowercase, the
+  workflow has `packages: write`, and the tag starts with `v`.
+- **Release Mobile fails**: set `EXPO_TOKEN`, run `eas init` in `mobile/`, and
+  configure the Android/iOS signing credentials in EAS. The first build cannot
+  be fully non-interactive until that one-time setup is done.
+- **Site/demo is not reachable**: point `SITE_DOMAIN`/`DEMO_DOMAIN` at the
+  server, open ports 80/443, and run `docker compose -f compose.public.yml ps`
+  and `logs caddy`.

@@ -12,7 +12,9 @@ COPY . .
 
 # Next.js inlines NEXT_PUBLIC_* at build time. Rebuild the image when these
 # values change.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+# Empty means the browser calls /api/v1 on the same origin. The production
+# compose stack puts Caddy in front and proxies /api to the backend.
+ARG NEXT_PUBLIC_API_URL=""
 ARG NEXT_PUBLIC_DEMO_MODE=false
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE

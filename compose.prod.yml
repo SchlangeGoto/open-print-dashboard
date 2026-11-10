@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-opd}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changethis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}
       - POSTGRES_DB=${POSTGRES_DB:-openprintdashboard}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -44,7 +44,7 @@ services:
       - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
       - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD:-}
       - FRONTEND_HOST=${FRONTEND_HOST:-http://localhost:3000}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-opd}:${POSTGRES_PASSWORD:-changethis}@db:5432/${POSTGRES_DB:-openprintdashboard}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-opd}:${POSTGRES_PASSWORD:?Variable not set}@db:5432/${POSTGRES_DB:-openprintdashboard}
       - PRINTER_IP=${PRINTER_IP:-}
       - PRINTER_SERIAL=${PRINTER_SERIAL:-}
       - PRINTER_ACCESS_CODE=${PRINTER_ACCESS_CODE:-}

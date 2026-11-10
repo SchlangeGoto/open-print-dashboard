@@ -1,0 +1,13 @@
+{$SITE_DOMAIN:openprintdash.app} {
+	encode zstd gzip
+	reverse_proxy site:80
+}
+
+www.{$SITE_DOMAIN:openprintdash.app} {
+	redir https://{$SITE_DOMAIN:openprintdash.app}{uri} permanent
+}
+
+{$DEMO_DOMAIN:demo.openprintdash.app} {
+	encode zstd gzip
+	reverse_proxy demo:3000
+}

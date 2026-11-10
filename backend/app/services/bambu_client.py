@@ -444,7 +444,11 @@ class BambuClient:
         t.start()
 
     def _active_spool(self, session: Session) -> Spool | None:
-        """Return the spool loaded in this printer, not another printer."""
+        """Return the spool loaded in this printer, not another printer.
+
+        ``printer_id`` alone is not enough: a stale ``active = false`` row can
+        keep the id after an interrupted move. The oldest current spool wins.
+        """
         if not self.serial:
             return None
         printer = session.exec(
@@ -452,7 +456,12 @@ class BambuClient:
         ).first()
         if not printer:
             return None
-        return session.exec(select(Spool).where(Spool.printer_id == printer.id)).first()
+        return session.exec(
+            select(Spool)
+            .where(Spool.printer_id == printer.id)
+            .where(col(Spool.active).is_(True))
+            .order_by(col(Spool.created_at).asc(), col(Spool.id).asc())
+        ).first()
 
     @staticmethod
     def _real_tag(tag: str | None) -> str | None:
@@ -625,8 +634,12 @@ class BambuClient:
                         if candidates:
                             spool = candidates[0]
                             spool.tag_uid = tag
-                            spool.total_weight_g = total
-                            spool.remaining_g = remaining
+                            # The scanned spool may be a 750 g refill while the
+                            # AMS omits tray_weight and reports 1000 g. Keep
+                            # the user's total and scale the percentage to it.
+                            spool.remaining_g = self._tray_remaining(
+                                tray, spool.total_weight_g
+                            )
                             session.add(spool)
                         else:
                             spool = Spool(

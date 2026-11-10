@@ -111,10 +111,13 @@ def test_ams_links_barcode_spool_by_tag(
     db.refresh(printer)
     db.refresh(filament)
 
+    # A scanned 750 g refill: the AMS tray still reports 1000 g because it
+    # omits tray_weight. Adopting the spool must not overwrite the user's
+    # total; the percentage is applied to 750 g instead.
     spool = Spool(
         filament_id=filament.id,
-        total_weight_g=1000,
-        remaining_g=1000,
+        total_weight_g=750,
+        remaining_g=750,
         barcode="TEST-AMS-LINK",
         source="barcode",
     )
@@ -150,7 +153,8 @@ def test_ams_links_barcode_spool_by_tag(
     linked = db.get(Spool, spool.id)
     assert linked
     assert linked.tag_uid == "AABBCCDD"
-    assert linked.remaining_g == 800
+    assert linked.total_weight_g == 750
+    assert linked.remaining_g == 600
 
     matches = db.exec(select(Spool).where(Spool.filament_id == filament.id)).all()
     assert len(matches) == 1
@@ -177,6 +181,11 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
     db.refresh(printer)
     db.refresh(filament)
 
+    other_printer = Printer(name="Other printer", serial=random_lower_string())
+    db.add(other_printer)
+    db.commit()
+    db.refresh(other_printer)
+
     base = datetime(2026, 1, 1, tzinfo=UTC)
     spools = []
     for index in range(4):
@@ -188,6 +197,10 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
             source="barcode",
             created_at=base + timedelta(minutes=index),
         )
+        if index == 1:
+            # Loaded in another printer: it must not be re-tagged or moved.
+            spool.printer_id = other_printer.id
+            spool.active = True
         db.add(spool)
         spools.append(spool)
     db.commit()
@@ -233,6 +246,11 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
 
     assert [row.tag_uid for row in rows].count("FIFO1234") == 1
     assert all(row.tag_uid is None for row in rows if row.id != oldest.id)
+
+    untouched = db.get(Spool, spools[1].id)
+    assert untouched is not None
+    assert untouched.tag_uid is None
+    assert untouched.printer_id == other_printer.id
 
 
 def test_barcode_scan_does_not_adopt_an_ams_spool(

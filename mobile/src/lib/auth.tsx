@@ -168,13 +168,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     apiClient.invalidateSession();
-    await clearStoredSession();
+    // Mutate the in-memory session synchronously before the first await, so
+    // an in-flight refresh cannot persist the old server's session after the
+    // clear.
     sessionTokens = null;
     sessionServerUrl = normalized;
     setServerUrlState(normalized);
-    await saveStoredServerUrl(normalized);
     setUser(null);
     setStatus("logged-out");
+    await clearStoredSession();
+    await saveStoredServerUrl(normalized);
   }, []);
 
   const value = useMemo<AuthContextValue>(

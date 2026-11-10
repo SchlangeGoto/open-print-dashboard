@@ -10,7 +10,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { Pressable, Text, useColorScheme, View } from "react-native";
 
 import { AuthProvider } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -53,5 +53,43 @@ export default function RootLayout() {
         <Stack.Screen name="connection-error" />
       </Stack>
     </AuthProvider>
+  );
+}
+
+
+export function ErrorBoundary({
+  error,
+  retry,
+}: {
+  error: Error;
+  retry: () => Promise<void>;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: "#0a0a0a",
+      }}
+    >
+      <Text style={{ color: "#f5f5f5", fontSize: 20, fontWeight: "600" }}>
+        Something went wrong
+      </Text>
+      <Text
+        style={{
+          color: "#a3a3a3",
+          marginTop: 8,
+          textAlign: "center",
+          maxWidth: 320,
+        }}
+      >
+        {error.message}
+      </Text>
+      <Pressable onPress={() => void retry()} style={{ marginTop: 20 }}>
+        <Text style={{ color: "#34d399", fontWeight: "600" }}>Try again</Text>
+      </Pressable>
+    </View>
   );
 }

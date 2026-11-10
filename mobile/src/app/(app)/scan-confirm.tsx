@@ -112,9 +112,13 @@ export default function ScanConfirmScreen() {
         priceValue,
         type,
       );
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success,
-      );
+      try {
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+      } catch {
+        // Haptics are best-effort; the spool was created successfully.
+      }
       if (result.spool) {
         router.replace({
           pathname: "/spool/[id]",

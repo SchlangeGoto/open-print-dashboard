@@ -66,9 +66,13 @@ export default function SpoolDetailScreen() {
     setActionError(null);
     try {
       await api.activateSpool(id, printer.id);
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success,
-      );
+      try {
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+      } catch {
+        // Haptics are best-effort; the spool is already loaded.
+      }
       await reload();
     } catch (err) {
       setActionError(formatError(err));
@@ -86,7 +90,9 @@ export default function SpoolDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
           hitSlop={12}
-          onPress={() => router.back()}
+          onPress={() =>
+            router.canGoBack() ? router.back() : router.replace("/")
+          }
         >
           <Ionicons
             name="chevron-back"

@@ -130,7 +130,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ) {
           apiClient.invalidateSession();
           sessionTokens = null;
-          await clearStoredSession();
+          try {
+            await clearStoredSession();
+          } catch {
+            // Storage may be unavailable; still drop the in-memory session
+            // instead of looping back to the server screen.
+          }
           if (epoch !== restoreEpoch.current) return;
           setUser(null);
           setStatus("logged-out");

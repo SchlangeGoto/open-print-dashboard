@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -28,6 +28,7 @@ export default function ServerSetupScreen() {
   const theme = useTheme();
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // Show the stored URL until the user starts editing. This avoids an effect
@@ -47,6 +48,8 @@ export default function ServerSetupScreen() {
   }
 
   async function handleConnect() {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -61,6 +64,7 @@ export default function ServerSetupScreen() {
     } catch (err) {
       setError(formatError(err));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }

@@ -210,7 +210,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| S-01 | `backend/app/core/config.py`, `.env.example` | `SECRET_KEY=changethis` is accepted everywhere. A copied `.env` signs JWTs with a public key, so tokens can be forged. | Reject the placeholder and short keys when `FASTAPI_ENV != "development"`; validate `BAMBU_CREDENTIALS_KEY` the same way. | CR #4 · 10 Nov 09:24 UTC · security analysis CWE-1188 |
 | S-02 | `frontend/lib/api.ts` (`storeTokens`) | The 90-day refresh token lives in `localStorage`; XSS or an extension gets a renewable credential that survives reload. | Move it to an httpOnly cookie scoped to the refresh endpoint, or shorten the lifetime and document the risk. | Human #7 · 09 Nov 20:18 UTC · code reading |
 | S-03 | `backend/app/api/deps.py` | Access tokens are stateless: after logout, password change or reuse detection a stolen token works until it expires (60 min). Logout is per-device (D-10); the real exposure is password change and reuse detection. | Add `users.sessions_revoked_at` and reject tokens whose `iat` predates it. | Human #7 · 09 Nov 20:18 UTC |
 | S-04 | `frontend/lib/api.ts` (`logout`) | `finally { clearTokens() }` runs after the network round-trip; a login in another tab that lands first is wiped. | Capture the token/epoch at call time and only clear if it is unchanged. | Human #7 + CR #7 · 10 Nov 09:21 UTC |
@@ -224,8 +223,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| P-01 | `backend/app/services/printer_service.py` (`clients`) | `self.clients` is read and written from request threads with no lock. A poll can raise "dictionary changed size"; two overlapping connects can create two clients and double-deduct filament. | Guard with `threading.Lock`; make the insert atomic (`setdefault` or re-check inside the lock). | Human #5 · 09 Nov 20:18 UTC |
-| P-02 | `backend/app/services/bambu_client.py` (`disconnect`, `MqttThread.stop`) | `stop()` only sets an event; `join(timeout=5)` runs while the thread is parked in `loop_forever()`, so every disconnect burns 5 s. `loop_stop()` happens after the join. | Call `loop_stop()`/`client.disconnect()` before joining, or have `MqttThread.stop()` do it. | Human #5 · 09 Nov 20:18 UTC |
 | P-03 | `backend/app/api/routes/spools.py` | `active` and `printer_id` are two sources of truth: a spool can be active with no printer, and deleting a printer leaves `active=true, printer_id=NULL` forever. | Make `printer_id` the single source and derive `active`; unload spools inside the printer-delete transaction. | Human #5 · 09 Nov 20:18 UTC |
 | P-04 | `backend/app/alembic/versions/a7c4e2f9d1b6_*` | Nothing enforces one loaded spool per printer; two tabs can both commit `active=true` for the same printer. | Partial unique index on `spool(printer_id) WHERE active`; return 409 for the loser. | Human #5 · 09 Nov 20:18 UTC |
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
@@ -243,8 +240,6 @@ These open issues should be solved as part of the epic, not separately:
 | --- | --- | --- | --- | --- |
 | B-01 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | The catalog match keys on nullable `bambu_info_idx` + colour; six support/PVA products share `NULL` + `#FFFFFF` and collapse into one filament. The colour+material fallback ignores brand, so a Bambu barcode can bind to another brand's black PLA. | Key on the barcode or a `(series, color_name, spool_weight_g)` product, and include brand/material/colour in the fallback. | Human #6 + CR #6/#8 · 10 Nov 09:21 UTC |
 | B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. By design, every scan adds a spool (D-06); the risk is an accidental retry, not a missing server-side dedupe. | Keep the mobile lookup-first flow as the guard and document “one scan = one spool”. Do not add server-side dedupe. | Human #6 + CR #6 · 10 Nov 09:21 UTC · resolved by D-06 |
-| B-03 | `backend/app/api/routes/spools.py` (`_create_barcode_spool`) | `_adopt_unlinked_ams_spool` runs on an explicit `create=true` scan, so scanning a **new box** can attach its barcode to an existing untagged AMS spool instead of adding a row. The UI says "Spool added" and inventory does not increase. | Explicit `create=true` always inserts; remove the adoption call from `_create_barcode_spool` and keep FIFO adoption on the AMS path only (D-06). | CR #8 · 10 Nov 09:21 UTC |
-| B-04 | `backend/app/services/bambu_client.py` (`_tray_remaining`) | `remain <= 0` returns full weight, so an exhausted spool (0 %) is reset to 1000 g on every AMS sync. | `remain < 0` means unknown; `0` means empty. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
 | B-05 | `backend/app/api/routes/spools.py`, `backend/scripts/import_bambu_gtins.py` | No GTIN check-digit validation, and a confirmed mapping cannot be deleted or re-mapped, so one typo is permanent. | Validate EAN-13 going forward (no production backfill, D-07), warn/skip in the importer, allow delete/re-map. | Human #6 · 09 Nov 20:18 UTC |
 | B-06 | `backend/app/services/bambu_catalog.py` | A malformed catalog returns `{}` with no log; a valid-but-non-object payload makes `payload.get` raise on every scan. | Log once, guard `isinstance(payload, dict)` and `barcodes` being a dict. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
 | B-07 | `backend/app/services/bambu_client.py` (`_maybe_sync_ams`) | The dedupe signature is the whole `ams` blob including temp/humidity, so it changes on nearly every `push_status`: a thread and a transaction every ~2 s per printer. | Build the signature from `(tag_uid, remain, tray_now)` per tray. | Human #6 · 09 Nov 20:18 UTC |
@@ -261,13 +256,8 @@ These open issues should be solved as part of the epic, not separately:
 | --- | --- | --- | --- | --- |
 | F-01 | `frontend/lib/appearance.tsx` | The accent is applied in a post-mount `useEffect`, so every hard navigation paints blue and then repaints. | Bootstrap before paint (inline script in `app/layout.tsx` or a server-read cookie). | Human #4 · 09 Nov 20:18 UTC |
 | F-02 | `frontend/components/ui/CoverImage.tsx` | The object URL leaks when the component unmounts before the fetch resolves: cleanup sees `nextUrl === null`, then the fetch creates a URL that is never revoked. | Use `AbortController` and revoke in the post-`await` branch. | Human #4 · 09 Nov 20:18 UTC |
-| F-03 | `frontend/app/dashboard/settings/page.tsx` | The printer form is populated only from `GET /settings/printer`, whose error is caught to `null`. A failed load renders blank fields with Save enabled, and saving overwrites a working config. | Gate Save on a successful load and show the error. | Human #4 · 09 Nov 20:18 UTC |
-| F-04 | `frontend/lib/api.ts` (`loginUser`) | Stores `data.access_token as string` without checking. A 200 without the field stores `"undefined"` and the app looks signed in while every request 401s. | Throw `ApiError` when the field is missing. | Human #4 · 09 Nov 20:18 UTC |
-| F-05 | `frontend/app/dashboard/analytics/page.tsx` (`getPreviousBounds`) | Trend badges compare a truncated current window with a full previous one: −8 % to −14 % on 7D, −6 % on 12M for a flat rate. | Shift both bounds by the same window length. The 12M range is the trailing 365 days (D-01). | Human #10 + CR #10 · 10 Nov 09:21 UTC |
 | F-06 | `frontend/app/dashboard/analytics/page.tsx` | `ceil((end - start) / 86400000)` adds a phantom day at the DST fall-back, so previous prints/day is divided by 8 instead of 7. | Use `differenceInCalendarDays(end, start) + 1`. | Human #10 · 09 Nov 20:18 UTC |
 | F-07 | `frontend/app/dashboard/prints/page.tsx` | Still calls `getPrintJobs()`, which returns only the first 500 rows; the header and the filament filter silently miss older jobs. | Use `getAllPrintJobs()` or add real server-side paging. | Human #10 · 09 Nov 20:18 UTC |
-| F-08 | `frontend/app/dashboard/analytics/page.tsx` | `<Cell key={entry.name}>` while data is keyed by filament id; a Sunlu green and a Bambu green share “Green”, and a real “Other” plus the aggregate bucket collide. | Carry the id in `UsageDatum`, key by id, and label `brand · color_name` (D-02). | Human #10 + CR #10 · 10 Nov 09:21 UTC |
-| F-09 | `frontend/app/dashboard/analytics/page.tsx` | "Filament Used" sums jobs with `weight > 0`, but the breakdown skips jobs with `spool_id` null, so the two numbers disagree. | Count spool-less jobs too (D-04) and compute both numbers from the same set. | Human #10 · 09 Nov 20:18 UTC |
 | F-10 | `frontend/app/dashboard/spools/page.tsx` | Purchased date drifts back one day per edit outside UTC: `new Date("2024-05-03").toISOString()` stores the previous day, and `beginEdit` splits the ISO string. | Format the local date and post `yyyy-MM-dd`. | Human #10 · 09 Nov 20:18 UTC |
 | F-11 | `frontend/app/dashboard/analytics/page.tsx` | `now` is frozen at mount and jobs are fetched once, so an open tab keeps saying "Last 7 days" and misses new prints. | Refresh `now` and the list on an interval or on window focus. | Human #10 · 09 Nov 20:18 UTC |
 | F-12 | `frontend/app/dashboard/printers/page.tsx` | The details modal receives the object captured on click; the list polls every 10 s, so temperatures and progress freeze while it is open. | Look the printer up by serial from the current list when rendering. | CR #5 · 10 Nov 09:21 UTC |
@@ -296,7 +286,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| I-01 | `compose.yml` (`db`) | Postgres is published on `0.0.0.0:5432` with a default password. | Bind `127.0.0.1:5432` or drop the mapping; the backend reaches it over the Compose network. | Human #4 + CR #4 · 10 Nov 09:24 UTC |
 | I-02 | `.github/workflows/test-mobile.yml` | `typedRoutes` is enabled but `.expo/` and `expo-env.d.ts` are gitignored, so `tsc --noEmit` on a fresh runner does not validate route paths. | Generate the Expo types before the typecheck step (or reorder). | CR #9 · 10 Nov 09:21 UTC |
 | I-03 | `backend/app/api/routes/prints.py`, `docs/API.md` | `PrintJob.status == 4` means “running” and is used in `/prints/active` and the print-job sync, but it is not documented. | Document the code and its Bambu source in `docs/API.md`. | Product · 2026-11-10 · D-03 |
 | I-04 | `backend/scripts/start.sh`, `docs/DEPLOYMENT.md` | The single-worker requirement is only a shell comment; adding `--workers` silently duplicates MQTT clients. | Document it in `docs/DEPLOYMENT.md` and fail fast if more than one worker is requested. | Product · 2026-11-10 · D-12 |
@@ -346,3 +335,11 @@ re-opened.
 | Local/LAN MQTT mode | `53a017d` | Product decision, 2026-11-10 |
 | CodeRabbit reviewed vendored `.agents` files | `825e95f` | CR #10 |
 | `certifi` compromised-CA advisory | `94109a9` | CI dependency review |
+| Client registry race and 5 s disconnect | `4627c44` | Human #5 |
+| Explicit barcode scan adopted an AMS spool | `e0e1d1c` | CR #8 |
+| `remain == 0` reset an empty spool | `e8a9c88` | Human #6 + CR #6 |
+| Placeholder `SECRET_KEY` accepted | `37dfc6a` | CR #4 |
+| Postgres published on `0.0.0.0` | `37dfc6a` | Human #4 + CR #4 |
+| Login accepted without an access token | `7b5be2b` | Human #4 |
+| Biased trend windows, chart keys, unassigned jobs | `162b203` | Human #10 + CR #10 |
+| Settings printer form (moot after LAN removal) | `53a017d` | Human #4 |

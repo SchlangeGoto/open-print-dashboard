@@ -126,21 +126,22 @@ function printDate(print: any): Date | null {
 function getRangeStart(range: Range, now: Date): Date | null {
   if (range === "7d") return startOfDay(subDays(now, 6));
   if (range === "30d") return startOfDay(subDays(now, 29));
-  if (range === "12m") return startOfMonth(subMonths(now, 11));
+  // “Last 12 months” is the trailing 365 days (D-01), not calendar months.
+  if (range === "12m") return startOfDay(subDays(now, 365));
   return null;
 }
 
 function getPreviousBounds(
   range: Range,
   start: Date | null,
+  now: Date,
 ): { start: Date; end: Date } | null {
   if (!start || range === "all") return null;
-  const end = endOfDay(subDays(start, 1));
-  if (range === "12m") {
-    return { start: startOfMonth(subMonths(start, 12)), end };
-  }
-  const days = range === "7d" ? 7 : 30;
-  return { start: startOfDay(subDays(start, days)), end };
+  // Compare equal-length windows: the previous one ends exactly one window
+  // before now, so both cover the same amount of time.
+  const windowMs = now.getTime() - start.getTime();
+  const end = new Date(now.getTime() - windowMs);
+  return { start: new Date(end.getTime() - windowMs), end };
 }
 
 function filterPrints(prints: any[], start: Date | null, end: Date) {
@@ -281,6 +282,7 @@ function formatMetricValue(value: number, metric: Metric, axis = false) {
 }
 
 interface UsageDatum {
+  id: string;
   name: string;
   value: number;
   pct: number;
@@ -325,7 +327,7 @@ function UsageBarChart({ data, label }: { data: UsageDatum[]; label: string }) {
         />
         <Bar dataKey="value" fill="var(--color-value)" radius={5}>
           {data.map((entry) => (
-            <Cell key={entry.name} fill={entry.color} />
+            <Cell key={entry.id} fill={entry.color} />
           ))}
         </Bar>
       </BarChart>
@@ -394,8 +396,8 @@ export default function AnalyticsPage() {
     [scopedPrints, rangeStart, now],
   );
   const previousBounds = useMemo(
-    () => getPreviousBounds(range, rangeStart),
-    [range, rangeStart],
+    () => getPreviousBounds(range, rangeStart, now),
+    [range, rangeStart, now],
   );
   const previousPrints = useMemo(
     () =>
@@ -459,12 +461,14 @@ export default function AnalyticsPage() {
     const usage = new Map<string, { weight: number; cost: number }>();
 
     for (const print of rangePrints) {
-      if (!print.weight || !print.spool_id) continue;
-      const spool = spoolById.get(String(print.spool_id));
+      if (!print.weight) continue;
+      const spool = print.spool_id
+        ? spoolById.get(String(print.spool_id))
+        : null;
       const filament = spool
         ? filamentById.get(String(spool.filament_id))
         : null;
-      const material = filament?.material ?? "Other";
+      const material = filament?.material ?? "Unassigned";
       const entry = usage.get(material) ?? { weight: 0, cost: 0 };
       entry.weight += print.weight;
       entry.cost += print.estimated_cost || 0;
@@ -480,6 +484,7 @@ export default function AnalyticsPage() {
       .map(([name, entry]) => {
         const pct = total ? Math.round((entry.weight / total) * 100) : 0;
         return {
+          id: name,
           name,
           value: Math.round(entry.weight),
           cost: entry.cost,
@@ -494,18 +499,23 @@ export default function AnalyticsPage() {
   const filamentData = useMemo(() => {
     const usage = new Map<
       string,
-      { name: string; color: string; weight: number; cost: number }
+      { id: string; name: string; color: string; weight: number; cost: number }
     >();
 
     for (const print of rangePrints) {
-      if (!print.weight || !print.spool_id) continue;
-      const spool = spoolById.get(String(print.spool_id));
+      if (!print.weight) continue;
+      const spool = print.spool_id
+        ? spoolById.get(String(print.spool_id))
+        : null;
       const filament = spool
         ? filamentById.get(String(spool.filament_id))
         : null;
-      const key = filament ? String(filament.id) : "unknown";
+      const key = filament ? String(filament.id) : "unassigned";
       const entry = usage.get(key) ?? {
-        name: filament?.color_name ?? "Unknown filament",
+        id: key,
+        name: filament
+          ? `${filament.brand} · ${filament.color_name}`
+          : "Unassigned",
         color: filament?.color_hex
           ? chartColor(filament.color_hex)
           : MATERIAL_COLORS.Other,
@@ -526,6 +536,7 @@ export default function AnalyticsPage() {
     if (sorted.length > 8) {
       const rest = sorted.slice(8);
       visible.push({
+        id: "other",
         name: "Other",
         color: MATERIAL_COLORS.Other,
         weight: rest.reduce((sum, entry) => sum + entry.weight, 0),

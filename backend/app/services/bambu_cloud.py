@@ -161,6 +161,19 @@ class BambuCloudClient:
         tasks = self.get_print_tasks_for_printer(serial)
         return tasks[0] if tasks else None
 
+    def get_task(self, task_id: str) -> dict | None:
+        """Return one print task by its Bambu Cloud task id.
+
+        The account task list is the only documented lookup, so fetch a large
+        enough page and filter locally. Looking the task up by id matters when
+        the next print has already started before the previous one's finish
+        poll lands.
+        """
+        for task in self.get_print_tasks(limit=100):
+            if str(task.get("id")) == str(task_id):
+                return task
+        return None
+
     def get_slicer_settings(self) -> dict:
         """
         Returns filament profiles, printer profiles and print profiles.

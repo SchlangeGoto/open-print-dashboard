@@ -416,19 +416,31 @@ class BambuClient:
             and new_state == "RUNNING"
         ):
             logger.info("Print started")
-            self._on_print_started()
+            self._on_print_started(self._current_task_id())
 
         if old_state == "RUNNING" and new_state in ("FINISH", "FAILED"):
             logger.info(f"Print finished with state: {new_state}")
-            self._on_print_finished(new_state)
+            self._on_print_finished(new_state, self._current_task_id())
 
-    def _on_print_finished(self, state: str) -> None:
+    def _current_task_id(self) -> str | None:
+        """Return the cloud task id reported by the printer, if any."""
+        task_id = self._current_status.get("task_id")
+        # "0" is what the printer reports for an SD-card print without a cloud
+        # task; treat it as unknown so the caller falls back to the account
+        # task list.
+        if task_id in (None, "", 0, "0"):
+            return None
+        return str(task_id)
+
+    def _on_print_finished(self, state: str, task_id: str | None = None) -> None:
         """Called when a print completes or fails."""
-        t = threading.Thread(target=self._save_print_job, daemon=True)
+        t = threading.Thread(target=self._save_print_job, args=(task_id,), daemon=True)
         t.start()
 
-    def _on_print_started(self) -> None:
-        t = threading.Thread(target=self._save_print_job_init, daemon=True)
+    def _on_print_started(self, task_id: str | None = None) -> None:
+        t = threading.Thread(
+            target=self._save_print_job_init, args=(task_id,), daemon=True
+        )
         t.start()
 
     def _active_spool(self, session: Session) -> Spool | None:
@@ -661,12 +673,18 @@ class BambuClient:
             logger.error("AMS sync failed: %s", exc)
             return False
 
-    def _save_print_job_init(self) -> None:
-        """Fetch cloud data and save a PrintJob when a print starts."""
+    def _fetch_cloud_task(self, task_id: str | None) -> dict | None:
+        """Fetch the task that the printer reported, not just the newest one."""
         from app.services.printer_service import printer_service
 
+        if task_id:
+            return printer_service.cloud_client.get_task(task_id)
+        return printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+
+    def _save_print_job_init(self, task_id: str | None = None) -> None:
+        """Fetch cloud data and save a PrintJob when a print starts."""
         try:
-            task = printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+            task = self._fetch_cloud_task(task_id)
             if not task:
                 logger.warning("No cloud task found on print start")
                 return
@@ -676,9 +694,7 @@ class BambuClient:
             while task.get("status") != 4 and trys < maxTrys:
                 time.sleep(1)
                 trys += 1
-                task = printer_service.cloud_client.get_latest_task_for_printer(
-                    self.serial
-                )
+                task = self._fetch_cloud_task(task_id)
                 if not task:
                     break
 
@@ -686,8 +702,33 @@ class BambuClient:
                 logger.error(f"Failed to fetch cloud task after {maxTrys} tries")
                 return
 
+            if not task or task.get("status") != 4:
+                logger.warning("Task %s never reached the printing state", task_id)
+                return
+
+            cloud_task_id = str(task.get("id"))
+            if task_id and cloud_task_id != task_id:
+                logger.warning(
+                    "Cloud returned task %s instead of %s; skipping job",
+                    cloud_task_id,
+                    task_id,
+                )
+                return
+
             with Session(engine) as session:
                 active_spool = self._active_spool(session)
+
+                existing = session.exec(
+                    select(PrintJob).where(
+                        PrintJob.device_id == self.serial,
+                        PrintJob.bambu_task_id == cloud_task_id,
+                    )
+                ).first()
+                if existing:
+                    # A FAILED -> RUNNING retry reports the same task again;
+                    # updating is fine, inserting a duplicate is not.
+                    logger.info("PrintJob already exists for task %s", cloud_task_id)
+                    return
 
                 job = PrintJob(
                     spool_id=active_spool.id if active_spool else None,
@@ -699,7 +740,7 @@ class BambuClient:
                     duration_seconds=task.get("costTime"),
                     start_time=parse_task_datetime(task.get("startTime")),
                     status=task.get("status"),
-                    bambu_task_id=str(task.get("id")),
+                    bambu_task_id=cloud_task_id,
                     device_id=self.serial,
                     ams_detail_mapping=str(task.get("amsDetailMapping", [])),
                 )
@@ -710,12 +751,10 @@ class BambuClient:
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
 
-    def _save_print_job(self) -> None:
-        """Update the PrintJob and deduct filament when a print finishes."""
-        from app.services.printer_service import printer_service
-
+    def _save_print_job(self, task_id: str | None = None) -> None:
+        """Update the PrintJob and deduct filament once when a print finishes."""
         try:
-            task = printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+            task = self._fetch_cloud_task(task_id)
 
             if not task:
                 logger.warning("No cloud task found after print finished")
@@ -728,14 +767,27 @@ class BambuClient:
             while task.get("status") == 4 and trys < maxTrys:
                 time.sleep(1)
                 trys += 1
-                task = printer_service.cloud_client.get_latest_task_for_printer(
-                    self.serial
-                )
+                task = self._fetch_cloud_task(task_id)
                 if not task:
                     break
 
             if trys >= maxTrys:
                 logger.error(f"Failed to fetch cloud task after {maxTrys} tries")
+                return
+
+            if not task or task.get("status") == 4:
+                logger.warning(
+                    "Task %s was still printing when polling stopped", task_id
+                )
+                return
+
+            cloud_task_id = str(task.get("id"))
+            if task_id and cloud_task_id != task_id:
+                logger.warning(
+                    "Cloud returned task %s instead of the finished %s; skipping",
+                    cloud_task_id,
+                    task_id,
+                )
                 return
 
             with Session(engine) as session:
@@ -761,14 +813,15 @@ class BambuClient:
                         )
 
                 job = session.exec(
-                    select(PrintJob).where(
-                        PrintJob.bambu_task_id == str(task.get("id"))
-                    )
+                    select(PrintJob)
+                    .where(PrintJob.device_id == self.serial)
+                    .where(PrintJob.bambu_task_id == cloud_task_id)
+                    .with_for_update()
                 ).first()
 
                 if not job:
                     job = PrintJob(
-                        bambu_task_id=str(task.get("id")),
+                        bambu_task_id=cloud_task_id,
                         device_id=self.serial or "",
                     )
                     session.add(job)
@@ -782,13 +835,17 @@ class BambuClient:
                 job.start_time = parse_task_datetime(task.get("startTime"))
                 job.finished_at = parse_task_datetime(task.get("endTime"))
                 job.status = task.get("status")
-                job.bambu_task_id = str(task.get("id"))
+                job.bambu_task_id = cloud_task_id
                 job.device_id = self.serial
                 job.ams_detail_mapping = str(task.get("amsDetailMapping", []))
 
                 session.add(job)
 
-                self._deduct_filament_from_spools(session, task)
+                # A repeated finish event must not deduct the same weight
+                # twice. The row lock makes the check safe across threads.
+                if job.filament_deducted_at is None:
+                    self._deduct_filament_from_spools(session, task)
+                    job.filament_deducted_at = datetime.now(UTC)
 
                 session.commit()
                 logger.info(f"PrintJob saved: {job.title} — {task.get('weight')}g used")

@@ -282,6 +282,9 @@ class PrintJobBase(SQLModel):
 class PrintJob(PrintJobBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    # Set when filament was subtracted for this job, so a repeated finish
+    # event cannot deduct the same print twice.
+    filament_deducted_at: datetime | None = None
     spool_id: uuid.UUID | None = Field(
         default=None, foreign_key="spool.id", ondelete="SET NULL"
     )

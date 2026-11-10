@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { toast } from "@/lib/toast";
 import {
   Archive,
@@ -9,7 +8,6 @@ import {
   Package,
   Pencil,
   Plus,
-  ScanLine,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -199,14 +197,6 @@ export default function SpoolsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<Link href="/dashboard/scan" />}
-          >
-            <ScanLine /> Scan Barcode
-          </Button>
           <Button size="sm" onClick={openCreate} disabled={filaments.length === 0}>
             <Plus /> Add Spool
           </Button>

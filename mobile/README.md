@@ -109,7 +109,7 @@ protects the API, but the credentials and tokens would travel unencrypted.
 ## Auth
 
 - Access tokens expire after 1 hour.
-- Refresh tokens expire 90 days after issuance and rotate on every use.
+- Refresh tokens expire after 30 days of inactivity and rotate on every use.
 - Both are stored with `expo-secure-store` on iOS/Android; the app never stores
   the password.
 - On a `401`, the client refreshes once and retries the request. If the refresh

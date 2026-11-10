@@ -118,29 +118,6 @@ def _link_barcode(*, session: SessionDep, code: str, filament: Filament) -> Fila
         return existing
 
 
-def _adopt_unlinked_ams_spool(
-    *, session: SessionDep, filament: Filament, code: str
-) -> Spool | None:
-    """Attach a barcode to an AMS spool that has no barcode yet.
-
-    Only adopt when there is exactly one candidate; with several identical
-    spools we cannot know which physical box was scanned.
-    """
-    candidates = session.exec(
-        select(Spool).where(
-            Spool.filament_id == filament.id,
-            col(Spool.barcode).is_(None),
-            Spool.source == "ams",
-        )
-    ).all()
-    if len(candidates) != 1:
-        return None
-    spool = candidates[0]
-    spool.barcode = code
-    session.add(spool)
-    return spool
-
-
 def _create_barcode_spool(
     *,
     session: SessionDep,
@@ -149,17 +126,6 @@ def _create_barcode_spool(
     total_weight_g: float | None = None,
     price_per_kg: float | None = None,
 ) -> Spool:
-    # If the spool was already read by the AMS, link the barcode to that
-    # existing row instead of creating a duplicate.
-    spool = _adopt_unlinked_ams_spool(session=session, filament=filament, code=code)
-    if spool is not None:
-        if price_per_kg is not None:
-            spool.price_per_kg = price_per_kg
-        session.add(spool)
-        session.commit()
-        session.refresh(spool)
-        return spool
-
     weight = total_weight_g or filament.spool_weight_g or 1000
     spool = Spool(
         filament_id=filament.id,

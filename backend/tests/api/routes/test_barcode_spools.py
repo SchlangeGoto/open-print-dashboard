@@ -238,7 +238,7 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
     )
 
 
-def test_barcode_scan_adopts_unlinked_ams_spool(
+def test_barcode_scan_does_not_adopt_an_ams_spool(
     client: TestClient,
     db: Session,
     superuser_token_headers: dict[str, str],
@@ -271,6 +271,8 @@ def test_barcode_scan_adopts_unlinked_ams_spool(
     db.commit()
     db.refresh(ams_spool)
 
+    # One scan adds one spool (D-06). It must not attach the barcode to the
+    # AMS spool that happens to use the same filament.
     r = client.post(
         f"{settings.API_V1_STR}/spools/scan/barcode",
         headers=superuser_token_headers,
@@ -279,14 +281,19 @@ def test_barcode_scan_adopts_unlinked_ams_spool(
     assert r.status_code == 200
     data = r.json()
     assert data["created"] is True
-    assert data["spool"]["id"] == str(ams_spool.id)
+    assert data["spool"]["id"] != str(ams_spool.id)
     assert data["spool"]["barcode"] == code
 
     db.expire_all()
     matches = db.exec(
         select(Spool).where(Spool.filament_id == filament.id)
     ).all()
-    assert len(matches) == 1
+    assert len(matches) == 2
+
+    untouched = db.get(Spool, ams_spool.id)
+    assert untouched is not None
+    assert untouched.barcode is None
+    assert untouched.tag_uid == "AMS-SPACE-GRAY"
 
 
 def test_unknown_barcode_can_create_filament_and_spool(

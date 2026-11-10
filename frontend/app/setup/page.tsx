@@ -515,7 +515,10 @@ export default function SetupPage() {
                     type="button"
                     variant="ghost"
                     className="w-full"
-                    onClick={() => router.push("/dashboard")}
+                    onClick={async () => {
+                      await api.skipSetup().catch(() => null);
+                      router.push("/dashboard");
+                    }}
                   >
                     Continue without a printer
                   </Button>

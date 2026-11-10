@@ -318,6 +318,8 @@ const apiImpl = {
 
   getSetupProgress: () => request<SetupProgress>("/setup/progress"),
 
+  skipSetup: () => request<{ message: string }>("/setup/skip", { method: "POST" }),
+
   register: (email: string, password: string, fullName?: string) =>
     request<UserPublic>("/users/signup", {
       method: "POST",

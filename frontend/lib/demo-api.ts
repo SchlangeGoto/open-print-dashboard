@@ -166,6 +166,8 @@ export const demoApi: ApiShape = {
       setup_complete: true,
     }),
 
+  skipSetup: () => delay({ message: "Setup skipped" }),
+
   register: (email, _password, fullName) => {
     void _password;
     return delay({

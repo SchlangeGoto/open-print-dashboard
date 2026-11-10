@@ -72,6 +72,25 @@ class Settings(BaseSettings):
             self.EMAILS_FROM_NAME = self.PROJECT_NAME
         return self
 
+    @model_validator(mode="after")
+    def _reject_insecure_secret_key(self) -> "Settings":
+        # The example file ships a placeholder. Outside development that is a
+        # public signing key, so refuse to start instead of accepting forged
+        # tokens.
+        if self.FASTAPI_ENV == "development":
+            return self
+        if (
+            self.SECRET_KEY.strip().lower() in {"", "changethis"}
+            or len(self.SECRET_KEY) < 32
+        ):
+            raise ValueError(
+                "SECRET_KEY must be a random value of at least 32 characters. "
+                "Generate one with: openssl rand -hex 32"
+            )
+        if self.BAMBU_CREDENTIALS_KEY and len(self.BAMBU_CREDENTIALS_KEY) < 32:
+            raise ValueError("BAMBU_CREDENTIALS_KEY must be at least 32 characters")
+        return self
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def emails_enabled(self) -> bool:

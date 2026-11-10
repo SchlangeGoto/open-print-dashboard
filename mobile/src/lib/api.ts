@@ -35,19 +35,39 @@ interface ApiClientOptions {
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
+function isIPv4(host: string): number[] | null {
+  const parts = host.split(".");
+  if (parts.length !== 4) return null;
+  const octets = parts.map((part) =>
+    /^\d{1,3}$/.test(part) ? Number(part) : NaN,
+  );
+  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return null;
+  }
+  return octets;
+}
+
 function isPrivateHost(host: string): boolean {
+  if (host === "localhost" || host.endsWith(".local")) return true;
+
+  const octets = isIPv4(host);
+  if (octets) {
+    const [a, b] = octets;
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+
+  const lower = host.toLowerCase();
   return (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "::1" ||
-    host.endsWith(".local") ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) ||
-    /^fe80:/i.test(host) ||
-    /^f[cd][0-9a-f]{2}:/i.test(host)
+    lower === "::1" ||
+    lower.startsWith("fe80:") ||
+    /^f[cd][0-9a-f]{2}:/.test(lower)
   );
 }
 
@@ -71,6 +91,11 @@ export function normalizeServerUrl(input: string): string {
   if (!hasProtocol) {
     const host = hostFromUrl(`https://${value}`);
     value = `${isPrivateHost(host) ? "http" : "https"}://${value}`;
+  }
+
+  const authority = value.replace(/^https?:\/\//i, "").split("/")[0];
+  if (authority.includes("@")) {
+    throw new Error("Server URLs cannot include a username or password");
   }
 
   value = value.replace(/\/+$/, "").replace(/\/api\/v1$/i, "");
@@ -312,7 +337,13 @@ export class ApiClient {
     };
     this.epoch += 1;
     await this.options.setTokens(tokens);
-    return this.getMe();
+    try {
+      return await this.getMe();
+    } catch (error) {
+      // Do not leave a usable session behind when the post-login probe fails.
+      await this.options.clearTokens();
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {

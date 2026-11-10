@@ -41,6 +41,7 @@ export default function LoginScreen() {
   }
 
   async function handleLogin() {
+    if (busy) return;
     if (!email.trim() || !password) {
       setError("Enter your email and password.");
       return;

@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,8 @@ from app.core.bambu_exceptions import (
 from app.core.store import get_cloud_token
 from app.models import Message
 from app.services.printer_service import printer_service
+
+logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(
     prefix="/bambu",
@@ -56,8 +59,10 @@ def login_start(payload: BambuLoginRequest) -> Any:
         raise HTTPException(
             status_code=503, detail="Blocked by Cloudflare, try again later"
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        # Never reflect upstream/Bambu error text (hosts, account ids).
+        logger.exception("Bambu Cloud login failed")
+        raise HTTPException(status_code=500, detail="Could not sign in to Bambu Cloud")
 
 
 @router.post("/login/verify")
@@ -80,8 +85,11 @@ def login_verify(payload: BambuVerifyRequest) -> Any:
         }
     except CodeIncorrectError:
         raise HTTPException(status_code=400, detail="Incorrect code, try again")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Bambu Cloud verification failed")
+        raise HTTPException(
+            status_code=500, detail="Could not verify the Bambu Cloud code"
+        )
 
 
 @router.get("/profile")

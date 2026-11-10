@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlmodel import col, func, select
 
 from app import crud
@@ -31,6 +32,9 @@ from app.utils import (
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+# Serializes the first-account check across concurrent signups.
+SETUP_LOCK_ID = 0x4F50445F53455455
 
 
 @router.get(
@@ -92,6 +96,11 @@ def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     This backs the first step of the setup wizard. It is only available while
     no account exists yet; afterwards new users must be created by an admin.
     """
+    # Two requests on a fresh instance can both count zero and both create a
+    # superuser. An advisory lock held until commit serializes them.
+    session.execute(
+        text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": SETUP_LOCK_ID}
+    )
     if crud.count_users(session=session) > 0:
         raise HTTPException(
             status_code=400, detail="An account already exists in the system"

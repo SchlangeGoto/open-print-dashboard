@@ -544,10 +544,12 @@ class BambuClient:
             # catalog. Fall back to brand + material + colour (+ series when
             # the tray names one) so a tray does not attach to another brand's
             # filament or collapse the white Support SKUs.
+            weight = self._tray_weight(tray)
             base = select(Filament).where(
                 func.lower(Filament.color_hex) == color.lower(),
                 func.lower(Filament.material) == material.lower(),
                 func.lower(Filament.brand) == brand.lower(),
+                Filament.spool_weight_g == weight,
             )
             if series:
                 filament = session.exec(

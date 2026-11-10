@@ -69,11 +69,14 @@ def _find_or_create_catalog_filament(
         # Support W/G/ABS all share brand/material/colour, so series is what
         # keeps them apart.
         series = (data.get("series") or "").strip()
+        weight = data.get("spool_weight_g")
         base = select(Filament).where(
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
             func.lower(Filament.material) == data["material"].lower(),
             func.lower(Filament.brand) == data["brand"].lower(),
         )
+        if weight is not None:
+            base = base.where(Filament.spool_weight_g == weight)
         if series:
             filament = session.exec(
                 base.where(func.lower(Filament.series) == series.lower()).order_by(
@@ -152,6 +155,35 @@ def _link_barcode(*, session: SessionDep, code: str, filament: Filament) -> Fila
         return existing
 
 
+def _replay_barcode_spool(
+    *, session: SessionDep, request_id: str | None, code: str
+) -> BarcodeScanResult | None:
+    """Return the spool created for an idempotency key, or None.
+
+    A request id may only replay the barcode it was first used with. The
+    barcode comparison also covers a stored NULL/empty barcode.
+    """
+    if not request_id:
+        return None
+    spool = session.exec(select(Spool).where(Spool.request_id == request_id)).first()
+    if not spool:
+        return None
+    if (spool.barcode or "") != code:
+        raise HTTPException(
+            status_code=409,
+            detail="request_id already used for a different barcode",
+        )
+    filament = session.get(Filament, spool.filament_id)
+    return BarcodeScanResult(
+        found=filament is not None,
+        code=spool.barcode or code,
+        filament=FilamentPublic.model_validate(filament) if filament else None,
+        spool=SpoolPublic.model_validate(spool),
+        created=False,
+        existing_spools=[SpoolPublic.model_validate(spool)],
+    )
+
+
 def _create_barcode_spool(
     *,
     session: SessionDep,
@@ -210,27 +242,11 @@ def read_active_spool(session: SessionDep, printer_id: uuid.UUID | None = None) 
 def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     """Look up a packaging barcode and create a spool when it is known."""
     code = payload.code.strip()
-    if payload.request_id:
-        replay = session.exec(
-            select(Spool).where(Spool.request_id == payload.request_id)
-        ).first()
-        if replay:
-            if replay.barcode and replay.barcode != code:
-                raise HTTPException(
-                    status_code=409,
-                    detail="request_id already used for a different barcode",
-                )
-            filament = session.get(Filament, replay.filament_id)
-            return BarcodeScanResult(
-                found=filament is not None,
-                code=replay.barcode or code,
-                filament=(
-                    FilamentPublic.model_validate(filament) if filament else None
-                ),
-                spool=SpoolPublic.model_validate(replay),
-                created=False,
-                existing_spools=[SpoolPublic.model_validate(replay)],
-            )
+    replay = _replay_barcode_spool(
+        session=session, request_id=payload.request_id, code=code
+    )
+    if replay:
+        return replay
     mapping = session.exec(
         select(FilamentBarcode).where(FilamentBarcode.code == code)
     ).first()
@@ -268,22 +284,15 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
             request_id=payload.request_id,
         )
     except IntegrityError:
-        # Two retries raced; the unique request_id decides. Return the winner.
+        # Two retries raced; the unique request_id decides. Re-read through
+        # the same replay helper so the barcode comparison still applies.
         session.rollback()
-        if not payload.request_id:
-            raise
-        spool = session.exec(
-            select(Spool).where(Spool.request_id == payload.request_id)
-        ).one()
-        filament = session.get(Filament, spool.filament_id)
-        return BarcodeScanResult(
-            found=True,
-            code=spool.barcode or code,
-            filament=(FilamentPublic.model_validate(filament) if filament else None),
-            spool=SpoolPublic.model_validate(spool),
-            created=False,
-            existing_spools=[SpoolPublic.model_validate(spool)],
+        replay = _replay_barcode_spool(
+            session=session, request_id=payload.request_id, code=code
         )
+        if replay is None:
+            raise
+        return replay
     return BarcodeScanResult(
         found=True,
         code=code,
@@ -298,27 +307,11 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
 def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
     """Create a new filament from a scanned barcode and add its first spool."""
     code = payload.code.strip()
-    if payload.request_id:
-        replay = session.exec(
-            select(Spool).where(Spool.request_id == payload.request_id)
-        ).first()
-        if replay:
-            if replay.barcode and replay.barcode != code:
-                raise HTTPException(
-                    status_code=409,
-                    detail="request_id already used for a different barcode",
-                )
-            filament = session.get(Filament, replay.filament_id)
-            return BarcodeScanResult(
-                found=filament is not None,
-                code=replay.barcode or code,
-                filament=(
-                    FilamentPublic.model_validate(filament) if filament else None
-                ),
-                spool=SpoolPublic.model_validate(replay),
-                created=False,
-                existing_spools=[SpoolPublic.model_validate(replay)],
-            )
+    replay = _replay_barcode_spool(
+        session=session, request_id=payload.request_id, code=code
+    )
+    if replay:
+        return replay
     mapping = session.exec(
         select(FilamentBarcode).where(FilamentBarcode.code == code)
     ).first()
@@ -340,21 +333,15 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
             request_id=payload.request_id,
         )
     except IntegrityError:
+        # Two retries raced; the unique request_id decides. Re-read through
+        # the same replay helper so the barcode comparison still applies.
         session.rollback()
-        if not payload.request_id:
-            raise
-        spool = session.exec(
-            select(Spool).where(Spool.request_id == payload.request_id)
-        ).one()
-        filament = session.get(Filament, spool.filament_id)
-        return BarcodeScanResult(
-            found=True,
-            code=spool.barcode or code,
-            filament=(FilamentPublic.model_validate(filament) if filament else None),
-            spool=SpoolPublic.model_validate(spool),
-            created=False,
-            existing_spools=[SpoolPublic.model_validate(spool)],
+        replay = _replay_barcode_spool(
+            session=session, request_id=payload.request_id, code=code
         )
+        if replay is None:
+            raise
+        return replay
     return BarcodeScanResult(
         found=True,
         code=code,

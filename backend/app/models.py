@@ -306,6 +306,8 @@ class BarcodeScanRequest(SQLModel):
     @model_validator(mode="after")
     def _normalize_code(self) -> "BarcodeScanRequest":
         self.code = _normalize_barcode_for_type(self.code, self.type)
+        if not self.code:
+            raise ValueError("code cannot be empty")
         return self
 
 
@@ -326,6 +328,8 @@ class BarcodeConfirmRequest(SQLModel):
     @model_validator(mode="after")
     def _normalize_code(self) -> "BarcodeConfirmRequest":
         self.code = _normalize_barcode_for_type(self.code, self.type)
+        if not self.code:
+            raise ValueError("code cannot be empty")
         return self
 
 

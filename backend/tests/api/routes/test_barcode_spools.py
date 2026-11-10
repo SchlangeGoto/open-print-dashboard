@@ -971,3 +971,95 @@ def test_scan_backfills_series_on_an_existing_filament(
 
     support = db.exec(select(Filament).where(Filament.material == "Support")).all()
     assert len(support) == 1
+
+
+def test_series_backfill_requires_the_same_spool_weight(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    legacy = Filament(
+        brand="Bambu Lab",
+        material="Support",
+        color_name="Legacy Support W",
+        color_hex="#FFFFFF",
+        spool_weight_g=750,
+    )
+    db.add(legacy)
+    db.commit()
+    db.refresh(legacy)
+
+    # 6975337038078 is the 1000 g Support for ABS SKU. It must not relabel the
+    # 750 g legacy row and then create a 250 g short spool.
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337038078", "create": True},
+    )
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    unchanged = db.get(Filament, legacy.id)
+    assert unchanged is not None
+    assert unchanged.series is None
+    assert unchanged.spool_weight_g == 750
+
+    spool = db.exec(select(Spool).where(Spool.barcode == "6975337038078")).one()
+    assert spool.total_weight_g == 1000
+
+
+def test_whitespace_barcode_is_rejected(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    for path in ("/spools/scan/barcode", "/spools/scan/barcode/confirm"):
+        payload = {"code": "   "}
+        if path.endswith("confirm"):
+            payload["filament"] = {
+                "brand": "Test",
+                "material": "PLA",
+                "color_name": "Blank",
+                "color_hex": "#000000",
+            }
+        r = client.post(
+            f"{settings.API_V1_STR}{path}",
+            headers=superuser_token_headers,
+            json=payload,
+        )
+        assert r.status_code == 422, (path, r.text)
+
+
+def test_replay_with_a_cleared_barcode_is_rejected(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="No barcode",
+        color_hex="#101010",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        barcode=None,
+        request_id="cleared-barcode",
+    )
+    db.add(spool)
+    db.commit()
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={
+            "code": "6975337032380",
+            "create": True,
+            "request_id": "cleared-barcode",
+        },
+    )
+    assert r.status_code == 409

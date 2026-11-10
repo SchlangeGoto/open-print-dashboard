@@ -238,7 +238,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| B-01 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | The catalog match keys on nullable `bambu_info_idx` + colour; six support/PVA products share `NULL` + `#FFFFFF` and collapse into one filament. The colour+material fallback ignores brand, so a Bambu barcode can bind to another brand's black PLA. | Key on the barcode or a `(series, color_name, spool_weight_g)` product, and include brand/material/colour in the fallback. | Human #6 + CR #6/#8 · 10 Nov 09:21 UTC |
 | B-02 | `backend/app/api/routes/spools.py` (`scan_barcode`) | A POST retry or a double scan creates inventory twice. By design, every scan adds a spool (D-06); the risk is an accidental retry, not a missing server-side dedupe. | Keep the mobile lookup-first flow as the guard and document “one scan = one spool”. Do not add server-side dedupe. | Human #6 + CR #6 · 10 Nov 09:21 UTC · resolved by D-06 |
 | B-05 | `backend/app/api/routes/spools.py`, `backend/scripts/import_bambu_gtins.py` | No GTIN check-digit validation, and a confirmed mapping cannot be deleted or re-mapped, so one typo is permanent. | Validate EAN-13 going forward (no production backfill, D-07), warn/skip in the importer, allow delete/re-map. | Human #6 · 09 Nov 20:18 UTC |
 | B-06 | `backend/app/services/bambu_catalog.py` | A malformed catalog returns `{}` with no log; a valid-but-non-object payload makes `payload.get` raise on every scan. | Log once, guard `isinstance(payload, dict)` and `barcodes` being a dict. | Human #6 + CR #6 · 10 Nov 09:21 UTC |
@@ -254,8 +253,6 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| F-01 | `frontend/lib/appearance.tsx` | The accent is applied in a post-mount `useEffect`, so every hard navigation paints blue and then repaints. | Bootstrap before paint (inline script in `app/layout.tsx` or a server-read cookie). | Human #4 · 09 Nov 20:18 UTC |
-| F-02 | `frontend/components/ui/CoverImage.tsx` | The object URL leaks when the component unmounts before the fetch resolves: cleanup sees `nextUrl === null`, then the fetch creates a URL that is never revoked. | Use `AbortController` and revoke in the post-`await` branch. | Human #4 · 09 Nov 20:18 UTC |
 | F-06 | `frontend/app/dashboard/analytics/page.tsx` | `ceil((end - start) / 86400000)` adds a phantom day at the DST fall-back, so previous prints/day is divided by 8 instead of 7. | Use `differenceInCalendarDays(end, start) + 1`. | Human #10 · 09 Nov 20:18 UTC |
 | F-07 | `frontend/app/dashboard/prints/page.tsx` | Still calls `getPrintJobs()`, which returns only the first 500 rows; the header and the filament filter silently miss older jobs. | Use `getAllPrintJobs()` or add real server-side paging. | Human #10 · 09 Nov 20:18 UTC |
 | F-10 | `frontend/app/dashboard/spools/page.tsx` | Purchased date drifts back one day per edit outside UTC: `new Date("2024-05-03").toISOString()` stores the previous day, and `beginEdit` splits the ISO string. | Format the local date and post `yyyy-MM-dd`. | Human #10 · 09 Nov 20:18 UTC |
@@ -338,8 +335,11 @@ re-opened.
 | Client registry race and 5 s disconnect | `4627c44` | Human #5 |
 | Explicit barcode scan adopted an AMS spool | `e0e1d1c` | CR #8 |
 | `remain == 0` reset an empty spool | `e8a9c88` | Human #6 + CR #6 |
-| Placeholder `SECRET_KEY` accepted | `37dfc6a` | CR #4 |
+| `SECRET_KEY` placeholder/short key (now auto-generates) | `37dfc6a` + `4d44452` | CR #4 |
 | Postgres published on `0.0.0.0` | `37dfc6a` | Human #4 + CR #4 |
 | Login accepted without an access token | `7b5be2b` | Human #4 |
 | Biased trend windows, chart keys, unassigned jobs | `162b203` | Human #10 + CR #10 |
 | Settings printer form (moot after LAN removal) | `53a017d` | Human #4 |
+| Brand/null-safe filament matching | `bf0c792` | Human #6 + CR #6/#8 |
+| Accent flash before hydration | `8322dcf` | Human #4 |
+| CoverImage object URL leak | `531a01b` | Human #4 |

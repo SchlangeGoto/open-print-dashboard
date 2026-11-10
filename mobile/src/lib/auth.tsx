@@ -119,7 +119,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authenticated");
       } catch (error) {
         if (epoch !== restoreEpoch.current) return;
-        if (error instanceof ApiError && error.status === 401) {
+        // A 4xx means the server rejected this session (401 expired, 400
+        // deactivated, 404 deleted user). Only network failures and 5xx are
+        // retryable; a dead session can never become valid.
+        if (
+          error instanceof ApiError &&
+          error.status >= 400 &&
+          error.status < 500
+        ) {
           sessionTokens = null;
           await clearStoredSession();
           if (epoch !== restoreEpoch.current) return;

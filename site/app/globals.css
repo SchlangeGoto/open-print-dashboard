@@ -321,7 +321,9 @@ h3 {
   z-index: 1;
   width: 62%;
   overflow: hidden;
-  border: 1px solid var(--color-rule-strong);
+  /* A 1px border under the 3D rotate aliases into a jagged edge. The images
+     already have a dark edge, so keep the border box but make it invisible. */
+  border: 1px solid transparent;
   border-radius: var(--radius-card);
   background: var(--color-paper-2);
   opacity: 0.88;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
 import { toast } from "@/lib/toast";
 import {
   Archive,
@@ -120,7 +121,9 @@ export default function SpoolsPage() {
       total_weight_g: s.total_weight_g,
       remaining_g: s.remaining_g,
       price_per_kg: s.price_per_kg ?? "",
-      purchased_at: s.purchased_at ? s.purchased_at.split("T")[0] : "",
+      purchased_at: s.purchased_at
+        ? format(new Date(s.purchased_at), "yyyy-MM-dd")
+        : "",
       nfc_uid: s.nfc_uid ?? "",
       notes: s.notes ?? "",
     });
@@ -141,7 +144,9 @@ export default function SpoolsPage() {
       total_weight_g: Number(form.total_weight_g),
       remaining_g: Number(form.remaining_g),
       price_per_kg: form.price_per_kg ? Number(form.price_per_kg) : null,
-      purchased_at: form.purchased_at ? new Date(form.purchased_at).toISOString() : null,
+      purchased_at: form.purchased_at
+        ? new Date(`${form.purchased_at}T00:00:00`).toISOString()
+        : null,
       nfc_uid: form.nfc_uid || null,
       notes: form.notes || null,
     };

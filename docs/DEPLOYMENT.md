@@ -63,12 +63,18 @@ cp .env.example .env
 Edit `.env` and set:
 
 ```dotenv
-SECRET_KEY=<openssl rand -hex 32>   # generate once, then keep it
-POSTGRES_PASSWORD=<a long random password>
+SECRET_KEY=<openssl rand -hex 32>       # generate once, then keep it
+POSTGRES_PASSWORD=<openssl rand -hex 32> # URL-safe; it is embedded in DATABASE_URL
 DOMAIN=dashboard.example.com
+FRONTEND_HOST=https://dashboard.example.com
 IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
 IMAGE_TAG=0.2.0
 ```
+
+Use a URL-safe password (hex or base64url) because `DATABASE_URL` embeds it
+without URL encoding. If you copied `.env.example`, change `FRONTEND_HOST` from
+`http://localhost:3000` to the public URL; otherwise CORS and password-reset
+links point at localhost.
 
 Then:
 
@@ -96,7 +102,7 @@ derives it from `DOMAIN`.
 | `DOMAIN` | Public dashboard hostname for `compose.ghcr.yml` |
 | `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |
 | `NEXT_PUBLIC_API_URL` | Source-build only. **Build-time** value; rebuild after changing it |
-| `FRONTEND_HOST` | Backend CORS allowlist. Derived from `DOMAIN` by `compose.ghcr.yml`; override only if needed |
+| `FRONTEND_HOST` | Backend CORS allowlist. Set it to the public frontend URL; `.env.example` defaults to localhost |
 | `PRINTER_IP`, `PRINTER_SERIAL`, `PRINTER_ACCESS_CODE` | Optional defaults for the Bambu Lab connection |
 | `SMTP_*`, `EMAILS_FROM_EMAIL` | Optional. If you are not using SMTP, set `EMAILS_FROM_EMAIL=` and `SMTP_HOST=` empty to skip email |
 

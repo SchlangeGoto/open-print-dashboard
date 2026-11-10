@@ -19,11 +19,8 @@ from app.models import (
     Printer,
     Spool,
     SpoolActivateRequest,
-    SpoolAssignRequest,
     SpoolCreate,
     SpoolPublic,
-    SpoolScanRequest,
-    SpoolScanResult,
     SpoolsPublic,
     SpoolUpdate,
 )
@@ -45,6 +42,9 @@ def _unload_other_spools(
     for spool in others:
         spool.active = False
         spool.printer_id = None
+    # Flush the unload before the caller activates the new spool; the partial
+    # unique index checks each row as it is written.
+    session.flush()
 
 
 def _find_or_create_catalog_filament(
@@ -177,53 +177,6 @@ def read_active_spool(session: SessionDep, printer_id: uuid.UUID | None = None) 
     return spool
 
 
-@router.post("/scan", response_model=SpoolScanResult)
-def scan_nfc(payload: SpoolScanRequest, session: SessionDep) -> Any:
-    """Look up a spool by its NFC UID, activating it when found."""
-    spool = session.exec(select(Spool).where(Spool.nfc_uid == payload.uid)).first()
-
-    if spool:
-        spool.active = True
-        session.add(spool)
-        session.commit()
-        session.refresh(spool)
-        return SpoolScanResult(
-            found=True, uid=payload.uid, spool=SpoolPublic.model_validate(spool)
-        )
-
-    unassigned = session.exec(select(Spool).where(col(Spool.nfc_uid).is_(None))).all()
-    return SpoolScanResult(
-        found=False,
-        uid=payload.uid,
-        unassigned_spools=[SpoolPublic.model_validate(s) for s in unassigned],
-    )
-
-
-@router.post("/scan/assign", response_model=SpoolScanResult)
-def assign_nfc(payload: SpoolAssignRequest, session: SessionDep) -> Any:
-    """Assign a scanned NFC UID to an existing spool and activate it."""
-    spool = session.get(Spool, payload.spool_id)
-    if not spool:
-        raise HTTPException(status_code=404, detail="Spool not found")
-
-    existing = session.exec(select(Spool).where(Spool.nfc_uid == payload.uid)).first()
-    if existing and existing.id != payload.spool_id:
-        raise HTTPException(
-            status_code=400,
-            detail="This NFC tag is already assigned to another spool",
-        )
-
-    spool.nfc_uid = payload.uid
-    spool.last_used_at = datetime.now(UTC)
-    spool.active = True
-    session.add(spool)
-    session.commit()
-    session.refresh(spool)
-    return SpoolScanResult(
-        found=True, uid=payload.uid, spool=SpoolPublic.model_validate(spool)
-    )
-
-
 @router.post("/scan/barcode", response_model=BarcodeScanResult)
 def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     """Look up a packaging barcode and create a spool when it is known."""
@@ -314,6 +267,9 @@ def create_spool(*, session: SessionDep, spool_in: SpoolCreate) -> Any:
         if not filament:
             raise HTTPException(status_code=404, detail="Filament not found")
     spool = Spool.model_validate(spool_in)
+    # A new spool has no printer yet, so it cannot be active. Loading goes
+    # through /spools/{id}/activate.
+    spool.active = False
     session.add(spool)
     session.commit()
     session.refresh(spool)
@@ -331,6 +287,14 @@ def update_spool(
     if not spool:
         raise HTTPException(status_code=404, detail="Spool not found")
     update_dict = spool_in.model_dump(exclude_unset=True)
+    if "filament_id" in update_dict and update_dict["filament_id"]:
+        if not session.get(Filament, update_dict["filament_id"]):
+            raise HTTPException(status_code=404, detail="Filament not found")
+    if update_dict.get("active") and spool.printer_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Load the spool into a printer before activating it",
+        )
     spool.sqlmodel_update(update_dict)
     if "active" in update_dict and not spool.active:
         spool.printer_id = None
@@ -370,6 +334,15 @@ def activate_spool(
     spool.active = True
     spool.last_used_at = datetime.now(UTC)
     session.add(spool)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # The partial unique index is the real guard against two requests
+        # activating different spools on the same printer at once.
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Another spool is already loaded in that printer",
+        )
     session.refresh(spool)
     return spool

@@ -91,7 +91,6 @@ function createBarcodeSpool(
     filament_id: filament.id,
     total_weight_g: weight,
     remaining_g: weight,
-    nfc_uid: null,
     tag_uid: null,
     barcode: code,
     source: "barcode",
@@ -473,25 +472,6 @@ export const demoApi: ApiShape = {
       spools.find((spool) => spool.id === spoolId) ?? { id: spoolId },
       120,
     );
-  },
-
-  scanNfc: (uid) =>
-    delay({
-      found: false,
-      uid,
-      spool: null,
-      unassigned_spools: getSpoolsRaw().filter((spool) => !spool.nfc_uid),
-    }),
-
-  assignNfc: (uid, spoolId) => {
-    let assigned: any = null;
-    const spools = getSpoolsRaw().map((spool) => {
-      if (spool.id !== spoolId) return spool;
-      assigned = { ...spool, nfc_uid: uid };
-      return assigned;
-    });
-    save("spools", spools);
-    return delay({ ok: true, spool: assigned });
   },
 
   scanBarcode: (code) => {

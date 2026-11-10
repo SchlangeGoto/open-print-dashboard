@@ -1,10 +1,12 @@
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models import Printer, PrintJob
+from app.models import Printer, PrintJob, Spool
 
 
 def _create_printer(db: Session) -> Printer:
@@ -168,3 +170,148 @@ def test_deleting_filament_keeps_print_history(
     preserved = db.get(PrintJob, job_id)
     assert preserved is not None
     assert preserved.spool_id is None
+
+
+def test_update_spool_with_unknown_filament_returns_404(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    filament_id = _create_filament(client, superuser_token_headers)
+    spool = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": filament_id,
+            "total_weight_g": 1000,
+            "remaining_g": 1000,
+        },
+    ).json()
+
+    response = client.put(
+        f"{settings.API_V1_STR}/spools/{spool['id']}",
+        headers=superuser_token_headers,
+        json={"filament_id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 404
+
+
+def test_activating_without_a_printer_returns_422(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    filament_id = _create_filament(client, superuser_token_headers)
+    spool = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": filament_id,
+            "total_weight_g": 1000,
+            "remaining_g": 1000,
+            "active": True,
+        },
+    ).json()
+
+    # Creation forces the spool inactive; flipping the flag without a printer
+    # must be rejected instead of leaving an unreachable active spool.
+    assert spool["active"] is False
+    response = client.put(
+        f"{settings.API_V1_STR}/spools/{spool['id']}",
+        headers=superuser_token_headers,
+        json={"active": True},
+    )
+
+    assert response.status_code == 422
+
+
+def test_deleting_a_printer_unloads_its_spools(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    filament_id = _create_filament(client, superuser_token_headers)
+    printer = _create_printer(db)
+    spool = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": filament_id,
+            "total_weight_g": 1000,
+            "remaining_g": 1000,
+        },
+    ).json()
+    activated = client.put(
+        f"{settings.API_V1_STR}/spools/{spool['id']}/activate",
+        headers=superuser_token_headers,
+        json={"printer_id": str(printer.id)},
+    )
+    assert activated.status_code == 200, activated.text
+
+    deleted = client.delete(
+        f"{settings.API_V1_STR}/printers/{printer.id}",
+        headers=superuser_token_headers,
+    )
+    assert deleted.status_code == 200, deleted.text
+
+    db.expire_all()
+    stored = db.get(Spool, uuid.UUID(spool["id"]))
+    assert stored is not None
+    assert stored.active is False
+    assert stored.printer_id is None
+
+
+def test_active_spool_is_per_printer(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    filament_id = _create_filament(client, superuser_token_headers)
+    first_printer = _create_printer(db)
+    second_printer = _create_printer(db)
+
+    spools = [
+        client.post(
+            f"{settings.API_V1_STR}/spools/",
+            headers=superuser_token_headers,
+            json={
+                "filament_id": filament_id,
+                "total_weight_g": 1000,
+                "remaining_g": 1000,
+            },
+        ).json()
+        for _ in range(3)
+    ]
+
+    for spool, printer in zip(spools[:2], (first_printer, second_printer), strict=True):
+        response = client.put(
+            f"{settings.API_V1_STR}/spools/{spool['id']}/activate",
+            headers=superuser_token_headers,
+            json={"printer_id": str(printer.id)},
+        )
+        assert response.status_code == 200, response.text
+
+    # Activating on the first printer must not unload the second printer.
+    response = client.put(
+        f"{settings.API_V1_STR}/spools/{spools[2]['id']}/activate",
+        headers=superuser_token_headers,
+        json={"printer_id": str(first_printer.id)},
+    )
+    assert response.status_code == 200, response.text
+
+    db.expire_all()
+    by_id = {str(spool["id"]): db.get(Spool, uuid.UUID(spool["id"])) for spool in spools}
+    assert by_id[spools[0]["id"]].active is False
+    assert by_id[spools[1]["id"]].active is True
+    assert by_id[spools[2]["id"]].active is True
+
+
+def test_database_rejects_two_active_spools(
+    db: Session,
+) -> None:
+    printer = _create_printer(db)
+    first = Spool(total_weight_g=1000, remaining_g=1000, active=True, printer_id=printer.id)
+    second = Spool(total_weight_g=1000, remaining_g=1000, active=True, printer_id=printer.id)
+    db.add(first)
+    db.add(second)
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()

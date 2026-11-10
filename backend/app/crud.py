@@ -168,6 +168,14 @@ def update_printer(
 
 
 def delete_printer(*, session: Session, printer: Printer) -> None:
+    # Unload the printer's spools in the same transaction. The FK would set
+    # printer_id to null, but the spool would stay active and unreachable.
+    for spool in session.exec(
+        select(Spool).where(Spool.printer_id == printer.id)
+    ).all():
+        spool.printer_id = None
+        spool.active = False
+        session.add(spool)
     session.delete(printer)
     session.commit()
 

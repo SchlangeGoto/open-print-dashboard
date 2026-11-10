@@ -74,7 +74,6 @@ export default function SpoolsPage() {
     remaining_g: 1000,
     price_per_kg: "",
     purchased_at: "",
-    nfc_uid: "",
     notes: "",
   });
 
@@ -108,7 +107,6 @@ export default function SpoolsPage() {
       remaining_g: 1000,
       price_per_kg: "",
       purchased_at: "",
-      nfc_uid: "",
       notes: "",
     });
     setEditingId(null);
@@ -124,7 +122,6 @@ export default function SpoolsPage() {
       purchased_at: s.purchased_at
         ? format(new Date(s.purchased_at), "yyyy-MM-dd")
         : "",
-      nfc_uid: s.nfc_uid ?? "",
       notes: s.notes ?? "",
     });
     setEditingId(s.id);
@@ -147,7 +144,6 @@ export default function SpoolsPage() {
       purchased_at: form.purchased_at
         ? new Date(`${form.purchased_at}T00:00:00`).toISOString()
         : null,
-      nfc_uid: form.nfc_uid || null,
       notes: form.notes || null,
     };
     setSaving(true);
@@ -421,16 +417,6 @@ export default function SpoolsPage() {
                 />
               </Field>
             </div>
-
-            <Field>
-              <FieldLabel htmlFor="nfc">NFC UID (optional)</FieldLabel>
-              <Input
-                id="nfc"
-                placeholder="04:A2:3F:…"
-                value={form.nfc_uid}
-                onChange={(e) => setForm({ ...form, nfc_uid: e.target.value })}
-              />
-            </Field>
 
             <Field>
               <FieldLabel htmlFor="spool-notes">Notes</FieldLabel>

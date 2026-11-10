@@ -448,13 +448,6 @@ const apiImpl = {
       method: "PUT",
       body: JSON.stringify({ printer_id: printerId }),
     }),
-  scanNfc: (uid: string) =>
-    request<any>("/spools/scan", { method: "POST", body: JSON.stringify({ uid }) }),
-  assignNfc: (uid: string, spoolId: string) =>
-    request<any>("/spools/scan/assign", {
-      method: "POST",
-      body: JSON.stringify({ uid, spool_id: spoolId }),
-    }),
   scanBarcode: (code: string) =>
     request<BarcodeScanResult>("/spools/scan/barcode", {
       method: "POST",

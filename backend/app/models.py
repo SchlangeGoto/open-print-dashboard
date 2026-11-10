@@ -164,7 +164,6 @@ class FilamentBarcode(SQLModel, table=True):
 class SpoolBase(SQLModel):
     total_weight_g: float = Field(gt=0)
     remaining_g: float = Field(ge=0)
-    nfc_uid: str | None = Field(default=None, max_length=100)
     tag_uid: str | None = Field(default=None, max_length=100, index=True)
     barcode: str | None = Field(default=None, max_length=100, index=True)
     source: str | None = Field(default=None, max_length=20)
@@ -183,7 +182,6 @@ class SpoolUpdate(SQLModel):
     filament_id: uuid.UUID | None = None
     total_weight_g: float | None = Field(default=None, gt=0)
     remaining_g: float | None = Field(default=None, ge=0)
-    nfc_uid: str | None = Field(default=None, max_length=100)
     tag_uid: str | None = Field(default=None, max_length=100)
     barcode: str | None = Field(default=None, max_length=100)
     source: str | None = Field(default=None, max_length=20)
@@ -221,24 +219,8 @@ class SpoolsPublic(SQLModel):
     count: int
 
 
-class SpoolScanRequest(SQLModel):
-    uid: str
-
-
-class SpoolAssignRequest(SQLModel):
-    uid: str
-    spool_id: uuid.UUID
-
-
 class SpoolActivateRequest(SQLModel):
     printer_id: uuid.UUID
-
-
-class SpoolScanResult(SQLModel):
-    found: bool
-    uid: str
-    spool: SpoolPublic | None = None
-    unassigned_spools: list[SpoolPublic] = []
 
 
 class BarcodeScanRequest(SQLModel):

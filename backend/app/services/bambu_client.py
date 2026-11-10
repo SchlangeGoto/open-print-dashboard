@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import paho.mqtt.client as mqtt
-from sqlalchemy import func
+from sqlalchemy import func, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, desc, select
 
 from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
@@ -770,37 +771,38 @@ class BambuClient:
 
             with Session(engine) as session:
                 active_spool = self._active_spool(session)
-
-                existing = session.exec(
-                    select(PrintJob).where(
-                        PrintJob.device_id == self.serial,
-                        PrintJob.bambu_task_id == cloud_task_id,
-                    )
-                ).first()
-                if existing:
-                    # A FAILED -> RUNNING retry reports the same task again;
-                    # updating is fine, inserting a duplicate is not.
-                    logger.info("PrintJob already exists for task %s", cloud_task_id)
-                    return
-
-                job = PrintJob(
-                    spool_id=active_spool.id if active_spool else None,
-                    filament_id=active_spool.filament_id if active_spool else None,
-                    title=task.get(
-                        "title", self._current_status.get("subtask_name", "Unknown")
-                    ),
-                    cover=task.get("cover"),
-                    weight=task.get("weight"),
-                    duration_seconds=task.get("costTime"),
-                    start_time=parse_task_datetime(task.get("startTime")),
-                    status=task.get("status"),
-                    bambu_task_id=cloud_task_id,
-                    device_id=self.serial,
-                    ams_detail_mapping=str(task.get("amsDetailMapping", [])),
+                title = (
+                    task.get("title")
+                    or self._current_status.get("subtask_name")
+                    or "Unknown"
                 )
-                session.add(job)
+
+                # A FAILED -> RUNNING retry reports the same task again. Let
+                # the unique key decide; never insert a second row.
+                session.execute(
+                    pg_insert(PrintJob)
+                    .values(
+                        id=uuid.uuid4(),
+                        spool_id=active_spool.id if active_spool else None,
+                        filament_id=(
+                            active_spool.filament_id if active_spool else None
+                        ),
+                        title=title,
+                        cover=task.get("cover"),
+                        weight=task.get("weight"),
+                        duration_seconds=task.get("costTime"),
+                        start_time=parse_task_datetime(task.get("startTime")),
+                        status=task.get("status"),
+                        bambu_task_id=cloud_task_id,
+                        device_id=self.serial,
+                        ams_detail_mapping=json.dumps(task.get("amsDetailMapping", [])),
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=["device_id", "bambu_task_id"]
+                    )
+                )
                 session.commit()
-                logger.info(f"PrintJob saved: {job.title} — {task.get('weight')}g used")
+                logger.info("PrintJob saved: %s — %sg used", title, task.get("weight"))
 
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
@@ -870,15 +872,28 @@ class BambuClient:
                     select(PrintJob)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == cloud_task_id)
-                    .with_for_update()
                 ).first()
 
                 if not job:
-                    job = PrintJob(
-                        bambu_task_id=cloud_task_id,
-                        device_id=self.serial or "",
+                    # The start handler may have missed the row. Insert it
+                    # without racing another finish thread.
+                    session.execute(
+                        pg_insert(PrintJob)
+                        .values(
+                            id=uuid.uuid4(),
+                            title=task.get("title") or "Unknown",
+                            bambu_task_id=cloud_task_id,
+                            device_id=self.serial or "",
+                        )
+                        .on_conflict_do_nothing(
+                            index_elements=["device_id", "bambu_task_id"]
+                        )
                     )
-                    session.add(job)
+                    job = session.exec(
+                        select(PrintJob)
+                        .where(PrintJob.device_id == self.serial)
+                        .where(PrintJob.bambu_task_id == cloud_task_id)
+                    ).one()
 
                 job.spool_id = active_spool.id if active_spool else None
                 # Keep the filament set at start even if the spool was deleted
@@ -895,21 +910,38 @@ class BambuClient:
                 job.status = task.get("status")
                 job.bambu_task_id = cloud_task_id
                 job.device_id = self.serial
-                job.ams_detail_mapping = str(task.get("amsDetailMapping", []))
+                job.ams_detail_mapping = json.dumps(task.get("amsDetailMapping", []))
 
                 session.add(job)
 
-                # A repeated finish event must not deduct the same weight
-                # twice. The row lock makes the check safe across threads.
-                if job.filament_deducted_at is None:
+                # Claim the one deduction for this job atomically. The second
+                # thread blocks on the row lock, then sees the marker and
+                # skips; check-then-write was not enough.
+                if self._claim_filament_deduction(session, job.id):
                     self._deduct_filament_from_spools(session, task)
-                    job.filament_deducted_at = datetime.now(UTC)
+                else:
+                    logger.info(
+                        "Skipped deduction for task %s: already claimed",
+                        cloud_task_id,
+                    )
 
                 session.commit()
                 logger.info(f"PrintJob saved: {job.title} — {task.get('weight')}g used")
 
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
+
+    def _claim_filament_deduction(self, session: Session, job_id: uuid.UUID) -> bool:
+        """Atomically claim the single filament deduction for a job."""
+        result = session.execute(
+            update(PrintJob)
+            .where(
+                PrintJob.id == job_id,
+                PrintJob.filament_deducted_at.is_(None),
+            )
+            .values(filament_deducted_at=datetime.now(UTC))
+        )
+        return result.rowcount == 1
 
     def _deduct_filament_from_spools(self, session: Session, task: dict) -> None:
         """Deduct filament usage per color slot from the correct spools.

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import EmailStr, model_validator
+from sqlalchemy import Index, UniqueConstraint, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.barcodes import is_valid_ean13, normalize_barcode
@@ -171,7 +172,9 @@ class FilamentStats(SQLModel):
 class FilamentBarcode(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     code: str = Field(unique=True, index=True, max_length=100)
-    filament_id: uuid.UUID = Field(foreign_key="filament.id", ondelete="CASCADE")
+    filament_id: uuid.UUID = Field(
+        foreign_key="filament.id", ondelete="CASCADE", index=True
+    )
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
 
 
@@ -185,7 +188,7 @@ class SpoolBase(SQLModel):
     # remaining_g then holds the nominal capacity and must not be shown as a
     # real measurement or used for deduction.
     remaining_unknown: bool = False
-    tag_uid: str | None = Field(default=None, max_length=100, index=True)
+    tag_uid: str | None = Field(default=None, max_length=100, index=True, unique=True)
     barcode: str | None = Field(default=None, max_length=100, index=True)
     source: str | None = Field(default=None, max_length=20)
     active: bool = False
@@ -215,6 +218,17 @@ class SpoolUpdate(SQLModel):
 
 
 class Spool(SpoolBase, table=True):
+    # Constraint that the AMS sync relies on: at most one active spool per
+    # printer. Keep it declared on the model so autogenerate cannot drop it.
+    __table_args__ = (
+        Index(
+            "uq_spool_active_printer",
+            "printer_id",
+            unique=True,
+            postgresql_where=text("active"),
+        ),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     filament_id: uuid.UUID | None = Field(
@@ -304,6 +318,12 @@ class PrintJobBase(SQLModel):
 
 
 class PrintJob(PrintJobBase, table=True):
+    # One cloud task maps to one row per printer. This is what makes the
+    # filament deduction claim atomic across overlapping finish/init threads.
+    __table_args__ = (
+        UniqueConstraint("device_id", "bambu_task_id", name="uq_printjob_device_task"),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     # Set when filament was subtracted for this job, so a repeated finish

@@ -30,6 +30,20 @@ target_metadata = SQLModel.metadata
 # ... etc.
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    # spool.nfc_uid is deliberately kept in the database for one release after
+    # the model and API dropped it. Hide it from autogenerate until the
+    # removal migration lands.
+    if (
+        type_ == "column"
+        and name == "nfc_uid"
+        and getattr(object, "table", None) is not None
+        and object.table.name == "spool"
+    ):
+        return False
+    return True
+
+
 def get_url():
     return str(settings.DATABASE_URL)
 
@@ -48,7 +62,11 @@ def run_migrations_offline():
     """
     url = get_url()
     context.configure(
-        url=url, target_metadata=target_metadata, literal_binds=True, compare_type=True
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -73,7 +91,10 @@ def run_migrations_online():
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata, compare_type=True
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

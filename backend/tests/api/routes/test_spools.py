@@ -489,3 +489,27 @@ def test_updating_other_fields_keeps_an_unknown_weight(
     assert updated is not None
     assert updated.remaining_unknown is False
     assert updated.remaining_g == 640
+
+
+def test_print_job_deduction_is_claimed_once(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    job = PrintJob(title="Claim test", device_id="claim-device", bambu_task_id="1")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    assert client._claim_filament_deduction(db, job.id) is True
+    db.commit()
+    assert client._claim_filament_deduction(db, job.id) is False
+
+
+def test_duplicate_print_job_is_rejected(db: Session) -> None:
+    db.add(PrintJob(title="First", device_id="dup-device", bambu_task_id="2"))
+    db.commit()
+
+    db.add(PrintJob(title="Second", device_id="dup-device", bambu_task_id="2"))
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Cloud,
@@ -51,6 +51,9 @@ export default function PrintersPage() {
   const [filaments, setFilaments] = useState<any[]>([]);
   const [firmware, setFirmware] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requestSeq = useRef(0);
+  const inFlight = useRef(false);
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
   const [selectedPrint, setSelectedPrint] = useState<any | null>(null);
   const [selectedSpool, setSelectedSpool] = useState<any | null>(null);
@@ -58,39 +61,58 @@ export default function PrintersPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPrinter, setSettingsPrinter] = useState<Printer | null>(null);
 
-  async function load() {
+  const load = useCallback(async (force = false) => {
+    if (inFlight.current && !force) return;
+    inFlight.current = true;
+    const seq = ++requestSeq.current;
     try {
       const [devices, jobs, spoolList, filamentList] = await Promise.all([
-        api.getPrinters().catch(() => []),
-        api.getPrintJobs().catch(() => []),
-        api.getSpools().catch(() => []),
-        api.getFilaments().catch(() => []),
+        api.getPrinters(),
+        api.getPrintJobs(),
+        api.getSpools(),
+        api.getFilaments(),
       ]);
+      if (seq !== requestSeq.current) return;
       setPrinters(devices);
       setPrints(jobs);
       setSpools(spoolList);
       setFilaments(filamentList);
 
-      const firmwareMap: Record<string, any> = {};
-      await Promise.all(
+      const entries = await Promise.all(
         devices
           .filter((printer) => printer.configured)
           .map(async (printer) => {
-            const info = await api.getFirmware(printer.serial).catch(() => null);
-            if (info) firmwareMap[printer.serial] = info;
+            try {
+              const info = await api.getFirmware(printer.serial);
+              return info ? ([printer.serial, info] as const) : null;
+            } catch {
+              // Firmware is optional and must not fail the whole refresh.
+              return null;
+            }
           }),
       );
-      setFirmware(firmwareMap);
+      if (seq !== requestSeq.current) return;
+      setFirmware(Object.fromEntries(entries.filter((entry) => entry !== null)));
+      setLoadError(null);
+    } catch (error) {
+      if (seq === requestSeq.current) {
+        setLoadError(
+          error instanceof Error ? error.message : "Could not reach the server",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) {
+        inFlight.current = false;
+        setLoading(false);
+      }
     }
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 10000);
+    void load();
+    const interval = setInterval(() => void load(), 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     if (printers.length > 0) {
@@ -175,19 +197,32 @@ export default function PrintersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={load}>
+          <Button variant="outline" size="sm" onClick={() => void load(true)}>
             <RefreshCw /> Refresh
           </Button>
         </div>
       </div>
 
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Could not refresh: {loadError}. Showing the last known data.
+        </div>
+      ) : null}
+
       {printers.length === 0 ? (
         <EmptyState
           icon={PrinterIcon}
-          title="No printers"
-          description={emptyPrinterMessage(cloudStatus)}
+          title={loadError ? "Could not load printers" : "No printers"}
+          description={loadError ?? emptyPrinterMessage(cloudStatus)}
           action={
-            cloudStatus && !cloudStatus.logged_in ? (
+            loadError ? (
+              <Button variant="outline" onClick={() => void load(true)}>
+                Try again
+              </Button>
+            ) : cloudStatus && !cloudStatus.logged_in ? (
               <Button onClick={() => router.push("/dashboard/settings")}>
                 Open settings
               </Button>
@@ -460,7 +495,7 @@ export default function PrintersPage() {
         <PrinterSettingsModal
           printer={settingsPrinter}
           onClose={() => setSettingsOpen(false)}
-          onSaved={load}
+          onSaved={() => void load(true)}
         />
       ) : null}
 

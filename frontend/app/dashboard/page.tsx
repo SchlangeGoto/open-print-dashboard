@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
 import { Printer as PrinterIcon, Thermometer } from "lucide-react";
 
@@ -20,6 +20,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Button } from "@/components/ui/button";
 import { CoverImage } from "@/components/ui/CoverImage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/progress";
@@ -42,6 +43,7 @@ export default function DashboardPage() {
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [firmware, setFirmware] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedPrint, setSelectedPrint] = useState<any>(null);
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
   const [selectedFilament, setSelectedFilament] = useState<any>(null);
@@ -49,37 +51,61 @@ export default function DashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPrinter, setSettingsPrinter] = useState<Printer | null>(null);
 
-  const load = useCallback(async () => {
+  const requestSeq = useRef(0);
+  const inFlight = useRef(false);
+
+  const load = useCallback(async (force = false) => {
+    // Skip a poll while the previous one is still running; a manual refresh
+    // may overtake it, and the sequence guard discards the older result.
+    if (inFlight.current && !force) return;
+    inFlight.current = true;
+    const seq = ++requestSeq.current;
     try {
       const [devs, pr, fil, sp] = await Promise.all([
-        api.getPrinters().catch(() => []),
-        api.getPrintJobs().catch(() => []),
-        api.getFilaments().catch(() => []),
-        api.getSpools().catch(() => []),
+        api.getPrinters(),
+        api.getPrintJobs(),
+        api.getFilaments(),
+        api.getSpools(),
       ]);
+      if (seq !== requestSeq.current) return;
       setPrinters(devs);
       setPrints(pr);
       setFilaments(fil);
       setSpools(sp);
 
-      const fwMap: Record<string, any> = {};
-      await Promise.all(
+      const fwEntries = await Promise.all(
         devs
           .filter((printer) => printer.configured)
           .map(async (printer) => {
-            const fw = await api.getFirmware(printer.serial).catch(() => null);
-            if (fw) fwMap[printer.serial] = fw;
+            try {
+              const fw = await api.getFirmware(printer.serial);
+              return fw ? ([printer.serial, fw] as const) : null;
+            } catch {
+              // Firmware is optional and must not fail the whole refresh.
+              return null;
+            }
           }),
       );
-      setFirmware(fwMap);
+      if (seq !== requestSeq.current) return;
+      setFirmware(Object.fromEntries(fwEntries.filter((entry) => entry !== null)));
+      setLoadError(null);
+    } catch (error) {
+      if (seq === requestSeq.current) {
+        setLoadError(
+          error instanceof Error ? error.message : "Could not reach the server",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) {
+        inFlight.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 10000);
+    void load();
+    const interval = setInterval(() => void load(), 10000);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -140,6 +166,15 @@ export default function DashboardPage() {
           Overview of your 3D printing activity
         </p>
       </div>
+
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Could not refresh: {loadError}. Showing the last known data.
+        </div>
+      ) : null}
 
       {filamentChartData.length > 0 ? (
         <Card>
@@ -305,8 +340,22 @@ export default function DashboardPage() {
         {printers.length === 0 ? (
           <EmptyState
             icon={PrinterIcon}
-            title="No printers found"
-            description="Connect a Bambu Lab account to see your printers here."
+            title={loadError ? "Could not load printers" : "No printers found"}
+            description={
+              loadError ??
+              "Connect a Bambu Lab account to see your printers here."
+            }
+            action={
+              loadError ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void load(true)}
+                >
+                  Try again
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -543,7 +592,7 @@ export default function DashboardPage() {
         <PrinterSettingsModal
           printer={settingsPrinter}
           onClose={() => setSettingsOpen(false)}
-          onSaved={load}
+          onSaved={() => void load(true)}
         />
       ) : null}
     </div>

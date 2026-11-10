@@ -26,6 +26,8 @@ reviews:
     - "!**/.next/**"
     - "!**/playwright-report/**"
     - "!**/test-results/**"
+    - "!**/htmlcov/**"
+    - "!**/.agents/**"
     - "!site/public/screenshots/**"
     - "!**/*.png"
     - "!**/*.jpg"

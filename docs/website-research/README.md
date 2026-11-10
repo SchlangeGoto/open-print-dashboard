@@ -91,7 +91,7 @@ These decisions supersede the earlier “no cloud” recommendation:
 - The six-job section is a scroll-driven sticky tour: the tab bar and full-width preview stay pinned while scrolling advances through the six features at roughly two thirds of a viewport each; clicking a tab scrolls to it. Once passed, it collapses to a compact tabbed viewer so it does not re-trap you on the way back up. The native scanner is last.
 - `/hosting/` is a quiet managed-hosting beta page: three plan slots, the Beta plan active, Standard and Team marked as placeholders, and a mailto interest CTA. It is linked from the footer, the self-hosted section and the install aside, not the main navigation.
 - The scanning band shows the native app as a fan of three phone captures — inventory, spool detail and barcode scanning — with the same demo data as the web screenshots. The deck becomes a horizontal snap strip on mobile.
-- The production demo flag is implemented in `frontend/lib/demo.ts`; `development.md` and `frontend/.env.example` document it.
+- The production demo flag is implemented in `frontend/lib/demo.ts`; `docs/SETUP.md` and `frontend/.env.example` document it.
 - The README claim is now “On your own hardware.”
 - The site is not deployed yet; `demo.openprintdash.app` and `openprintdash.app` DNS/TLS are the next P0.
 

@@ -121,6 +121,12 @@ MQTT sessions and see only its own state. `backend/scripts/start.sh` uses
 `fastapi run` with the default single worker and refuses to start when
 `WEB_CONCURRENCY` is greater than 1.
 
+## Rolling back
+
+Back up the database before downgrading. Several migrations are lossy in
+`downgrade()`: printer LAN fields, NFC identifiers, and the one-active-spool
+ordering. A downgrade does not restore credentials or tags.
+
 ## Updating
 
 Source build:

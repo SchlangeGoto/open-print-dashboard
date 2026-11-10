@@ -152,9 +152,7 @@ def test_ams_links_barcode_spool_by_tag(
     assert linked.tag_uid == "AABBCCDD"
     assert linked.remaining_g == 800
 
-    matches = db.exec(
-        select(Spool).where(Spool.filament_id == filament.id)
-    ).all()
+    matches = db.exec(select(Spool).where(Spool.filament_id == filament.id)).all()
     assert len(matches) == 1
 
 
@@ -234,9 +232,7 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
     assert oldest.printer_id == printer.id
 
     assert [row.tag_uid for row in rows].count("FIFO1234") == 1
-    assert all(
-        row.tag_uid is None for row in rows if row.id != oldest.id
-    )
+    assert all(row.tag_uid is None for row in rows if row.id != oldest.id)
 
 
 def test_barcode_scan_does_not_adopt_an_ams_spool(
@@ -286,9 +282,7 @@ def test_barcode_scan_does_not_adopt_an_ams_spool(
     assert data["spool"]["barcode"] == code
 
     db.expire_all()
-    matches = db.exec(
-        select(Spool).where(Spool.filament_id == filament.id)
-    ).all()
+    matches = db.exec(select(Spool).where(Spool.filament_id == filament.id)).all()
     assert len(matches) == 2
 
     untouched = db.get(Spool, ams_spool.id)

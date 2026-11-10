@@ -18,9 +18,7 @@ def test_ean13_check_digit() -> None:
     assert ean13_check_digit("697533703238") == 0
 
 
-def test_catalog_ignores_a_non_object_root(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_catalog_ignores_a_non_object_root(tmp_path: Path, monkeypatch) -> None:
     path = tmp_path / "catalog.json"
     path.write_text("[]")
     monkeypatch.setattr("app.services.bambu_catalog._CATALOG_PATH", path)
@@ -31,9 +29,7 @@ def test_catalog_ignores_a_non_object_root(
         _catalog.cache_clear()
 
 
-def test_catalog_ignores_a_non_object_barcodes_map(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_catalog_ignores_a_non_object_barcodes_map(tmp_path: Path, monkeypatch) -> None:
     path = tmp_path / "catalog.json"
     path.write_text('{"barcodes": []}')
     monkeypatch.setattr("app.services.bambu_catalog._CATALOG_PATH", path)

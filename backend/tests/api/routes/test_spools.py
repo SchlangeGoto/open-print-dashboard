@@ -297,7 +297,9 @@ def test_active_spool_is_per_printer(
     assert response.status_code == 200, response.text
 
     db.expire_all()
-    by_id = {str(spool["id"]): db.get(Spool, uuid.UUID(spool["id"])) for spool in spools}
+    by_id = {
+        str(spool["id"]): db.get(Spool, uuid.UUID(spool["id"])) for spool in spools
+    }
     assert by_id[spools[0]["id"]].active is False
     assert by_id[spools[1]["id"]].active is True
     assert by_id[spools[2]["id"]].active is True
@@ -307,8 +309,12 @@ def test_database_rejects_two_active_spools(
     db: Session,
 ) -> None:
     printer = _create_printer(db)
-    first = Spool(total_weight_g=1000, remaining_g=1000, active=True, printer_id=printer.id)
-    second = Spool(total_weight_g=1000, remaining_g=1000, active=True, printer_id=printer.id)
+    first = Spool(
+        total_weight_g=1000, remaining_g=1000, active=True, printer_id=printer.id
+    )
+    second = Spool(
+        total_weight_g=1000, remaining_g=1000, active=True, printer_id=printer.id
+    )
     db.add(first)
     db.add(second)
 

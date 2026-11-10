@@ -347,6 +347,12 @@ export class ApiClient {
   }
 
   async logout(): Promise<void> {
+    // Let an in-flight refresh settle first. Bumping the epoch before it
+    // finishes would discard the rotated token while it stays valid on the
+    // server.
+    if (this.refreshPromise) {
+      await this.refreshPromise.catch(() => null);
+    }
     const tokens = this.options.getTokens();
     this.epoch += 1;
     try {

@@ -30,7 +30,7 @@ All endpoints live under `/api/v1`.
 | `app/api/deps.py` | DB session + current-user dependencies |
 | `app/api/routes/` | Route modules (`login`, `users`, `filaments`, `spools`, `prints`, `printers`, `bambu`, `settings`, `setup`, `utils`) |
 | `app/core/` | `config.py`, `db.py`, `security.py`, `store.py`, `commands.py` |
-| `app/services/` | `bambu_client.py` (MQTT), `bambu_cloud.py` (cloud REST), `printer_service.py` |
+| `app/services/` | `bambu_client.py` (cloud + LAN MQTT), `bambu_cloud.py` (cloud REST), `printer_service.py` |
 | `app/models.py` | SQLModel models (UUID primary keys) |
 | `app/crud.py` | Database access helpers |
 | `app/utils.py` | Email rendering/sending and password-reset tokens |

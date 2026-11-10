@@ -5,7 +5,7 @@ from sqlmodel import Session
 from app import crud
 from app.core.config import settings
 from app.core.db import engine
-from app.core.store import save_cloud_credentials, save_cloud_token
+from app.core.store import get_cloud_token, save_cloud_credentials, save_cloud_token
 from app.models import Printer, PrinterCreate
 from app.services.bambu_client import BambuClient
 from app.services.bambu_cloud import BambuCloudClient
@@ -25,6 +25,9 @@ class PrinterService:
         self.cloud_client.login(code)
         self.save_token()
         self.save_credentials()
+        # A fresh token is needed by the cloud MQTT clients, so reconnect
+        # anything that was configured before the login.
+        self.reload()
 
     def save_token(self) -> None:
         if self.cloud_client.token:
@@ -36,7 +39,41 @@ class PrinterService:
 
     def _connect(self, printer: Printer) -> None:
         client = BambuClient()
-        client.configure(printer.ip, printer.serial, printer.access_code)
+
+        if printer.connection_mode == "cloud":
+            token = self.cloud_client.token or get_cloud_token()
+            if not token:
+                logger.info(
+                    "Printer %s uses Bambu Cloud but no account is connected",
+                    printer.serial,
+                )
+                return
+            self.cloud_client.token = token
+            try:
+                user_id = self.cloud_client.get_user_id()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Could not resolve the Bambu Cloud user id for %s: %s",
+                    printer.serial,
+                    exc,
+                )
+                return
+            client.configure(
+                settings.BAMBU_CLOUD_MQTT_HOST,
+                printer.serial,
+                mode="cloud",
+                username=f"u_{user_id}",
+                password=token,
+                port=settings.BAMBU_CLOUD_MQTT_PORT,
+            )
+        else:
+            client.configure(
+                printer.ip,
+                printer.serial,
+                printer.access_code,
+                mode="lan",
+            )
+
         if not client.is_configured:
             logger.info("Printer %s is not configured — MQTT skipped", printer.serial)
             return
@@ -60,6 +97,7 @@ class PrinterService:
                         serial=settings.PRINTER_SERIAL,
                         ip=settings.PRINTER_IP,
                         access_code=settings.PRINTER_ACCESS_CODE,
+                        connection_mode="lan",
                     ),
                 )
                 printers = [printer]

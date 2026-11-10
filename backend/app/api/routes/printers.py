@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from app import crud
 from app.api.deps import SessionDep, get_current_user
+from app.core.bambu_exceptions import NotLoggedInError
 from app.models import (
     Message,
     Printer,
@@ -28,20 +29,18 @@ router = APIRouter(
 def _cloud_devices() -> list[dict[str, Any]]:
     try:
         return printer_service.cloud_client.get_devices()
+    except NotLoggedInError:
+        return []
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not load cloud printers: %s", exc)
         return []
 
 
-def _cloud_statuses() -> dict[str, dict[str, Any]]:
-    try:
-        statuses = printer_service.cloud_client.get_cloud_print_status()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not load cloud printer status: %s", exc)
-        return {}
-    return {
-        str(status.get("dev_id")): status for status in statuses if status.get("dev_id")
-    }
+def _cloud_device(serial: str) -> dict[str, Any] | None:
+    for device in _cloud_devices():
+        if str(device.get("dev_id")) == serial:
+            return device
+    return None
 
 
 def _serialize_printers(
@@ -50,7 +49,6 @@ def _serialize_printers(
     cloud_device: dict[str, Any] | None = None,
     status: dict[str, Any] | None = None,
     statuses: dict[str, dict[str, Any]] | None = None,
-    cloud_statuses: dict[str, dict[str, Any]] | None = None,
 ) -> PrinterPublic:
     if printer is not None:
         serial = printer.serial
@@ -59,12 +57,11 @@ def _serialize_printers(
     else:
         raise ValueError("A local or cloud printer is required")
 
-    status = (
-        status or (statuses or {}).get(serial) or (cloud_statuses or {}).get(serial)
-    )
+    status = status or (statuses or {}).get(serial)
     connected = bool(status and status.get("connected"))
     cloud_online = bool(cloud_device and cloud_device.get("online"))
     online = connected or cloud_online or bool(status and status.get("gcode_state"))
+    connection_mode = printer.connection_mode if printer else "cloud"
 
     return PrinterPublic(
         id=printer.id if printer else None,
@@ -77,8 +74,11 @@ def _serialize_printers(
         ),
         serial=serial,
         model=cloud_device.get("dev_model_name") if cloud_device else None,
-        ip=printer.ip if printer else None,
-        access_code=printer.access_code if printer else None,
+        ip=printer.ip if printer and connection_mode == "lan" else None,
+        access_code=(
+            printer.access_code if printer and connection_mode == "lan" else None
+        ),
+        connection_mode=connection_mode,
         online=online,
         configured=printer is not None,
         status={**status, "dev_id": serial} if status else None,
@@ -96,7 +96,6 @@ def _serialized_printers(session: SessionDep) -> list[PrinterPublic]:
         if device.get("dev_id")
     }
     statuses = printer_service.get_statuses()
-    cloud_statuses = _cloud_statuses()
 
     printers: list[PrinterPublic] = []
     seen: set[str] = set()
@@ -108,7 +107,6 @@ def _serialized_printers(session: SessionDep) -> list[PrinterPublic]:
                 printer=printer,
                 cloud_device=cloud_devices_by_serial.get(printer.serial),
                 statuses=statuses,
-                cloud_statuses=cloud_statuses,
             )
         )
 
@@ -119,7 +117,6 @@ def _serialized_printers(session: SessionDep) -> list[PrinterPublic]:
             _serialize_printers(
                 cloud_device=device,
                 statuses=statuses,
-                cloud_statuses=cloud_statuses,
             )
         )
 
@@ -177,7 +174,11 @@ def get_messages() -> Any:
 
 @router.get("/", response_model=list[PrinterPublic])
 def get_printers(session: SessionDep) -> Any:
-    """List configured printers and unconfigured printers on the cloud account."""
+    """List configured printers plus printers found on the Bambu Cloud account.
+
+    Cloud devices that have not been added to the dashboard yet are returned
+    with ``configured=false`` and an ``id`` of null so the UI can offer them.
+    """
     return _serialized_printers(session)
 
 
@@ -190,9 +191,10 @@ def create_printer(*, session: SessionDep, printer_in: PrinterCreate) -> Any:
             detail="A printer with this serial number is already configured",
         )
     printer = crud.create_printer(session=session, printer_in=printer_in)
-    printer_service.reload()
+    printer_service.reload_printer(printer.serial)
     return _serialize_printers(
         printer=printer,
+        cloud_device=_cloud_device(printer.serial),
         status=printer_service.get_status(printer.serial),
     )
 
@@ -204,12 +206,24 @@ def update_printer(
     printer = crud.get_printer(session=session, printer_id=printer_id)
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
+
+    changes = printer_in.model_dump(exclude_unset=True)
+    connection_mode = changes.get("connection_mode", printer.connection_mode)
+    ip = changes.get("ip", printer.ip)
+    access_code = changes.get("access_code", printer.access_code)
+    if connection_mode == "lan" and not (ip and access_code):
+        raise HTTPException(
+            status_code=422,
+            detail="LAN printers require an IP address and access code",
+        )
+
     printer = crud.update_printer(
         session=session, printer=printer, printer_in=printer_in
     )
-    printer_service.reload()
+    printer_service.reload_printer(printer.serial)
     return _serialize_printers(
         printer=printer,
+        cloud_device=_cloud_device(printer.serial),
         status=printer_service.get_status(printer.serial),
     )
 

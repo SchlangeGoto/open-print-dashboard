@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings2, Thermometer } from "lucide-react";
+import { Cloud, Network, Settings2, Thermometer } from "lucide-react";
 
 import type { Printer } from "@/lib/api";
 import { formatWeight, isPrintingStatus } from "@/lib/utils";
@@ -123,9 +123,20 @@ export default function PrinterModal({
               {printer.online || liveStatus?.connected ? "Online" : "Offline"}
             </Badge>
           </DialogTitle>
-          <DialogDescription className="flex flex-wrap gap-x-3 gap-y-0.5">
+          <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
             <span>{printer.model ?? "Bambu Lab printer"}</span>
             <span className="font-mono">{printer.serial}</span>
+            <span className="inline-flex items-center gap-1">
+              {printer.connection_mode === "cloud" ? (
+                <>
+                  <Cloud className="size-3" /> Bambu Cloud
+                </>
+              ) : (
+                <>
+                  <Network className="size-3" /> LAN
+                </>
+              )}
+            </span>
             {printer.ip ? <span className="font-mono">{printer.ip}</span> : null}
             {!printer.configured ? <span>Not configured</span> : null}
           </DialogDescription>

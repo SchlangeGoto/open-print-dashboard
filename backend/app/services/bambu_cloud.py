@@ -87,6 +87,8 @@ class BambuCloudClient:
         if data.get("loginType") == "verifyCode" and not code:
             raise CodeRequiredError()
         self.token = data["accessToken"]
+        # The user id belongs to the account behind the token.
+        self.user_id = None
 
     def _headers(self) -> dict:
         self._load_token()
@@ -100,6 +102,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/design-user-service/my/preference",
             headers=self._headers(),
+            timeout=15,
         )
         resp.raise_for_status()
         self.user_id = resp.json()["uid"]
@@ -111,6 +114,7 @@ class BambuCloudClient:
         resp = requests.get(
             f"{BASE_URL}/v1/iot-service/api/user/bind",
             headers=self._headers(),
+            timeout=15,
         )
         resp.raise_for_status()
         return resp.json().get("devices", [])
@@ -122,6 +126,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/user-service/my/tasks",
             headers=self._headers(),
             params={"limit": limit},
+            timeout=15,
         )
         resp.raise_for_status()
         return resp.json().get("hits", [])
@@ -216,6 +221,7 @@ class BambuCloudClient:
             f"{BASE_URL}/v1/iot-service/api/user/print",
             headers=self._headers(),
             params={"force": "true"},
+            timeout=15,
         )
         resp.raise_for_status()
         return resp.json().get("devices", [])

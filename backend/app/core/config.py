@@ -73,8 +73,13 @@ class Settings(BaseSettings):
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
 
-    # Optional printer defaults. Normally configured through the setup wizard
-    # and stored in the database.
+    # Bambu Cloud MQTT. Global accounts use the us broker; mainland China
+    # accounts use cn.mqtt.bambulab.com.
+    BAMBU_CLOUD_MQTT_HOST: str = "us.mqtt.bambulab.com"
+    BAMBU_CLOUD_MQTT_PORT: int = 8883
+
+    # Optional LAN printer bootstrap. Normally configured through the setup
+    # wizard and stored in the database.
     PRINTER_IP: str | None = None
     PRINTER_SERIAL: str | None = None
     PRINTER_ACCESS_CODE: str | None = None

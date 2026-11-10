@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import select
 
 from app.api.deps import SessionDep, get_current_user
+from app.core.security import decrypt_secret
 from app.models import (
     AppSetting,
     SettingPublic,
@@ -24,10 +25,16 @@ MASK = "••••••••"
 def read_settings(session: SessionDep) -> Any:
     """Return all stored settings, masking sensitive values."""
     settings = session.exec(select(AppSetting)).all()
-    return [
-        SettingPublic(
-            key=setting.key,
-            value=MASK if setting.key in SECRET_KEYS else setting.value,
-        )
-        for setting in settings
-    ]
+    result: list[SettingPublic] = []
+    for setting in settings:
+        if setting.key in SECRET_KEYS:
+            value = MASK
+        elif setting.key == "bambu_cloud_email":
+            try:
+                value = decrypt_secret(setting.value)
+            except Exception:  # noqa: BLE001 - legacy plaintext values
+                value = setting.value
+        else:
+            value = setting.value
+        result.append(SettingPublic(key=setting.key, value=value))
+    return result

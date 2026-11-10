@@ -342,3 +342,13 @@ re-opened.
 | AMS adoption matched by remaining weight; unknown percentages tracked | `9224ba5` | Product D-13 |
 | Unknown spool weight shown as unknown on web and mobile | `1b709f5` | Product D-13 |
 | Unknown-weight edit keeps the flag; scan create passes the symbology; mobile 4xx narrowed | `84652f7`, `8198400` | Human #20 |
+| Test DB requires a `_test` name; rows cleared between tests | `cf1f249` | Human #20 |
+| Alembic metadata matches migrations; `alembic check` clean | `faa44f8` | Human #20 |
+| Exactly-once filament deduction (unique key + atomic claim) | `faa44f8` | Human #20 |
+| `filament_id` exposed; deterministic active-spool query | `84d3a51` | Human #20 |
+| Browser request timeouts; list-page error states; filaments N+1 | `371fd66` | Human #20 |
+| Email off by default; SMTP/MQTT forwarded; `.env` docs first | `ae5de40` | Human #20 |
+| AMS backoff, slot ordering, print ordering, atomic key, script fixes | `ffd7e1e` | Human #20 |
+| Web card accessibility, demo scan, dead-code cleanup | `1e81949` | Human #20 |
+| Mobile error screens, haptics, SecureStore, dev client | `7c75858` | Human #20 |
+| Site security contact, install copy, 404, screenshots | `78b9e82` | Human #20 |

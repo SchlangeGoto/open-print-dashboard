@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -345,27 +345,44 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState<Range>("all");
   const [metric, setMetric] = useState<Metric>("count");
   const [printerFilter, setPrinterFilter] = useState("all");
-  const [now] = useState(() => new Date());
+  const [now, setNow] = useState(() => new Date());
+
+  const load = useCallback(async () => {
+    try {
+      const [jobs, devices, filamentList, spoolList] = await Promise.all([
+        api.getAllPrintJobs().catch(() => []),
+        api.getPrinters().catch(() => []),
+        api.getFilaments().catch(() => []),
+        api.getSpools().catch(() => []),
+      ]);
+      setPrints(jobs);
+      setPrinters(devices);
+      setFilaments(filamentList);
+      setSpools(spoolList);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [jobs, devices, filamentList, spoolList] = await Promise.all([
-          api.getAllPrintJobs().catch(() => []),
-          api.getPrinters().catch(() => []),
-          api.getFilaments().catch(() => []),
-          api.getSpools().catch(() => []),
-        ]);
-        setPrints(jobs);
-        setPrinters(devices);
-        setFilaments(filamentList);
-        setSpools(spoolList);
-      } finally {
-        setLoading(false);
-      }
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    function refresh() {
+      if (document.visibilityState !== "visible") return;
+      setNow(new Date());
+      void load();
     }
-    load();
-  }, []);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [load]);
 
   const scopedPrints = useMemo(
     () =>

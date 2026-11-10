@@ -268,6 +268,9 @@ export default function PrintersPage() {
                           ? "Online"
                           : "Offline"}
                       </Badge>
+                      {status?.reauth_required ? (
+                        <Badge variant="destructive">Sign-in expired</Badge>
+                      ) : null}
                       {!printer.configured ? (
                         <Badge variant="secondary">Not configured</Badge>
                       ) : null}

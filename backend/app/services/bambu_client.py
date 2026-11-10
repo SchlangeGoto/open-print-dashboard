@@ -112,13 +112,13 @@ class MqttThread(threading.Thread):
                 self._client.client.loop_forever()
                 logger.debug("loop_forever exited cleanly")
                 if self._client._auth_error:
-                    # Bad token. Retrying quickly makes Bambu rate-limit the
-                    # account, so back off before trying again.
-                    logger.warning("MQTT authentication failed — retrying in 60s")
-                    if self._stop_event.wait(60):
-                        break
-                    self._client._auth_error = False
-                    continue
+                    # Re-login is attempted from the persisted credentials in
+                    # _on_connect. Do not hammer the broker with the same stale
+                    # token.
+                    logger.warning(
+                        "MQTT authentication failed — waiting for a re-login"
+                    )
+                    break
                 break
 
             except TimeoutError as e:
@@ -164,6 +164,8 @@ class BambuClient:
         self._client_id = f"open-print-{uuid.uuid4()}"
         self._connected = False
         self._auth_error = False
+        self._reauth_started = False
+        self._reauth_required = False
         self._last_seen: float | None = None
         self._current_status: dict = {}
         self._ams_signature: str | None = None
@@ -199,6 +201,8 @@ class BambuClient:
         self.password = password
         self._connected = False
         self._auth_error = False
+        self._reauth_started = False
+        self._reauth_required = False
         self._last_seen = None
         self._current_status = {}
         self._ams_signature = None
@@ -258,11 +262,15 @@ class BambuClient:
         self._connected = False
         logger.info("Disconnected from printer")
 
-    def _on_connect(self, client, userdata, flags, rc, properties=None) -> None:
-        if rc == 0:
+    def _on_connect(
+        self, client, userdata, flags, reason_code, properties=None
+    ) -> None:
+        code = getattr(reason_code, "value", reason_code)
+        if code == 0:
             logger.info("Connected to the Bambu Cloud MQTT broker at %s", self.host)
             self._connected = True
             self._auth_error = False
+            self._reauth_required = False
             self._last_seen = time.monotonic()
             client.subscribe(f"device/{self.serial}/report")
             self._publish(GET_VERSION)
@@ -276,15 +284,30 @@ class BambuClient:
                 5: "not authorised",
             }
             self._connected = False
-            self._auth_error = rc in (4, 5)
+            self._auth_error = code in (4, 5)
             logger.error(
                 "MQTT connection failed: %s",
-                codes.get(rc, rc),
+                codes.get(code, code),
             )
-            if self._auth_error and self.client is not None:
-                # Leave loop_forever so the MqttThread can back off instead of
-                # hammering the broker with a bad token.
-                self.client.disconnect()
+            if self._auth_error:
+                # Try the persisted Bambu credentials once; if that fails,
+                # stay offline and ask for a manual sign-in.
+                self._start_reauth()
+                if self.client is not None:
+                    self.client.disconnect()
+
+    def _start_reauth(self) -> None:
+        if self._reauth_started:
+            return
+        self._reauth_started = True
+        threading.Thread(target=self._reauth, daemon=True).start()
+
+    def _reauth(self) -> None:
+        from app.services.printer_service import printer_service
+
+        if not printer_service.reauthenticate():
+            self._reauth_required = True
+            logger.error("Bambu Cloud re-login failed; sign in again from Settings")
 
     def _on_disconnect(
         self,
@@ -620,6 +643,9 @@ class BambuClient:
                     ).all():
                         other.active = False
                         other.printer_id = None
+                    # Flush the unload before the new active row is written;
+                    # the partial unique index checks each row as it lands.
+                    session.flush()
                     active_spool.active = True
                     active_spool.printer_id = printer.id
 
@@ -867,6 +893,15 @@ class BambuClient:
             and time.monotonic() - self._last_seen > 180
         ):
             connected = False
+        reauth_required = self._reauth_required
         if not self._current_status:
-            return {"connected": connected, "status": "no_data"}
-        return {**self._current_status, "connected": connected}
+            return {
+                "connected": connected,
+                "status": "no_data",
+                "reauth_required": reauth_required,
+            }
+        return {
+            **self._current_status,
+            "connected": connected,
+            "reauth_required": reauth_required,
+        }

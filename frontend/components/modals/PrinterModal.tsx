@@ -146,6 +146,17 @@ export default function PrinterModal({
           </div>
         ) : (
           <>
+            {liveStatus?.reauth_required ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-sm font-medium text-destructive">
+                  Bambu Cloud sign-in expired
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sign in again under Settings to bring this printer back
+                  online.
+                </p>
+              </div>
+            ) : null}
             {isConnected ? (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <div className="rounded-lg border bg-muted/40 p-3">

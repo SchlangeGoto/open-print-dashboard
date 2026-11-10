@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 
 from sqlmodel import Session
 
@@ -23,6 +24,14 @@ class PrinterService:
         # lock because it can block on the network.
         self._lock = threading.Lock()
         self._reconnect_timers: dict[str, threading.Timer] = {}
+        # Only one automatic re-login may run at a time. A token that Bambu
+        # rejects right after a successful login means the account needs a
+        # human, so do not loop on the login endpoint.
+        self._reauth_condition = threading.Condition()
+        self._reauthing = False
+        self._last_reauth_ok = False
+        self._last_reauth_at: float | None = None
+        self._reauth_cooldown = 60.0
 
     def get_token(self) -> str | None:
         return self.cloud_client.token
@@ -42,6 +51,39 @@ class PrinterService:
     def save_credentials(self) -> None:
         if self.cloud_client.email and self.cloud_client.password:
             save_cloud_credentials(self.cloud_client.email, self.cloud_client.password)
+
+    def reauthenticate(self) -> bool:
+        """Log in again with the persisted Bambu Cloud credentials.
+
+        Called by an MQTT client whose token was rejected. Concurrent callers
+        share one login attempt instead of sending duplicate requests. A
+        second attempt within the cooldown returns False so a token that Bambu
+        keeps rejecting surfaces as "re-login required" instead of looping.
+        """
+        with self._reauth_condition:
+            if self._reauthing:
+                self._reauth_condition.wait_for(lambda: not self._reauthing, timeout=60)
+                return self._last_reauth_ok
+            if (
+                self._last_reauth_at is not None
+                and time.monotonic() - self._last_reauth_at < self._reauth_cooldown
+            ):
+                return False
+            self._reauthing = True
+
+        ok = False
+        try:
+            self.login()
+            ok = True
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Bambu Cloud re-login failed: %s", exc)
+        finally:
+            with self._reauth_condition:
+                self._reauthing = False
+                self._last_reauth_ok = ok
+                self._last_reauth_at = time.monotonic()
+                self._reauth_condition.notify_all()
+        return ok
 
     def _connect(self, printer: Printer) -> None:
         with self._lock:

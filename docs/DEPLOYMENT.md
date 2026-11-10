@@ -113,6 +113,14 @@ The backend uses a single process because printer connections and the pending
 Bambu login are kept in memory. Do not scale the backend to multiple replicas
 without moving that state out of process.
 
+## Backend worker
+
+Run exactly **one** backend worker. The printer connection registry and the
+pending Bambu login live in process memory; a second worker would open its own
+MQTT sessions and see only its own state. `backend/scripts/start.sh` uses
+`fastapi run` with the default single worker and refuses to start when
+`WEB_CONCURRENCY` is greater than 1.
+
 ## Updating
 
 Source build:

@@ -103,7 +103,7 @@ old `api/` + `web/` layout and has no workflows. After the migration PR lands on
 
 - `test-backend`
 - `test-frontend`
-- `CodeQL`
+- `CodeQL / analyze`
 - `dependency-review`
 
 Do **not** require `test-site`, `test-mobile`, or `test-e2e` as they are

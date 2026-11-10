@@ -106,7 +106,6 @@ derives it from `DOMAIN`.
 | `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |
 | `NEXT_PUBLIC_API_URL` | Source-build only. **Build-time** value; rebuild after changing it |
 | `FRONTEND_HOST` | Backend CORS allowlist. Set it to the public frontend URL; `.env.example` defaults to localhost |
-| `PRINTER_IP`, `PRINTER_SERIAL`, `PRINTER_ACCESS_CODE` | Optional defaults for the Bambu Lab connection |
 | `SMTP_*`, `EMAILS_FROM_EMAIL` | Optional. If you are not using SMTP, set `EMAILS_FROM_EMAIL=` and `SMTP_HOST=` empty to skip email |
 
 The backend uses a single process because printer connections and the pending

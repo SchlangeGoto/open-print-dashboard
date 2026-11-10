@@ -210,7 +210,7 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 90-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
+| S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 30-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
 
 ### 2.2 Printer and cloud backend
 
@@ -248,7 +248,7 @@ These open issues should be solved as part of the epic, not separately:
 | D-02 | `color_name` is the display name (“Black”, “Green Mate”). Duplicates across brands are expected — a Sunlu green and a Bambu green are different filaments. Label by brand + color_name, key by id. | F-08 |
 | D-03 | `PrintJob.status == 4` is the “running” code and is used in `/prints/active` and the print-job sync. Document it; no code change. | I-03 |
 | D-04 | Jobs without a `spool_id` **do** count toward “Filament Used”. | F-09 |
-| D-05 | Only two identifiers matter: the packaging barcode and the AMS RFID (`tag_uid`). `nfc_uid` and the NFC/UID scan endpoints were experiments and are removed. | B-13 |
+| D-05 | Only two identifiers matter: the packaging barcode and the AMS RFID (`tag_uid`). `nfc_uid` and the NFC/UID scan endpoints were experiments and are retired; the column stays for one release. | B-13 |
 | D-06 | Every barcode scan adds a spool. `create=true` must always insert; the mobile lookup-first flow is the duplicate guard. No server-side dedupe. | B-02, B-03, M-02 |
 | D-07 | No production data with 14-digit or UPC-A mappings. No backfill; validate new codes. | B-05, M-03 |
 | D-08 | No known Bambu per-account session cap. Keep one client per printer for now; revisit only if printers evict each other. | P-05 |

@@ -111,10 +111,19 @@ export default function PrivacyPage() {
               Questions
             </h2>
             <p className="mt-3">
-              Open an issue on GitHub for privacy questions or security reports.
-              Please do not disclose a vulnerability publicly before we have a
-              chance to fix it.
+              Open an issue on GitHub for privacy questions. Please report
+              security problems privately through the repository&apos;s
+              security advisories, not in a public issue, so there is time to
+              fix them.
             </p>
+            <a
+              href={`${GITHUB_URL}/security/advisories/new`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex font-medium text-[var(--color-ink)] underline decoration-[var(--color-rule)] underline-offset-4 hover:decoration-[var(--color-rule-strong)]"
+            >
+              Report a vulnerability privately
+            </a>
             <div className="mt-4 flex flex-wrap gap-4">
               <a
                 href={ISSUES_URL}

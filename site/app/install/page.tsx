@@ -69,8 +69,8 @@ export default function InstallPage() {
         </h1>
         <p className="mt-6 text-base leading-7 text-[var(--color-muted)] md:text-lg md:leading-8">
           OpenPrintDash runs on your machine. You need Docker, a Bambu Lab
-          account and your printer network details. The first build takes a few
-          minutes; later starts are fast.
+          account and your printer&apos;s serial number. The first build takes a
+          few minutes; later starts are fast.
         </p>
       </div>
 
@@ -91,11 +91,16 @@ export default function InstallPage() {
 
           <Step number="02" title="Create your environment file">
             <p>
-              Copy the example file and set a{" "}
+              Copy the example file and set{" "}
+              <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
+                POSTGRES_PASSWORD
+              </code>
+              . A{" "}
               <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
                 SECRET_KEY
-              </code>
-              . Generate one with{" "}
+              </code>{" "}
+              is generated on first start and kept in the backend data volume,
+              or set one yourself with{" "}
               <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
                 openssl rand -hex 32
               </code>
@@ -114,8 +119,9 @@ export default function InstallPage() {
 
           <Step number="03" title="Start the stack">
             <p>
-              Docker builds the frontend and backend, starts PostgreSQL, and
-              starts Mailpit for local email.
+              Docker builds the frontend and backend and starts PostgreSQL.
+              Email is optional and configured separately in the environment
+              file.
             </p>
             <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--color-rule)] bg-[var(--color-code-bg)] px-4 py-2">
               <span className="text-sm text-[var(--color-muted)]">

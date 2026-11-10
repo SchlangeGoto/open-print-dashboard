@@ -256,6 +256,7 @@ These open issues should be solved as part of the epic, not separately:
 | D-10 | “Log out” ends **this device** only. Per-token revocation is correct; a stolen access token stays valid for up to 60 minutes. | S-03, S-08 |
 | D-11 | Deactivation semantics are deferred to the multi-tenancy work. | S-06, T-02 |
 | D-12 | The backend runs **one worker** on purpose (documented in `scripts/start.sh`). Multi-worker is out of scope; the in-process registry is safe within one process, but its threads still need a lock. | P-01, T-06, I-04 |
+| D-14 | Scan and confirm accept a client-generated `request_id` for retry idempotency. This is not content dedupe (D-06): two different requests still add two spools. | Barcode scan/confirm |
 | D-13 | AMS adoption is weight-aware: a partial tray never adopts a full spool; only untagged spools on no printer whose remaining weight is within max(50 g, 15 %) are candidates, FIFO breaks ties. A tray with no percentage creates a `remaining_unknown` spool (nominal capacity as placeholder), never 0 g or a fake full weight. Entering the remaining grams clears the flag. | AMS sync, spool UI |
 
 ---
@@ -352,3 +353,7 @@ re-opened.
 | Web card accessibility, demo scan, dead-code cleanup | `1e81949` | Human #20 |
 | Mobile error screens, haptics, SecureStore, dev client | `7c75858` | Human #20 |
 | Site security contact, install copy, 404, screenshots | `78b9e82` | Human #20 |
+| Support SKUs separated by series; idempotent scan/confirm; slot-accurate deduction | `223ed50` | Human #20 |
+| First-run no-printer escape; analytics range/banner; demo weight edit; Progress name | `94a2516` | Human #20 |
+| Mobile unknown readout, scan guards, deep-link return, retry backoff | `7d5e772` | Human #20 |
+| Latest gated to main; images unprivileged/slim/digest-pinned; Dependabot dirs | `15e9143` | Human #20 |

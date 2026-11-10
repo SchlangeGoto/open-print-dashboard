@@ -41,14 +41,19 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
 
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
     user_data = user_in.model_dump(exclude_unset=True)
+    password_changed = "password" in user_data
     extra_data = {}
-    if "password" in user_data:
+    if password_changed:
         password = user_data["password"]
         hashed_password = get_password_hash(password)
         extra_data["hashed_password"] = hashed_password
     db_user.sqlmodel_update(user_data, update=extra_data)
     session.add(db_user)
     session.commit()
+    if password_changed:
+        # A password change must invalidate every existing session, including
+        # when an admin resets another user's password.
+        revoke_user_refresh_tokens(session=session, user_id=db_user.id)
     session.refresh(db_user)
     return db_user
 

@@ -60,6 +60,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The web client uses this header to distinguish an expired app session
+    # from other 401s (for example an unlinked Bambu Cloud account).
+    expose_headers=["WWW-Authenticate"],
 )
 
 

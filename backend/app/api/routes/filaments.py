@@ -35,9 +35,9 @@ def read_filaments(session: SessionDep) -> Any:
     for filament in filaments:
         total_remaining = (
             session.exec(
-                select(func.sum(Spool.remaining_g)).where(
-                    Spool.filament_id == filament.id
-                )
+                select(func.sum(Spool.remaining_g))
+                .where(Spool.filament_id == filament.id)
+                .where(col(Spool.remaining_unknown).is_(False))
             ).first()
             or 0.0
         )

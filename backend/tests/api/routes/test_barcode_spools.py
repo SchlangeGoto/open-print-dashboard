@@ -217,7 +217,7 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
                         "tray_info_idx": "GFL99",
                         "tray_color": "00AE42",
                         "tray_weight": "1000",
-                        "remain": "40",
+                        "remain": "100",
                         "tray_id_name": "Green Mate",
                     }
                 ],
@@ -240,7 +240,7 @@ def test_ams_links_oldest_barcode_spool_when_multiple(
     oldest = db.get(Spool, spools[0].id)
     assert oldest is not None
     assert oldest.tag_uid == "FIFO1234"
-    assert oldest.remaining_g == 400
+    assert oldest.remaining_g == 1000
     assert oldest.active is True
     assert oldest.printer_id == printer.id
 
@@ -523,3 +523,184 @@ def test_scan_without_a_type_keeps_ean13_validation(
     )
 
     assert r.status_code == 422
+
+
+def test_ams_does_not_adopt_a_full_spool_for_a_partial_tray(
+    db: Session,
+) -> None:
+    printer = Printer(name="Partial tray", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Partial Test",
+        color_hex="#112233",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    full = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        barcode="PARTIAL-TEST",
+        source="barcode",
+    )
+    db.add(full)
+    db.commit()
+    db.refresh(full)
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "PARTIAL1",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "112233",
+                        "tray_weight": "1000",
+                        "remain": "36",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "partial")
+
+    db.expire_all()
+    untouched = db.get(Spool, full.id)
+    assert untouched is not None
+    assert untouched.tag_uid is None
+
+    created = db.exec(select(Spool).where(Spool.tag_uid == "PARTIAL1")).one()
+    assert created.id != full.id
+    assert created.source == "ams"
+    assert created.remaining_g == 360
+    assert created.remaining_unknown is False
+
+
+def test_ams_adopts_a_partial_spool_with_a_matching_weight(
+    db: Session,
+) -> None:
+    printer = Printer(name="Matching partial", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Matching Partial",
+        color_hex="#445566",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    partial = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=365,
+        barcode="MATCHING-PARTIAL",
+        source="barcode",
+    )
+    db.add(partial)
+    db.commit()
+    db.refresh(partial)
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "MATCH123",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "445566",
+                        "tray_weight": "1000",
+                        "remain": "36",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "match")
+
+    db.expire_all()
+    adopted = db.get(Spool, partial.id)
+    assert adopted is not None
+    assert adopted.tag_uid == "MATCH123"
+    assert adopted.remaining_g == 360
+
+
+def test_ams_unknown_remaining_creates_an_unknown_spool(
+    db: Session,
+) -> None:
+    printer = Printer(name="Unknown weight", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Unknown Weight",
+        color_hex="#778899",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    full = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        barcode="UNKNOWN-TEST",
+        source="barcode",
+    )
+    db.add(full)
+    db.commit()
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "UNKNOWN1",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "778899",
+                        "tray_weight": "1000",
+                        "remain": "-1",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "unknown")
+
+    db.expire_all()
+    created = db.exec(select(Spool).where(Spool.tag_uid == "UNKNOWN1")).one()
+    assert created.remaining_unknown is True
+    assert created.remaining_g == 1000
+    assert created.remaining_g != 0

@@ -486,14 +486,25 @@ class BambuClient:
         return value if value > 0 else 1000.0
 
     @staticmethod
-    def _tray_remaining(tray: dict, total: float) -> float:
+    def _tray_remain_percent(tray: dict) -> float | None:
+        """Return the AMS percentage, or None when it has no measurement."""
+        raw = tray.get("remain")
+        if raw is None:
+            return None
         try:
-            remain = float(tray.get("remain") or 0)
+            value = float(raw)
         except (TypeError, ValueError):
-            remain = 0
-        if remain < 0:
-            return total
-        return max(0.0, min(total, total * remain / 100))
+            return None
+        if value < 0:
+            return None
+        return max(0.0, min(100.0, value))
+
+    @staticmethod
+    def _tray_remaining(tray: dict, total: float) -> float | None:
+        pct = BambuClient._tray_remain_percent(tray)
+        if pct is None:
+            return None
+        return round(max(0.0, min(total, total * pct / 100)), 1)
 
     def _ams_filament(self, session: Session, tray: dict) -> Filament:
         info_idx = tray.get("tray_info_idx") or tray.get("setting_id") or None
@@ -562,6 +573,36 @@ class BambuClient:
         session.flush()
         return filament
 
+    def _match_untagged_spool(
+        self,
+        session: Session,
+        filament_id: uuid.UUID,
+        remaining: float | None,
+    ) -> Spool | None:
+        """Return an untagged spool whose weight matches the AMS estimate.
+
+        FIFO decides between equally plausible spools. A tray whose estimate is
+        unknown never adopts anything, and a partial tray never adopts a full
+        spool, because the weight difference is too large.
+        """
+        if remaining is None:
+            return None
+        candidates = session.exec(
+            select(Spool)
+            .where(
+                Spool.filament_id == filament_id,
+                col(Spool.tag_uid).is_(None),
+                col(Spool.printer_id).is_(None),
+                col(Spool.remaining_unknown).is_(False),
+            )
+            .order_by(col(Spool.created_at).asc(), col(Spool.id).asc())
+        ).all()
+        for candidate in candidates:
+            tolerance = max(50.0, candidate.total_weight_g * 0.15)
+            if abs(candidate.remaining_g - remaining) <= tolerance:
+                return candidate
+        return None
+
     def _sync_ams_trays(self, ams: dict, signature: str) -> None:
         if not self.serial:
             return
@@ -615,45 +656,43 @@ class BambuClient:
                     ).first()
                     if not spool:
                         filament = self._ams_filament(session, tray)
-                        # The barcode is SKU-level, so identical barcode
-                        # spools cannot be distinguished until the AMS reads
-                        # their RFID tags. Adopt the oldest untagged barcode
-                        # spool (FIFO) instead of creating an extra row.
-                        candidates = session.exec(
-                            select(Spool)
-                            .where(
-                                Spool.filament_id == filament.id,
-                                col(Spool.tag_uid).is_(None),
-                                col(Spool.printer_id).is_(None),
-                                Spool.source == "barcode",
-                            )
-                            .order_by(
-                                col(Spool.created_at).asc(),
-                                col(Spool.id).asc(),
-                            )
-                        ).all()
-                        if candidates:
-                            spool = candidates[0]
+                        # The barcode is SKU-level, so identical spools cannot
+                        # be told apart until the AMS reads their RFID tags.
+                        # Adopt an untagged spool only when its recorded weight
+                        # is close to the AMS estimate; a partial tray must
+                        # never consume a full library spool.
+                        spool = self._match_untagged_spool(
+                            session, filament.id, remaining
+                        )
+                        if spool:
                             spool.tag_uid = tag
-                            # The scanned spool may be a 750 g refill while the
-                            # AMS omits tray_weight and reports 1000 g. Keep
-                            # the user's total and scale the percentage to it.
-                            spool.remaining_g = self._tray_remaining(
-                                tray, spool.total_weight_g
-                            )
+                            scaled = self._tray_remaining(tray, spool.total_weight_g)
+                            if scaled is not None:
+                                spool.remaining_g = scaled
+                                spool.remaining_unknown = False
                             session.add(spool)
                         else:
                             spool = Spool(
                                 filament_id=filament.id,
                                 total_weight_g=total,
-                                remaining_g=remaining,
+                                # Keep the nominal capacity as a placeholder;
+                                # the flag keeps it out of stock math and the
+                                # UI shows "unknown" instead.
+                                remaining_g=(
+                                    remaining if remaining is not None else total
+                                ),
+                                remaining_unknown=remaining is None,
                                 tag_uid=tag,
                                 source="ams",
                             )
                             session.add(spool)
                         session.flush()
                     else:
-                        spool.remaining_g = remaining
+                        if remaining is not None:
+                            scaled = self._tray_remaining(tray, spool.total_weight_g)
+                            if scaled is not None:
+                                spool.remaining_g = scaled
+                                spool.remaining_unknown = False
                         if is_active:
                             spool.last_used_at = datetime.now(UTC)
 
@@ -885,7 +924,11 @@ class BambuClient:
 
         if not ams_mapping:
             active_spool = self._active_spool(session)
-            if active_spool and task.get("weight"):
+            if (
+                active_spool
+                and task.get("weight")
+                and not active_spool.remaining_unknown
+            ):
                 active_spool.remaining_g = max(
                     0, active_spool.remaining_g - task["weight"]
                 )
@@ -915,7 +958,13 @@ class BambuClient:
             if not spool:
                 spool = self._active_spool(session)
 
-            if spool:
+            if spool and spool.remaining_unknown:
+                logger.info(
+                    "Skipped %sg deduction: spool %s has unknown weight",
+                    used_g,
+                    spool.id,
+                )
+            elif spool:
                 spool.remaining_g = max(0, spool.remaining_g - used_g)
                 spool.last_used_at = datetime.now(UTC)
                 logger.info(

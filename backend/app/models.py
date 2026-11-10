@@ -181,6 +181,10 @@ class FilamentBarcode(SQLModel, table=True):
 class SpoolBase(SQLModel):
     total_weight_g: float = Field(gt=0)
     remaining_g: float = Field(ge=0)
+    # The AMS found the spool but could not report how much filament is left.
+    # remaining_g then holds the nominal capacity and must not be shown as a
+    # real measurement or used for deduction.
+    remaining_unknown: bool = False
     tag_uid: str | None = Field(default=None, max_length=100, index=True)
     barcode: str | None = Field(default=None, max_length=100, index=True)
     source: str | None = Field(default=None, max_length=20)
@@ -199,6 +203,7 @@ class SpoolUpdate(SQLModel):
     filament_id: uuid.UUID | None = None
     total_weight_g: float | None = Field(default=None, gt=0)
     remaining_g: float | None = Field(default=None, ge=0)
+    remaining_unknown: bool | None = None
     tag_uid: str | None = Field(default=None, max_length=100)
     barcode: str | None = Field(default=None, max_length=100)
     source: str | None = Field(default=None, max_length=20)

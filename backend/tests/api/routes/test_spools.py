@@ -402,3 +402,40 @@ def test_filament_stats_survive_deleting_the_spool(db: Session) -> None:
     assert after.total_used_g == 120
     assert after.total_cost == 3.5
     assert after.spool_count == 0
+
+
+def test_filament_stats_exclude_unknown_weight(db: Session) -> None:
+    from app import crud
+
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Unknown Stats",
+        color_hex="#654321",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    known = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=700,
+    )
+    unknown = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        remaining_unknown=True,
+        source="ams",
+    )
+    db.add(known)
+    db.add(unknown)
+    db.commit()
+
+    stats = crud.get_filament_stats(session=db, filament_id=filament.id)
+
+    assert stats.spool_count == 2
+    assert stats.remaining_g == 700
+    assert stats.total_g == 1000
+    assert stats.used_percent == 30.0

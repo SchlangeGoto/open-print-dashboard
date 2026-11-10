@@ -241,20 +241,16 @@ def clear_cloud_credentials(*, session: Session) -> None:
 # Filament statistics
 # ────────────────────────────────────────────────────────────
 def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentStats:
-    remaining_g = (
-        session.exec(
-            select(func.sum(Spool.remaining_g)).where(Spool.filament_id == filament_id)
-        ).first()
-        or 0
-    )
-    total_g = (
-        session.exec(
-            select(func.sum(Spool.total_weight_g)).where(
-                Spool.filament_id == filament_id
-            )
-        ).first()
-        or 0
-    )
+    # An unknown weight is not stock: counting the placeholder capacity would
+    # report filament that may not exist.
+    known = (
+        select(Spool).where(
+            Spool.filament_id == filament_id,
+            col(Spool.remaining_unknown).is_(False),
+        )
+    ).subquery()
+    remaining_g = session.exec(select(func.sum(known.c.remaining_g))).first() or 0
+    total_g = session.exec(select(func.sum(known.c.total_weight_g))).first() or 0
     spool_count = session.exec(
         select(func.count()).select_from(Spool).where(Spool.filament_id == filament_id)
     ).one()

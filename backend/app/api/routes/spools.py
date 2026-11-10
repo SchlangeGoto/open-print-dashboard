@@ -296,6 +296,9 @@ def update_spool(
             detail="Load the spool into a printer before activating it",
         )
     spool.sqlmodel_update(update_dict)
+    if "remaining_g" in update_dict:
+        # A human-entered weight is real again.
+        spool.remaining_unknown = False
     if "active" in update_dict and not spool.active:
         spool.printer_id = None
     session.add(spool)

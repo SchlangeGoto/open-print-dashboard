@@ -6,7 +6,11 @@ def test_tray_remaining_zero_is_empty() -> None:
 
 
 def test_tray_remaining_negative_is_unknown() -> None:
-    assert BambuClient._tray_remaining({"remain": -1}, 1000) == 1000
+    assert BambuClient._tray_remaining({"remain": -1}, 1000) is None
+
+
+def test_tray_remaining_missing_is_unknown() -> None:
+    assert BambuClient._tray_remaining({}, 1000) is None
 
 
 def test_tray_remaining_percentage() -> None:

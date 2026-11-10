@@ -65,21 +65,32 @@ export default function SetupPage() {
   useEffect(() => {
     api
       .getSetupStatus()
-      .then((status) => {
+      .then(async (status) => {
         if (isDemoActive()) {
           router.push("/dashboard");
           return;
         }
         if (status.setup_complete) {
           router.push("/");
-        } else if (status.user_created && !status.bambu_logged_in) {
-          setStep("bambu");
-        } else if (
-          status.user_created &&
-          status.bambu_logged_in &&
-          !status.printer_configured
-        ) {
-          setStep("printer");
+          return;
+        }
+        if (!status.user_created) {
+          // Fresh instance: the account step is already showing.
+          return;
+        }
+        try {
+          const progress = await api.getSetupProgress();
+          setStep(
+            !progress.bambu_logged_in
+              ? "bambu"
+              : progress.printer_configured
+                ? "done"
+                : "printer",
+          );
+        } catch {
+          // The account exists but this browser has no session. Signing in
+          // is the only way forward; creating the account would fail.
+          router.replace("/");
         }
       })
       .catch(() => {});
@@ -136,8 +147,8 @@ export default function SetupPage() {
   }
 
   async function afterBambuLogin() {
-    const status = await api.getSetupStatus();
-    setStep(status.printer_configured ? "done" : "printer");
+    const progress = await api.getSetupProgress();
+    setStep(progress.printer_configured ? "done" : "printer");
   }
 
   async function handleBambuLogin(e: React.FormEvent) {

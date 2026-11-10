@@ -155,6 +155,12 @@ export const demoApi: ApiShape = {
   getSetupStatus: () =>
     delay({
       user_created: true,
+      setup_complete: true,
+    }),
+
+  getSetupProgress: () =>
+    delay({
+      user_created: true,
       bambu_logged_in: true,
       printer_configured: true,
       setup_complete: true,

@@ -226,9 +226,12 @@ export interface UserPublic {
 
 export interface SetupStatus {
   user_created: boolean;
+  setup_complete: boolean;
+}
+
+export interface SetupProgress extends SetupStatus {
   bambu_logged_in: boolean;
   printer_configured: boolean;
-  setup_complete: boolean;
 }
 
 export interface Printer {
@@ -273,6 +276,8 @@ interface ListResponse<T> {
 const apiImpl = {
   // Setup / auth
   getSetupStatus: () => request<SetupStatus>("/setup/status"),
+
+  getSetupProgress: () => request<SetupProgress>("/setup/progress"),
 
   register: (email: string, password: string, fullName?: string) =>
     request<UserPublic>("/users/signup", {

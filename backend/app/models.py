@@ -372,10 +372,15 @@ class PrinterPublic(SQLModel):
 # Helper payloads
 # ────────────────────────────────────────────────────────────
 class SetupStatus(SQLModel):
+    # Public: enough for the login/setup routing decision.
     user_created: bool
+    setup_complete: bool
+
+
+class SetupProgress(SetupStatus):
+    # Authenticated: the detailed step state.
     bambu_logged_in: bool
     printer_configured: bool
-    setup_complete: bool
 
 
 class Message(SQLModel):

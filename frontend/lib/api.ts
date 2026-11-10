@@ -114,14 +114,31 @@ async function refreshAccessToken(force = false): Promise<string | null> {
       return null;
     }
 
-    let res: Response;
-    try {
-      res = await fetch(`${API_ROOT}/login/refresh`, {
+    async function exchange(token: string): Promise<Response> {
+      return fetch(`${API_ROOT}/login/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({ refresh_token: token }),
         signal: timeoutSignal(),
       });
+    }
+
+    async function tokenFrom(res: Response): Promise<string | null> {
+      let tokens: TokenResponse;
+      try {
+        tokens = (await res.json()) as TokenResponse;
+      } catch {
+        // A truncated response is a server problem, not a revoked session.
+        return null;
+      }
+      if (epoch !== tokenEpoch) return null;
+      storeTokens(tokens);
+      return tokens.access_token;
+    }
+
+    let res: Response;
+    try {
+      res = await exchange(refreshToken);
     } catch {
       // Keep the session on a temporary network failure.
       return null;
@@ -133,22 +150,26 @@ async function refreshAccessToken(force = false): Promise<string | null> {
       // 400/401/403 mean the refresh token itself is no longer valid.
       // 5xx/429 are transient and must not destroy a valid session.
       if (res.status === 400 || res.status === 401 || res.status === 403) {
+        // The server's grace window rejects an already-rotated token. If
+        // another tab rotated it while this request was in flight, retry
+        // once with the token it stored before ending the session.
+        const latest = getRefreshToken();
+        if (latest && latest !== refreshToken) {
+          try {
+            const retry = await exchange(latest);
+            if (epoch !== tokenEpoch) return null;
+            if (retry.ok) return await tokenFrom(retry);
+          } catch {
+            // Fall through to a local sign-out.
+          }
+        }
         clearTokens();
         notifySessionExpired();
       }
       return null;
     }
 
-    let tokens: TokenResponse;
-    try {
-      tokens = (await res.json()) as TokenResponse;
-    } catch {
-      // A truncated response is a server problem, not a revoked session.
-      return null;
-    }
-    if (epoch !== tokenEpoch) return null;
-    storeTokens(tokens);
-    return tokens.access_token;
+    return await tokenFrom(res);
   }).finally(() => {
     refreshPromise = null;
   });

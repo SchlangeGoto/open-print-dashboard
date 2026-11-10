@@ -256,6 +256,7 @@ These open issues should be solved as part of the epic, not separately:
 | D-10 | “Log out” ends **this device** only. Per-token revocation is correct; a stolen access token stays valid for up to 60 minutes. | S-03, S-08 |
 | D-11 | Deactivation semantics are deferred to the multi-tenancy work. | S-06, T-02 |
 | D-12 | The backend runs **one worker** on purpose (documented in `scripts/start.sh`). Multi-worker is out of scope; the in-process registry is safe within one process, but its threads still need a lock. | P-01, T-06, I-04 |
+| D-13 | AMS adoption is weight-aware: a partial tray never adopts a full spool; only untagged spools on no printer whose remaining weight is within max(50 g, 15 %) are candidates, FIFO breaks ties. A tray with no percentage creates a `remaining_unknown` spool (nominal capacity as placeholder), never 0 g or a fake full weight. Entering the remaining grams clears the flag. | AMS sync, spool UI |
 
 ---
 
@@ -338,3 +339,5 @@ re-opened.
 | Retired LAN settings removed from docs, compose and `.env.example` | `f2aff4d` | Human #20 |
 | Mobile rejects any 4xx session; audio permission and token docs fixed | `426a594` | Human #20 |
 | Printer screenshot refreshed to the current copy | `40c189c` | Human #20 |
+| AMS adoption matched by remaining weight; unknown percentages tracked | `9224ba5` | Product D-13 |
+| Unknown spool weight shown as unknown on web and mobile | `1b709f5` | Product D-13 |

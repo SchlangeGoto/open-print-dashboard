@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import Filament, Printer, Spool
+from app.models import Filament, FilamentBarcode, Printer, Spool
 from app.services.bambu_client import BambuClient
 from tests.utils.utils import random_lower_string
 
@@ -343,3 +343,34 @@ def test_scan_imported_catalog_barcode(
     assert data["filament"]["color_hex"] == "#FFFFFF"
     assert data["filament"]["material"] == "PLA"
     assert data["spool"]["barcode"] == "6975337030164"
+
+
+def test_link_barcode_tolerates_a_concurrent_insert(db: Session) -> None:
+    from app.api.routes.spools import _link_barcode
+
+    code = f"race-{random_lower_string()}"
+    winner = Filament(
+        brand="Race", material="PLA", color_name="Race", color_hex="#123456"
+    )
+    loser = Filament(
+        brand="Race", material="PLA", color_name="Race", color_hex="#123456"
+    )
+    db.add(winner)
+    db.add(loser)
+    db.commit()
+    db.refresh(winner)
+    db.refresh(loser)
+    db.add(FilamentBarcode(code=code, filament_id=winner.id))
+    db.commit()
+
+    # The loser's insert hits the unique index; it must fall back to the
+    # committed mapping instead of raising.
+    result = _link_barcode(session=db, code=code, filament=loser)
+    db.commit()
+
+    assert result.id == winner.id
+    mapping = db.exec(
+        select(FilamentBarcode).where(FilamentBarcode.code == code)
+    ).first()
+    assert mapping is not None
+    assert mapping.filament_id == winner.id

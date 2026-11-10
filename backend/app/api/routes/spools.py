@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 
 from app.api.deps import SessionDep, get_current_user
@@ -92,6 +93,29 @@ def _existing_barcode_spools(*, session: SessionDep, code: str) -> list[Spool]:
             .order_by(col(Spool.created_at).desc())
         ).all()
     )
+
+
+def _link_barcode(*, session: SessionDep, code: str, filament: Filament) -> Filament:
+    """Persist a barcode→filament mapping, tolerating a concurrent insert.
+
+    Two requests can both miss the mapping and each create a filament. The
+    unique index on FilamentBarcode.code decides the winner; the loser rolls
+    back its own filament and continues with the committed one instead of
+    returning a 500.
+    """
+    session.add(FilamentBarcode(code=code, filament_id=filament.id))
+    try:
+        session.flush()
+        return filament
+    except IntegrityError:
+        session.rollback()
+        mapping = session.exec(
+            select(FilamentBarcode).where(FilamentBarcode.code == code)
+        ).first()
+        existing = session.get(Filament, mapping.filament_id) if mapping else None
+        if not existing:
+            raise
+        return existing
 
 
 def _adopt_unlinked_ams_spool(
@@ -234,9 +258,8 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     if not filament:
         catalog = lookup_barcode(code)
         if catalog:
-            filament = _find_or_create_catalog_filament(session=session, data=catalog)
-            session.add(FilamentBarcode(code=code, filament_id=filament.id))
-            session.flush()
+            candidate = _find_or_create_catalog_filament(session=session, data=catalog)
+            filament = _link_barcode(session=session, code=code, filament=candidate)
 
     if not filament:
         return BarcodeScanResult(
@@ -277,10 +300,10 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
     filament = session.get(Filament, mapping.filament_id) if mapping else None
 
     if not filament:
-        filament = Filament(**payload.filament.model_dump())
-        session.add(filament)
+        candidate = Filament(**payload.filament.model_dump())
+        session.add(candidate)
         session.flush()
-        session.add(FilamentBarcode(code=code, filament_id=filament.id))
+        filament = _link_barcode(session=session, code=code, filament=candidate)
 
     spool = _create_barcode_spool(
         session=session,

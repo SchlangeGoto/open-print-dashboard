@@ -596,3 +596,5 @@ def test_saving_the_same_finish_twice_deducts_once(db: Session, monkeypatch) -> 
     ).one()
     assert job.filament_deducted_at is not None
     assert job.weight == 100
+    # The production finish path writes the denormalised attribution.
+    assert job.filament_id == filament.id

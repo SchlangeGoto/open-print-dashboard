@@ -1,4 +1,8 @@
-from typing import Literal
+import logging
+import os
+import secrets
+from pathlib import Path
+from typing import Any, Literal
 
 from pydantic import (
     EmailStr,
@@ -8,6 +12,11 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# In Docker this resolves to /app/data; in a checkout it is <repo>/data.
+DEFAULT_SECRET_KEY_FILE = Path(__file__).resolve().parents[3] / "data" / "secret_key"
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class Settings(BaseSettings):
@@ -21,6 +30,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "OpenPrintDashboard"
     SECRET_KEY: str
+    # Where an auto-generated key is persisted when none is configured.
+    SECRET_KEY_FILE: Path = DEFAULT_SECRET_KEY_FILE
     # Encrypts the stored Bambu Cloud credentials. When unset, a key is derived
     # from SECRET_KEY for backwards compatibility. Set this to rotate
     # SECRET_KEY without losing the stored Bambu login.
@@ -72,21 +83,58 @@ class Settings(BaseSettings):
             self.EMAILS_FROM_NAME = self.PROJECT_NAME
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_secret_key(cls, data: Any) -> Any:
+        """Generate and persist a key on first start when none is configured.
+
+        A container cannot prompt on ``docker compose up -d``, so the key is
+        created once, written to the data volume and reused afterwards. The
+        placeholder from ``.env.example`` is replaced the same way outside
+        development.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("FASTAPI_ENV") == "development":
+            return data
+
+        value = str(data.get("SECRET_KEY") or "").strip()
+        if value and value.lower() != "changethis" and len(value) >= 32:
+            return data
+
+        path = Path(
+            data.get("SECRET_KEY_FILE")
+            or os.getenv("SECRET_KEY_FILE")
+            or DEFAULT_SECRET_KEY_FILE
+        )
+        if path.exists():
+            stored = path.read_text().strip()
+            if len(stored) >= 32:
+                data["SECRET_KEY"] = stored
+                logger.warning("Using the SECRET_KEY persisted at %s", path)
+                return data
+
+        key = secrets.token_hex(32)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(key + "\n")
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+        data["SECRET_KEY"] = key
+        logger.warning(
+            "No usable SECRET_KEY configured; generated one at %s. Keep this "
+            "file: losing it invalidates sessions and stored Bambu credentials.",
+            path,
+        )
+        return data
+
     @model_validator(mode="after")
     def _reject_insecure_secret_key(self) -> "Settings":
-        # The example file ships a placeholder. Outside development that is a
-        # public signing key, so refuse to start instead of accepting forged
-        # tokens.
         if self.FASTAPI_ENV == "development":
             return self
-        if (
-            self.SECRET_KEY.strip().lower() in {"", "changethis"}
-            or len(self.SECRET_KEY) < 32
-        ):
-            raise ValueError(
-                "SECRET_KEY must be a random value of at least 32 characters. "
-                "Generate one with: openssl rand -hex 32"
-            )
+        if len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters")
         if self.BAMBU_CREDENTIALS_KEY and len(self.BAMBU_CREDENTIALS_KEY) < 32:
             raise ValueError("BAMBU_CREDENTIALS_KEY must be at least 32 characters")
         return self

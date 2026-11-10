@@ -40,7 +40,7 @@ services:
         restart: true
     environment:
       - PROJECT_NAME=${PROJECT_NAME:-OpenPrintDashboard}
-      - SECRET_KEY=${SECRET_KEY:?Variable not set}
+      - SECRET_KEY=${SECRET_KEY:-}
       - BAMBU_CREDENTIALS_KEY=${BAMBU_CREDENTIALS_KEY:-}
       - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
       - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD:-}
@@ -57,6 +57,8 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - backend_data:/app/data
 
   frontend:
     build:
@@ -74,3 +76,4 @@ services:
 
 volumes:
   postgres_data:
+  backend_data:

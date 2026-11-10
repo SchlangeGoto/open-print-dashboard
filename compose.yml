@@ -35,7 +35,7 @@ services:
         restart: true
     environment:
       - PROJECT_NAME=${PROJECT_NAME:-OpenPrintDashboard}
-      - SECRET_KEY=${SECRET_KEY:?Variable not set}
+      - SECRET_KEY=${SECRET_KEY:-}
       - FASTAPI_ENV=development
       - BAMBU_CREDENTIALS_KEY=${BAMBU_CREDENTIALS_KEY:-}
       - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
@@ -62,6 +62,7 @@ services:
       # Mount the source for live reload during development. Remove this
       # volume and the `command` override to run the image as built.
       - ./backend:/app/backend
+      - backend_data:/app/data
     command:
       - bash
       - -c
@@ -98,5 +99,6 @@ services:
 
 volumes:
   postgres_data:
+  backend_data:
   frontend_node_modules:
   frontend_next:

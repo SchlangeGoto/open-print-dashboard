@@ -107,3 +107,6 @@ mobile/dist-*/
 *.p12
 *.mobileprovision
 mobile/credentials.json
+
+# Auto-generated SECRET_KEY (local runs outside Docker)
+/data/

@@ -23,7 +23,7 @@ cp .env.example .env
 Edit `.env` and set at least:
 
 ```dotenv
-SECRET_KEY=<openssl rand -hex 32>
+SECRET_KEY=<openssl rand -hex 32>   # or leave empty to auto-generate
 POSTGRES_PASSWORD=<a long random password>
 NEXT_PUBLIC_API_URL=https://api.example.com
 FRONTEND_HOST=https://dashboard.example.com
@@ -63,7 +63,7 @@ cp .env.example .env
 Edit `.env` and set:
 
 ```dotenv
-SECRET_KEY=<openssl rand -hex 32>       # generate once, then keep it
+SECRET_KEY=<openssl rand -hex 32>       # or leave empty to auto-generate
 POSTGRES_PASSWORD=<openssl rand -hex 32> # URL-safe; it is embedded in DATABASE_URL
 DOMAIN=dashboard.example.com
 FRONTEND_HOST=https://dashboard.example.com
@@ -83,9 +83,12 @@ docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d
 ```
 
-Generate `SECRET_KEY` **once** and keep it in a protected, backed-up `.env` or
-secret manager. The backend derives its credential-encryption key from it;
-replacing it makes existing printer credentials unreadable.
+`SECRET_KEY` is generated once and kept. If it is unset (or still the example
+placeholder) outside development, the backend generates a random key on first
+start and stores it in the `backend_data` volume. Either way, keep it: the
+backend derives its credential-encryption key from it, so replacing it makes
+existing printer credentials unreadable. Back up that volume, or set the key
+explicitly in `.env`.
 
 Point `dashboard.example.com` at the server and open ports 80/443. Caddy obtains
 TLS certificates automatically.
@@ -97,7 +100,7 @@ derives it from `DOMAIN`.
 
 | Variable | Notes |
 | --- | --- |
-| `SECRET_KEY` | Required. Generate with `openssl rand -hex 32` |
+| `SECRET_KEY` | Recommended (`openssl rand -hex 32`). If empty, a key is generated into the `backend_data` volume on first start |
 | `POSTGRES_PASSWORD` | Required for anything public; change the default |
 | `DOMAIN` | Public dashboard hostname for `compose.ghcr.yml` |
 | `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |

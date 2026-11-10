@@ -44,6 +44,7 @@ def upgrade() -> None:
                    ) AS rn
             FROM printjob
             WHERE bambu_task_id IS NOT NULL
+              AND device_id IS NOT NULL
         )
         DELETE FROM printjob p
         USING ranked r

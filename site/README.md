@@ -43,6 +43,10 @@ docker compose -f compose.public.yml up -d
 Point both domains at the server and open ports 80/443. Caddy handles TLS.
 There is no Vercel or Cloudflare dependency.
 
+The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
+`https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, build the image
+with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
+
 For a local check:
 
 ```bash

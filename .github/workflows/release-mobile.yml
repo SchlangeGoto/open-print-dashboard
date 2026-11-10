@@ -37,7 +37,7 @@ jobs:
       - name: Set up EAS
         uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8
         with:
-          eas-version: latest
+          eas-version: 16.x
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
@@ -58,6 +58,7 @@ jobs:
             curl -fL "$url" -o "artifacts/$name"
           done
           ls -lh artifacts
+          [ "$(ls artifacts | wc -l)" -ge 2 ] || { echo "Expected Android and iOS artifacts" >&2; exit 1; }
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

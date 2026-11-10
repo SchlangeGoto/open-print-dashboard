@@ -57,15 +57,29 @@ calls `/api/v1` on the same origin. Caddy proxies `/api/*` to the backend; no
 separate API hostname is needed.
 
 ```bash
-export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
-export IMAGE_TAG=0.2.0        # or latest
-export DOMAIN=dashboard.example.com
-export SECRET_KEY="$(openssl rand -hex 32)"
-export POSTGRES_PASSWORD="<a long random password>"
+cp .env.example .env
+```
 
+Edit `.env` and set:
+
+```dotenv
+SECRET_KEY=<openssl rand -hex 32>   # generate once, then keep it
+POSTGRES_PASSWORD=<a long random password>
+DOMAIN=dashboard.example.com
+IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+IMAGE_TAG=0.2.0
+```
+
+Then:
+
+```bash
 docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d
 ```
+
+Generate `SECRET_KEY` **once** and keep it in a protected, backed-up `.env` or
+secret manager. The backend derives its credential-encryption key from it;
+replacing it makes existing printer credentials unreadable.
 
 Point `dashboard.example.com` at the server and open ports 80/443. Caddy obtains
 TLS certificates automatically.
@@ -82,7 +96,7 @@ derives it from `DOMAIN`.
 | `DOMAIN` | Public dashboard hostname for `compose.ghcr.yml` |
 | `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |
 | `NEXT_PUBLIC_API_URL` | Source-build only. **Build-time** value; rebuild after changing it |
-| `FRONTEND_HOST` | Backend CORS allowlist. Must match the public frontend URL |
+| `FRONTEND_HOST` | Backend CORS allowlist. Derived from `DOMAIN` by `compose.ghcr.yml`; override only if needed |
 | `PRINTER_IP`, `PRINTER_SERIAL`, `PRINTER_ACCESS_CODE` | Optional defaults for the Bambu Lab connection |
 | `SMTP_*`, `EMAILS_FROM_EMAIL` | Optional. If you are not using SMTP, set `EMAILS_FROM_EMAIL=` and `SMTP_HOST=` empty to skip email |
 
@@ -146,6 +160,15 @@ docker compose -f compose.public.yml up -d
 Point both DNS records at the server and open ports 80/443. Caddy obtains
 certificates automatically.
 
+`compose.ghcr.yml` and `compose.public.yml` both bind ports 80/443. Run them on
+separate hosts, or terminate TLS in one external Caddy and route by hostname.
+The Compose project names are isolated (`openprintdashboard` and
+`openprint-public`), but port bindings still conflict on a single host.
+
+The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
+`https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, rebuild the site
+image with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
+
 For local testing, use hostnames that Caddy can issue locally:
 
 ```bash
@@ -169,7 +192,14 @@ eas login
 cd mobile
 eas init                 # writes the Expo project ID into app.json
 eas build:configure      # creates/updates eas.json
+git add app.json eas.json
+git commit -m "chore: configure EAS project"
+git push
 ```
+
+`eas init` changes `mobile/app.json`; commit and push it **before** creating a
+release tag. The release workflow checks out the tagged commit, so an
+uncommitted project ID cannot work.
 
 - Android: let EAS generate and store the upload keystore. Back it up in the
   Expo dashboard.
@@ -178,6 +208,10 @@ eas build:configure      # creates/updates eas.json
 - Create an Expo access token and add it as the `EXPO_TOKEN` repository secret.
 
 ### Release
+
+Set `expo.version` in `mobile/app.json` to the release version (for example
+`0.2.0`), commit it, and push before tagging. EAS `autoIncrement` changes build
+numbers, not the user-facing version.
 
 ```bash
 git tag v0.2.0

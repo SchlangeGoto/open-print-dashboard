@@ -156,11 +156,21 @@ eas login
 cd mobile
 eas init                 # writes the Expo project ID into app.json
 eas build:configure      # creates/updates eas.json
+git add app.json eas.json
+git commit -m "chore: configure EAS project"
+git push
 ```
+
+Commit and push the `eas init` changes before tagging; the release workflow
+checks out the tagged commit.
 
 Create an Expo access token and add it as the `EXPO_TOKEN` repository secret.
 Android signing is managed by EAS (back up the keystore in the Expo dashboard);
 iOS needs an Apple Developer account and an EAS credential setup.
+
+Set `expo.version` in `app.json` to the release version, commit it, and push
+before tagging. EAS `autoIncrement` changes build numbers, not the user-facing
+version.
 
 Release on a tag:
 

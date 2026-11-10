@@ -1,4 +1,5 @@
 # Public marketing site and demo, served from published GHCR images.
+name: openprint-public
 #
 #   export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
 #   export IMAGE_TAG=0.2.0

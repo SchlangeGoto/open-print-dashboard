@@ -357,3 +357,6 @@ re-opened.
 | First-run no-printer escape; analytics range/banner; demo weight edit; Progress name | `94a2516` | Human #20 |
 | Mobile unknown readout, scan guards, deep-link return, retry backoff | `7d5e772` | Human #20 |
 | Latest gated to main; images unprivileged/slim/digest-pinned; Dependabot dirs | `15e9143` | Human #20 |
+| Client request ids; slot exclusion/tag/preset/ratio; series backfill | `79249b1`, `5de89c1` | Human #20 |
+| Setup skip persisted; replay 409; repair-safe invariant; progress labels | `79249b1`, `d519562`, `306c8c6` | Human #20 |
+| Release guard for all tags; latest concurrency + highest semver | `a3201fd` | Human #20 |

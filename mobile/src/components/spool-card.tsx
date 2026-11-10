@@ -26,9 +26,10 @@ export function SpoolCard({
   onPress,
 }: SpoolCardProps) {
   const theme = useTheme();
-  const pct = percent(spool.remaining_g, spool.total_weight_g);
+  const unknown = Boolean(spool.remaining_unknown);
+  const pct = unknown ? 0 : percent(spool.remaining_g, spool.total_weight_g);
   const color = filament?.color_hex ?? theme.colors.faint;
-  const low = pct <= 15;
+  const low = !unknown && pct <= 15;
   const loaded = Boolean(printerName);
   const sourceLabel =
     spool.source === "ams"
@@ -40,9 +41,11 @@ export function SpoolCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${filament?.color_name ?? "Spool"}, ${pct} percent, ${formatWeight(
-        spool.remaining_g,
-      )} remaining, ${printerName ?? "not loaded"}`}
+      accessibilityLabel={`${filament?.color_name ?? "Spool"}, ${
+        unknown
+          ? "weight unknown"
+          : `${pct} percent, ${formatWeight(spool.remaining_g)} remaining`
+      }, ${printerName ?? "not loaded"}`}
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
@@ -70,7 +73,7 @@ export function SpoolCard({
             color={low ? theme.colors.danger : theme.colors.muted}
             style={styles.readout}
           >
-            {pct}%
+            {unknown ? "—" : `${pct}%`}
           </AppText>
         </View>
 
@@ -86,12 +89,12 @@ export function SpoolCard({
           <View style={styles.barTrack}>
             <ProgressBar
               value={pct}
-              color={low ? theme.colors.danger : color}
+              color={unknown ? theme.colors.faint : low ? theme.colors.danger : color}
               height={3}
             />
           </View>
           <AppText variant="monoSmall" muted style={styles.readout}>
-            {formatWeight(spool.remaining_g)} left
+            {unknown ? "Weight unknown" : `${formatWeight(spool.remaining_g)} left`}
           </AppText>
         </View>
 

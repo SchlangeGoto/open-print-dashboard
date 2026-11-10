@@ -132,7 +132,7 @@ export default function DashboardPage() {
     .filter((f) => f.total_remaining_g > 0)
     .map((f) => {
       const totalSpoolG = spools
-        .filter((s) => s.filament_id === f.id)
+        .filter((s) => s.filament_id === f.id && !s.remaining_unknown)
         .reduce((sum, s) => sum + s.total_weight_g, 0);
       const pct = totalSpoolG > 0 ? (f.total_remaining_g / totalSpoolG) * 100 : 0;
       return {
@@ -374,8 +374,9 @@ export default function DashboardPage() {
                     (filament) => filament.id === loadedSpool.filament_id,
                   )
                 : null;
+              const loadedUnknown = Boolean(loadedSpool?.remaining_unknown);
               const loadedPct =
-                loadedSpool && loadedSpool.total_weight_g > 0
+                loadedSpool && !loadedUnknown && loadedSpool.total_weight_g > 0
                   ? Math.round(
                       (loadedSpool.remaining_g / loadedSpool.total_weight_g) *
                         100,
@@ -499,6 +500,7 @@ export default function DashboardPage() {
                             total={loadedSpool.total_weight_g}
                             color={loadedFilament.color_hex}
                             size={48}
+                            unknown={loadedUnknown}
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -510,18 +512,26 @@ export default function DashboardPage() {
                             <p className="text-xs text-muted-foreground">
                               {loadedFilament.brand} ·{" "}
                               {loadedFilament.material} ·{" "}
-                              {formatWeight(loadedSpool.remaining_g)}
+                              {loadedUnknown
+                                ? "Unknown"
+                                : formatWeight(loadedSpool.remaining_g)}
                             </p>
-                            <Progress
-                              value={loadedPct}
-                              className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
-                              style={
-                                {
-                                  "--spool-color":
-                                    loadedFilament.color_hex ?? "#9ca3af",
-                                } as React.CSSProperties
-                              }
-                            />
+                            {loadedUnknown ? (
+                              <p className="mt-1 text-[10px] text-muted-foreground">
+                                Weight unknown · added from printer
+                              </p>
+                            ) : (
+                              <Progress
+                                value={loadedPct}
+                                className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                                style={
+                                  {
+                                    "--spool-color":
+                                      loadedFilament.color_hex ?? "#9ca3af",
+                                  } as React.CSSProperties
+                                }
+                              />
+                            )}
                           </div>
                         </div>
                       </button>

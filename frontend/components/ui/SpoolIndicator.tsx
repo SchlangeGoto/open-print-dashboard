@@ -8,10 +8,21 @@ interface Props {
   color: string;
   size?: number;
   className?: string;
+  /** The printer found the spool but not its weight. */
+  unknown?: boolean;
 }
 
-export function SpoolIndicator({ remaining, total, color, size = 120, className }: Props) {
-  const pct = Math.max(0, Math.min(1, remaining / (total || 1)));
+export function SpoolIndicator({
+  remaining,
+  total,
+  color,
+  size = 120,
+  className,
+  unknown = false,
+}: Props) {
+  const pct = unknown
+    ? 0
+    : Math.max(0, Math.min(1, remaining / (total || 1)));
   const outerR = size / 2 - 4;
   const hubR = size * 0.18;
   const filamentR = hubR + (outerR - hubR - 6) * pct;
@@ -69,7 +80,16 @@ export function SpoolIndicator({ remaining, total, color, size = 120, className 
           );
         })}
       </svg>
-      {lowStock && (
+      {unknown && (
+        <span
+          className="absolute inset-0 flex items-center justify-center font-semibold text-muted-foreground"
+          style={{ fontSize: Math.max(12, size * 0.18) }}
+          aria-label="Remaining weight unknown"
+        >
+          ?
+        </span>
+      )}
+      {lowStock && !unknown && (
         <span className="absolute -top-1 -right-1 rounded-sm bg-red-500/90 text-white text-[8px] font-bold uppercase tracking-wider px-1 py-0.5 animate-pulse">
           LOW
         </span>

@@ -82,6 +82,7 @@ export default function LoadSpoolModal({
             total={spool?.total_weight_g ?? 1000}
             color={filament?.color_hex ?? "#9ca3af"}
             size={52}
+            unknown={Boolean(spool?.remaining_unknown)}
           />
           <div className="min-w-0">
             <p className="truncate font-medium">
@@ -90,7 +91,9 @@ export default function LoadSpoolModal({
             <p className="text-xs text-muted-foreground">
               {filament?.brand ? `${filament.brand} · ` : ""}
               {filament?.material ?? "Filament"} ·{" "}
-              {formatWeight(spool?.remaining_g)} remaining
+              {spool?.remaining_unknown
+                ? "weight unknown"
+                : `${formatWeight(spool?.remaining_g)} remaining`}
             </p>
           </div>
         </div>

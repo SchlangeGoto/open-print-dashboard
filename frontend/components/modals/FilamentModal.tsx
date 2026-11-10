@@ -26,7 +26,10 @@ export default function FilamentModal({
   onClose,
 }: Props) {
   const [selectedSpool, setSelectedSpool] = useState<any>(null);
-  const totalRemaining = spools.reduce((sum, s) => sum + s.remaining_g, 0);
+  const totalRemaining = spools.reduce(
+    (sum, s) => (s.remaining_unknown ? sum : sum + s.remaining_g),
+    0,
+  );
 
   const stats = [
     { label: "In Stock", value: formatWeight(totalRemaining) },
@@ -82,9 +85,12 @@ export default function FilamentModal({
               </p>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 {spools.map((spool) => {
-                  const pct = Math.round(
-                    (spool.remaining_g / spool.total_weight_g) * 100,
-                  );
+                  const unknown = Boolean(spool.remaining_unknown);
+                  const pct = unknown
+                    ? 0
+                    : Math.round(
+                        (spool.remaining_g / spool.total_weight_g) * 100,
+                      );
                   return (
                     <button
                       key={spool.id}
@@ -97,12 +103,15 @@ export default function FilamentModal({
                         total={spool.total_weight_g}
                         color={filament?.color_hex ?? "#555"}
                         size={72}
+                        unknown={unknown}
                       />
                       <div className="text-center">
                         <p className="text-xs font-medium">
-                          {formatWeight(spool.remaining_g)}
+                          {unknown ? "Unknown" : formatWeight(spool.remaining_g)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">{pct}%</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {unknown ? "Weight unknown" : `${pct}%`}
+                        </p>
                         {spool.active ? (
                           <Badge variant="success" className="mt-1 text-[9px]">
                             Active

@@ -33,9 +33,11 @@ export default function SpoolModal({
   onRequestLoad,
   onEdit,
 }: Props) {
-  const pct = spool
-    ? Math.round((spool.remaining_g / spool.total_weight_g) * 100)
-    : 0;
+  const unknown = Boolean(spool?.remaining_unknown);
+  const pct =
+    spool && !unknown
+      ? Math.round((spool.remaining_g / spool.total_weight_g) * 100)
+      : 0;
 
   async function handleActivate() {
     if (!onActivate) return;
@@ -51,7 +53,10 @@ export default function SpoolModal({
     { label: "Status", value: spool?.active ? "Active" : "Stored" },
     { label: "Material", value: filament?.material ?? "—" },
     { label: "Total Weight", value: formatWeight(spool?.total_weight_g) },
-    { label: "Remaining", value: formatWeight(spool?.remaining_g) },
+    {
+      label: "Remaining",
+      value: unknown ? "Unknown" : formatWeight(spool?.remaining_g),
+    },
     {
       label: "Price / kg",
       value: spool?.price_per_kg ? formatCurrency(spool.price_per_kg) : "—",
@@ -83,6 +88,7 @@ export default function SpoolModal({
             total={spool?.total_weight_g ?? 1000}
             color={filament?.color_hex ?? "#555"}
             size={140}
+            unknown={unknown}
           />
           <div className="text-center">
             <p className="text-lg font-bold">
@@ -92,21 +98,27 @@ export default function SpoolModal({
               {filament?.brand} · {filament?.material}
             </p>
           </div>
-          <div className="w-40">
-            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>{Math.round(spool?.remaining_g ?? 0)}g</span>
-              <span>{pct}%</span>
+          {unknown ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Weight unknown · added from printer
+            </p>
+          ) : (
+            <div className="w-40">
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>{Math.round(spool?.remaining_g ?? 0)}g</span>
+                <span>{pct}%</span>
+              </div>
+              <Progress
+                value={pct}
+                className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                style={
+                  {
+                    "--spool-color": filament?.color_hex ?? "#9ca3af",
+                  } as React.CSSProperties
+                }
+              />
             </div>
-            <Progress
-              value={pct}
-              className="[&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
-              style={
-                {
-                  "--spool-color": filament?.color_hex ?? "#9ca3af",
-                } as React.CSSProperties
-              }
-            />
-          </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">

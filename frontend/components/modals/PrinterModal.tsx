@@ -53,8 +53,9 @@ export default function PrinterModal({
   const printTitle =
     liveStatus?.subtask_name ?? activePrint?.title ?? "Unknown print";
 
+  const spoolUnknown = Boolean(loadedSpool?.remaining_unknown);
   const spoolPct =
-    loadedSpool && loadedSpool.total_weight_g > 0
+    loadedSpool && !spoolUnknown && loadedSpool.total_weight_g > 0
       ? Math.round((loadedSpool.remaining_g / loadedSpool.total_weight_g) * 100)
       : 0;
 
@@ -66,6 +67,7 @@ export default function PrinterModal({
           total={loadedSpool.total_weight_g}
           color={loadedFilament.color_hex}
           size={52}
+          unknown={spoolUnknown}
         />
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -76,17 +78,23 @@ export default function PrinterModal({
           </p>
           <p className="text-xs text-muted-foreground">
             {loadedFilament.brand} · {loadedFilament.material} ·{" "}
-            {formatWeight(loadedSpool.remaining_g)}
+            {spoolUnknown ? "Unknown" : formatWeight(loadedSpool.remaining_g)}
           </p>
-          <Progress
-            value={spoolPct}
-            className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
-            style={
-              {
-                "--spool-color": loadedFilament.color_hex ?? "#9ca3af",
-              } as React.CSSProperties
-            }
-          />
+          {spoolUnknown ? (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Weight unknown · added from printer
+            </p>
+          ) : (
+            <Progress
+              value={spoolPct}
+              className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+              style={
+                {
+                  "--spool-color": loadedFilament.color_hex ?? "#9ca3af",
+                } as React.CSSProperties
+              }
+            />
+          )}
         </div>
       </div>
     </>

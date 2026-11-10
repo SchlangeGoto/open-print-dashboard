@@ -40,6 +40,7 @@ export interface Spool {
   printer_id: string | null;
   total_weight_g: number;
   remaining_g: number;
+  remaining_unknown: boolean;
   tag_uid: string | null;
   barcode: string | null;
   source: string | null;

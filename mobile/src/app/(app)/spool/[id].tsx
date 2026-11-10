@@ -134,7 +134,8 @@ export default function SpoolDetailScreen() {
   }
 
   const { spool, filament, printers } = data;
-  const pct = percent(spool.remaining_g, spool.total_weight_g);
+  const unknown = Boolean(spool.remaining_unknown);
+  const pct = unknown ? 0 : percent(spool.remaining_g, spool.total_weight_g);
   const color = filament?.color_hex ?? theme.colors.faint;
   const heroText = isLightColor(color)
     ? theme.colors.mediaInk
@@ -195,7 +196,7 @@ export default function SpoolDetailScreen() {
               ]}
             >
               <AppText variant="caption" color={heroText}>
-                {pct}% left
+                {unknown ? "Weight unknown" : `${pct}% left`}
               </AppText>
             </View>
           </View>
@@ -203,16 +204,17 @@ export default function SpoolDetailScreen() {
             {filament?.color_name ?? "Unknown color"}
           </AppText>
           <AppText variant="caption" color={heroText} style={styles.heroWeight}>
-            {formatWeight(spool.remaining_g)} remaining of{" "}
-            {formatWeight(spool.total_weight_g)}
+            {unknown
+              ? "Weight unknown · added from printer"
+              : `${formatWeight(spool.remaining_g)} remaining of ${formatWeight(
+                  spool.total_weight_g,
+                )}`}
           </AppText>
-          <View style={styles.heroProgress}>
-            <ProgressBar
-              value={pct}
-              color={heroText}
-              height={6}
-            />
-          </View>
+          {unknown ? null : (
+            <View style={styles.heroProgress}>
+              <ProgressBar value={pct} color={heroText} height={6} />
+            </View>
+          )}
         </LinearGradient>
 
         {actionError ? (
@@ -238,7 +240,10 @@ export default function SpoolDetailScreen() {
 
         <StatGrid
           stats={[
-            { value: formatWeight(spool.remaining_g), label: "Remaining" },
+            {
+              value: unknown ? "Unknown" : formatWeight(spool.remaining_g),
+              label: "Remaining",
+            },
             { value: formatWeight(spool.total_weight_g), label: "Total" },
             { value: formatPrice(spool.price_per_kg), label: "Price" },
             { value: sourceLabel, label: "Source" },

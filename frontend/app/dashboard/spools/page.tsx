@@ -220,8 +220,9 @@ export default function SpoolsPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {spools.map((s) => {
             const fil = getFilament(s.filament_id);
+            const unknown = Boolean(s.remaining_unknown);
             const pct =
-              s.total_weight_g > 0
+              !unknown && s.total_weight_g > 0
                 ? Math.round((s.remaining_g / s.total_weight_g) * 100)
                 : 0;
             return (
@@ -240,7 +241,7 @@ export default function SpoolsPage() {
                 className="group relative cursor-pointer gap-4 transition-colors hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 <CardContent className="flex flex-col gap-3">
-                  <div className="absolute left-3 top-3 z-10">
+                  <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-1">
                     {s.active ? (
                       <Badge variant="success">
                         <Check className="size-2.5" /> Active
@@ -250,6 +251,9 @@ export default function SpoolsPage() {
                         <Archive className="size-2.5" /> Stored
                       </Badge>
                     )}
+                    {unknown ? (
+                      <Badge variant="warning">Weight unknown</Badge>
+                    ) : null}
                   </div>
 
                   <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
@@ -281,6 +285,7 @@ export default function SpoolsPage() {
                       total={s.total_weight_g}
                       color={fil?.color_hex ?? "#555"}
                       size={100}
+                      unknown={unknown}
                     />
                   </div>
 
@@ -301,19 +306,27 @@ export default function SpoolsPage() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                      <span>{formatWeight(s.remaining_g)}</span>
-                      <span className="tabular-nums">{pct}%</span>
-                    </div>
-                    <Progress
-                      value={pct}
-                      className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
-                      style={
-                        {
-                          "--spool-color": fil?.color_hex ?? "#9ca3af",
-                        } as React.CSSProperties
-                      }
-                    />
+                    {unknown ? (
+                      <p className="text-xs text-muted-foreground">
+                        Added from printer · set the remaining weight
+                      </p>
+                    ) : (
+                      <>
+                        <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                          <span>{formatWeight(s.remaining_g)}</span>
+                          <span className="tabular-nums">{pct}%</span>
+                        </div>
+                        <Progress
+                          value={pct}
+                          className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
+                          style={
+                            {
+                              "--spool-color": fil?.color_hex ?? "#9ca3af",
+                            } as React.CSSProperties
+                          }
+                        />
+                      </>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-1.5 text-[10px] text-muted-foreground">
@@ -391,6 +404,13 @@ export default function SpoolsPage() {
                   onChange={(e) => setForm({ ...form, remaining_g: Number(e.target.value) })}
                   required
                 />
+                {editingId &&
+                spools.find((s) => s.id === editingId)?.remaining_unknown ? (
+                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                    The printer could not read the weight of this spool. Enter
+                    the remaining grams.
+                  </p>
+                ) : null}
               </Field>
             </div>
 

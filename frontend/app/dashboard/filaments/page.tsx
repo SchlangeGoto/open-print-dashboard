@@ -185,7 +185,10 @@ export default function FilamentsPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filaments.map((f) => {
             const spools = spoolsByFilament[f.id] ?? [];
-            const remaining = spools.reduce((s, sp) => s + sp.remaining_g, 0);
+            const remaining = spools.reduce(
+              (s, sp) => (sp.remaining_unknown ? s : s + sp.remaining_g),
+              0,
+            );
             return (
               <Card
                 key={f.id}

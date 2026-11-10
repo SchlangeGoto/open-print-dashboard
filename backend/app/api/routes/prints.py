@@ -49,7 +49,9 @@ def read_active_prints(session: SessionDep) -> Any:
 def read_print_stats(session: SessionDep) -> Any:
     """Return the most recently finished print job."""
     return session.exec(
-        select(PrintJob).order_by(col(PrintJob.finished_at).desc())
+        select(PrintJob)
+        .where(col(PrintJob.finished_at).is_not(None))
+        .order_by(col(PrintJob.finished_at).desc())
     ).first()
 
 

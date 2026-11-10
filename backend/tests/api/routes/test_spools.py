@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models import Printer
+from app.models import Printer, PrintJob
 
 
 def _create_printer(db: Session) -> Printer:
@@ -107,3 +107,67 @@ def test_only_one_active_spool_per_printer(
     assert by_id[first["id"]]["printer_id"] is None
     assert by_id[second["id"]]["active"] is True
     assert by_id[second["id"]]["printer_id"] == str(printer.id)
+
+
+def test_deleting_spool_keeps_print_history(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    filament_id = _create_filament(client, superuser_token_headers)
+    spool = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": filament_id,
+            "total_weight_g": 1000,
+            "remaining_g": 500,
+        },
+    ).json()
+
+    job = PrintJob(title="Kept after spool delete", weight=12, spool_id=spool["id"])
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    job_id = job.id
+
+    deleted = client.delete(
+        f"{settings.API_V1_STR}/spools/{spool['id']}",
+        headers=superuser_token_headers,
+    )
+    assert deleted.status_code == 200, deleted.text
+
+    db.expire_all()
+    preserved = db.get(PrintJob, job_id)
+    assert preserved is not None
+    assert preserved.spool_id is None
+
+
+def test_deleting_filament_keeps_print_history(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    filament_id = _create_filament(client, superuser_token_headers)
+    spool = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": filament_id,
+            "total_weight_g": 1000,
+            "remaining_g": 750,
+        },
+    ).json()
+
+    job = PrintJob(title="Kept after filament delete", weight=5, spool_id=spool["id"])
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    job_id = job.id
+
+    deleted = client.delete(
+        f"{settings.API_V1_STR}/filaments/{filament_id}",
+        headers=superuser_token_headers,
+    )
+    assert deleted.status_code == 200, deleted.text
+
+    db.expire_all()
+    preserved = db.get(PrintJob, job_id)
+    assert preserved is not None
+    assert preserved.spool_id is None

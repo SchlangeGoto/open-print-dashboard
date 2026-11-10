@@ -191,9 +191,9 @@ class Spool(SpoolBase, table=True):
         default=None, foreign_key="printer.id", ondelete="SET NULL", index=True
     )
     filament: Filament | None = Relationship(back_populates="spools")
-    print_jobs: list["PrintJob"] = Relationship(
-        back_populates="spool", cascade_delete=True
-    )
+    # Print history outlives the spool. The foreign key is ``SET NULL``, so the
+    # database clears the reference instead of the ORM deleting the jobs.
+    print_jobs: list["PrintJob"] = Relationship(back_populates="spool")
 
 
 class SpoolPublic(SpoolBase):

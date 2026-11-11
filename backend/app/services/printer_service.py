@@ -155,7 +155,10 @@ class PrinterService:
                 self._connecting.discard(serial)
                 if serial in self._reconnect_pending:
                     self._reconnect_pending.discard(serial)
-                    retry = True
+                    # A racing reload only needs a retry if this connect did
+                    # not leave a healthy client behind; otherwise the retry
+                    # would tear that client down again.
+                    retry = serial not in self.clients
             if retry:
                 self._schedule_reconnect(serial, delay=0.5)
 

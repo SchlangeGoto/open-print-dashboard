@@ -46,7 +46,7 @@ export default function PrintersPage() {
   const router = useRouter();
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [cloudStatus, setCloudStatus] = useState<CloudStatus | null>(null);
-  const [prints, setPrints] = useState<any[]>([]);
+  const [activePrints, setActivePrints] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
   const [firmware, setFirmware] = useState<Record<string, any>>({});
@@ -60,21 +60,22 @@ export default function PrintersPage() {
   const [selectedFilament, setSelectedFilament] = useState<any | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPrinter, setSettingsPrinter] = useState<Printer | null>(null);
+  const [addingSerial, setAddingSerial] = useState<string | null>(null);
 
   const load = useCallback(async (force = false) => {
     if (inFlight.current && !force) return;
     inFlight.current = true;
     const seq = ++requestSeq.current;
     try {
-      const [devices, jobs, spoolList, filamentList] = await Promise.all([
+      const [devices, active, spoolList, filamentList] = await Promise.all([
         api.getPrinters(),
-        api.getPrintJobs(),
+        api.getActivePrints(),
         api.getSpools(),
         api.getFilaments(),
       ]);
       if (seq !== requestSeq.current) return;
       setPrinters(devices);
-      setPrints(jobs);
+      setActivePrints(active);
       setSpools(spoolList);
       setFilaments(filamentList);
 
@@ -116,7 +117,7 @@ export default function PrintersPage() {
 
   useEffect(() => {
     setSelectedPrint((current: any) =>
-      current ? prints.find((p) => p.id === current.id) ?? null : null,
+      current ? activePrints.find((p) => p.id === current.id) ?? null : null,
     );
     setSelectedSpool((current: any) =>
       current ? spools.find((s) => s.id === current.id) ?? null : null,
@@ -124,7 +125,7 @@ export default function PrintersPage() {
     setSelectedFilament((current: any) =>
       current ? filaments.find((f) => f.id === current.id) ?? null : null,
     );
-  }, [prints, spools, filaments]);
+  }, [activePrints, spools, filaments]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -166,24 +167,28 @@ export default function PrintersPage() {
   }
 
   async function addCloudPrinter(printer: Printer) {
+    if (addingSerial) return;
+    setAddingSerial(printer.serial);
     try {
       await api.createPrinter({
         name: printer.name,
         serial: printer.serial,
       });
       toast.success("Printer added");
-      await load();
+      // Force the refresh so an in-flight poll cannot apply a snapshot from
+      // before the printer existed.
+      await load(true);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to add printer",
       );
+    } finally {
+      setAddingSerial(null);
     }
   }
 
   function activePrintFor(serial: string) {
-    return prints.find(
-      (print) => print.status === 4 && print.device_id === serial,
-    );
+    return activePrints.find((print) => print.device_id === serial);
   }
 
   const currentSelectedPrinter = selectedPrinter
@@ -485,12 +490,16 @@ export default function PrintersPage() {
                     ) : (
                       <Button
                         size="sm"
+                        disabled={addingSerial !== null}
                         onClick={(event) => {
                           event.stopPropagation();
                           addCloudPrinter(printer);
                         }}
                       >
-                        <Plus /> Add to dashboard
+                        <Plus />{" "}
+                        {addingSerial === printer.serial
+                          ? "Adding…"
+                          : "Add to dashboard"}
                       </Button>
                     )}
                   </div>

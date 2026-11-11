@@ -37,7 +37,7 @@ const filamentChartConfig = {
 } satisfies ChartConfig;
 
 export default function DashboardPage() {
-  const [prints, setPrints] = useState<any[]>([]);
+  const [activePrints, setActivePrints] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
   const [printers, setPrinters] = useState<Printer[]>([]);
@@ -61,15 +61,15 @@ export default function DashboardPage() {
     inFlight.current = true;
     const seq = ++requestSeq.current;
     try {
-      const [devs, pr, fil, sp] = await Promise.all([
+      const [devs, active, fil, sp] = await Promise.all([
         api.getPrinters(),
-        api.getPrintJobs(),
+        api.getActivePrints(),
         api.getFilaments(),
         api.getSpools(),
       ]);
       if (seq !== requestSeq.current) return;
       setPrinters(devs);
-      setPrints(pr);
+      setActivePrints(active);
       setFilaments(fil);
       setSpools(sp);
 
@@ -109,7 +109,6 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [load]);
 
-  const activePrints = prints.filter((p) => p.status === 4);
   const statusByDev = Object.fromEntries(
     printers.map((printer) => [printer.serial, printer.status]),
   );
@@ -131,7 +130,7 @@ export default function DashboardPage() {
   useEffect(() => {
     // Keep the open modals on the latest rows; a deleted row closes them.
     setSelectedPrint((current: any) =>
-      current ? prints.find((p) => p.id === current.id) ?? null : null,
+      current ? activePrints.find((p) => p.id === current.id) ?? null : null,
     );
     setSelectedSpool((current: any) =>
       current ? spools.find((s) => s.id === current.id) ?? null : null,
@@ -142,7 +141,7 @@ export default function DashboardPage() {
     setSelectedPrinter((current: Printer | null) =>
       current ? printers.find((p) => p.serial === current.serial) ?? null : null,
     );
-  }, [prints, spools, filaments, printers]);
+  }, [activePrints, spools, filaments, printers]);
 
   useEffect(() => {
     if (!settingsOpen) return;

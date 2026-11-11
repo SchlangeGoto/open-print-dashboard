@@ -197,15 +197,33 @@ export const demoApi: ApiShape = {
     delay({ message: "Password reset (demo mode)" }),
 
   // ── Bambu Cloud Auth ──────────────────────────────────────────────────────
-  bambuLoginStart: () =>
-    delay({ message: "Login successful", requireCode: false }),
+  bambuLoginStart: () => {
+    const settings = load("settings", DEMO_SETTINGS as any[]).filter(
+      (item: any) => !String(item.key).startsWith("bambu_cloud_"),
+    );
+    save("settings", [
+      ...settings,
+      { key: "bambu_cloud_email", value: "demo@bambu.example" },
+      { key: "bambu_cloud_token", value: "demo-token" },
+    ]);
+    return delay({ message: "Login successful", requireCode: false });
+  },
 
   bambuLoginVerify: () =>
     delay({ message: "Verified", codeExpired: false }),
 
   getBambuProfile: () => delay({ ...DEMO_BAMBU_PROFILE }),
 
-  bambuLogout: () => delay({ message: "Bambu Lab session cleared" }),
+  bambuLogout: () => {
+    const settings = load("settings", DEMO_SETTINGS as any[]);
+    save(
+      "settings",
+      settings.filter(
+        (item: any) => !String(item.key).startsWith("bambu_cloud_"),
+      ),
+    );
+    return delay({ message: "Bambu Lab session cleared" });
+  },
 
   // ── Settings ──────────────────────────────────────────────────────────────
   getSettings: () => delay(load("settings", DEMO_SETTINGS as any[])),

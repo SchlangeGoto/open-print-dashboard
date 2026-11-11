@@ -121,6 +121,13 @@ export default function SpoolsPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    // Keep the open detail modal on the latest row; a deleted spool closes it.
+    setSelectedSpool((current: any) =>
+      current ? spools.find((s) => s.id === current.id) ?? null : null,
+    );
+  }, [spools]);
+
   function getFilament(id: string | null) {
     return filaments.find((f) => f.id === id);
   }

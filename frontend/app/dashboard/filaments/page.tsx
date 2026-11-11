@@ -103,6 +103,14 @@ export default function FilamentsPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    // Keep the open detail modal on the latest row; a deleted filament closes
+    // it.
+    setSelectedFilament((current: any) =>
+      current ? filaments.find((f) => f.id === current.id) ?? null : null,
+    );
+  }, [filaments]);
+
   function openCreate() {
     setForm({ ...emptyFilament });
     setEditingId(null);

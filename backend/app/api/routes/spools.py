@@ -75,31 +75,37 @@ def _find_or_create_catalog_filament(
             func.lower(Filament.material) == data["material"].lower(),
             func.lower(Filament.brand) == data["brand"].lower(),
         )
-        if weight is not None:
-            base = base.where(Filament.spool_weight_g == weight)
         if series:
-            filament = session.exec(
-                base.where(func.lower(Filament.series) == series.lower()).order_by(
-                    col(Filament.created_at).asc()
+            # The product is identified by series. Prefer a same-weight row
+            # but do not split a correctly seriesed product just because its
+            # stored weight differs.
+            query = base.where(func.lower(Filament.series) == series.lower())
+            if weight is not None:
+                query = query.order_by(
+                    (Filament.spool_weight_g == weight).desc(),
+                    col(Filament.created_at).asc(),
                 )
-            ).first()
+            else:
+                query = query.order_by(col(Filament.created_at).asc())
+            filament = session.exec(query).first()
             if not filament:
-                # Existing rows predate series. Adopt one and backfill it
-                # instead of creating a duplicate product.
+                # Existing rows predate series. Adopt one and backfill it.
+                query = base.where(col(Filament.series).is_(None))
+                if weight is not None:
+                    query = query.where(Filament.spool_weight_g == weight)
                 filament = session.exec(
-                    base.where(col(Filament.series).is_(None)).order_by(
-                        col(Filament.created_at).asc()
-                    )
+                    query.order_by(col(Filament.created_at).asc())
                 ).first()
                 if filament:
                     filament.series = series
                     session.add(filament)
                     session.flush()
         else:
+            query = base.where(col(Filament.series).is_(None))
+            if weight is not None:
+                query = query.where(Filament.spool_weight_g == weight)
             filament = session.exec(
-                base.where(col(Filament.series).is_(None)).order_by(
-                    col(Filament.created_at).asc()
-                )
+                query.order_by(col(Filament.created_at).asc())
             ).first()
     if filament:
         return filament
@@ -251,12 +257,11 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
         select(FilamentBarcode).where(FilamentBarcode.code == code)
     ).first()
     filament = session.get(Filament, mapping.filament_id) if mapping else None
+    catalog = lookup_barcode(code)
 
-    if not filament:
-        catalog = lookup_barcode(code)
-        if catalog:
-            candidate = _find_or_create_catalog_filament(session=session, data=catalog)
-            filament = _link_barcode(session=session, code=code, filament=candidate)
+    if not filament and catalog:
+        candidate = _find_or_create_catalog_filament(session=session, data=catalog)
+        filament = _link_barcode(session=session, code=code, filament=candidate)
 
     if not filament:
         return BarcodeScanResult(
@@ -281,6 +286,7 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
             session=session,
             filament=filament,
             code=code,
+            total_weight_g=catalog.get("spool_weight_g") if catalog else None,
             request_id=payload.request_id,
         )
     except IntegrityError:

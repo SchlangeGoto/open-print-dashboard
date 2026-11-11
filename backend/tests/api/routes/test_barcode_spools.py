@@ -1063,3 +1063,39 @@ def test_replay_with_a_cleared_barcode_is_rejected(
         },
     )
     assert r.status_code == 409
+
+
+def test_scan_prefers_a_series_match_over_the_stored_weight(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    # The AMS created this row without a box weight, so it picked the 1000 g
+    # default. Scanning the 750 g box must reuse the same product instead of
+    # splitting Support W into two filaments.
+    existing = Filament(
+        brand="Bambu Lab",
+        material="Support",
+        series="Support W",
+        color_name="Support W",
+        color_hex="#FFFFFF",
+        bambu_info_idx=None,
+        spool_weight_g=1000,
+    )
+    db.add(existing)
+    db.commit()
+    db.refresh(existing)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337030409", "create": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["spool"]["filament_id"] == str(existing.id)
+
+    db.expire_all()
+    support = db.exec(select(Filament).where(Filament.material == "Support")).all()
+    assert len(support) == 1
+    spool = db.exec(select(Spool).where(Spool.barcode == "6975337030409")).one()
+    assert spool.total_weight_g == 750

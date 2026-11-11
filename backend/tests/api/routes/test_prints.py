@@ -104,3 +104,42 @@ def test_prints_rejects_invalid_pagination(
             headers=superuser_token_headers,
         )
         assert r.status_code == 422, query
+
+
+def test_deleting_a_print_forgets_the_started_task(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.services.printer_service import printer_service
+
+    _clear_jobs(db)
+    job = PrintJob(
+        title="Delete hook",
+        status=4,
+        device_id="hook-serial",
+        bambu_task_id="hook-task",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    forgotten: list[str] = []
+
+    class FakeClient:
+        def forget_started_task(self, task_id: str) -> None:
+            forgotten.append(task_id)
+
+    monkeypatch.setattr(
+        printer_service,
+        "get_client",
+        lambda serial: FakeClient() if serial == "hook-serial" else None,
+    )
+
+    r = client.delete(
+        f"{settings.API_V1_STR}/prints/{job.id}",
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert forgotten == ["hook-task"]

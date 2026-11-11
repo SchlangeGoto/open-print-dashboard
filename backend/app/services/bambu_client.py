@@ -3,7 +3,8 @@ import logging
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from collections import OrderedDict
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -22,6 +23,10 @@ WATCHDOG_TIMER = 60
 # The account task list lags the printer briefly around a finish.
 TASK_LOOKUP_RETRIES = 3
 TASK_LOOKUP_DELAY = 1.0
+# A deferred finish is retried on the next reports/reconcile passes.
+MAX_FINISH_ATTEMPTS = 3
+RECONCILE_INTERVAL = 300
+DEDUCTION_RETRY_HOURS = 24
 
 
 def parse_task_datetime(value: Any) -> datetime | None:
@@ -60,6 +65,7 @@ class WatchdogThread(threading.Thread):
         self._watchdog_fired = False
         self._stop_event = threading.Event()
         self._last_received_data = time.time()
+        self._last_reconcile = 0.0
         self.daemon = True
 
     def stop(self) -> None:
@@ -86,6 +92,12 @@ class WatchdogThread(threading.Thread):
                 self._client._publish(START_PUSH)
             elif interval < WATCHDOG_TIMER:
                 self._watchdog_fired = False
+
+            if time.time() - self._last_reconcile >= RECONCILE_INTERVAL:
+                self._last_reconcile = time.time()
+                threading.Thread(
+                    target=self._client._reconcile_open_jobs, daemon=True
+                ).start()
 
         logger.debug("Watchdog thread exited")
 
@@ -180,6 +192,12 @@ class BambuClient:
         # A finish whose AMS mapping cannot be resolved yet is retried once
         # the first report has populated the tray tags.
         self._reconcile_on_ams = False
+        # Task ids observed via a start event. If the start row insert was
+        # lost, a later finish may recover it; a finish with no observation
+        # is an old print (or a user-deleted record) and must be ignored.
+        self._started_tasks: OrderedDict[str, float] = OrderedDict()
+        self._started_lock = threading.Lock()
+        self._reconcile_lock = threading.Lock()
 
         self.client: mqtt.Client | None = None
         self._mqtt_thread: MqttThread | None = None
@@ -468,40 +486,116 @@ class BambuClient:
         )
         t.start()
 
+    def _remember_started_task(self, task_id: str | None) -> None:
+        if not task_id:
+            return
+        key = str(task_id)
+        with self._started_lock:
+            self._started_tasks[key] = time.monotonic()
+            self._started_tasks.move_to_end(key)
+            while len(self._started_tasks) > 64:
+                self._started_tasks.popitem(last=False)
+
+    def _was_started(self, task_id: str | None) -> bool:
+        if not task_id:
+            return False
+        with self._started_lock:
+            return str(task_id) in self._started_tasks
+
+    def forget_started_task(self, task_id: str | None) -> None:
+        """Stop treating a task as a genuine print after the user deletes it."""
+        if not task_id:
+            return
+        with self._started_lock:
+            self._started_tasks.pop(str(task_id), None)
+
+    def _defer_finish(self, task_id: str | None, state: str | None) -> None:
+        """Persist a finish request that cannot be processed yet."""
+        if not task_id or not self.serial:
+            return
+        try:
+            with Session(engine) as session:
+                job = session.exec(
+                    select(PrintJob)
+                    .where(PrintJob.device_id == self.serial)
+                    .where(PrintJob.bambu_task_id == str(task_id))
+                ).first()
+                if not job or job.status != 4:
+                    return
+                now = datetime.now(UTC)
+                if job.finish_requested_at is None:
+                    job.finish_requested_at = now
+                job.finish_attempts = (job.finish_attempts or 0) + 1
+                if state:
+                    job.finish_state = state
+                if job.finish_attempts >= MAX_FINISH_ATTEMPTS:
+                    job.status = 2 if (job.finish_state or "FINISH") == "FINISH" else 3
+                    job.finished_at = job.finished_at or now
+                    logger.warning(
+                        "Giving up on task %s after %s finish attempts; "
+                        "closing as status %s without a deduction",
+                        task_id,
+                        job.finish_attempts,
+                        job.status,
+                    )
+                session.add(job)
+                session.commit()
+        except Exception as exc:
+            logger.error("Could not record the finish retry for %s: %s", task_id, exc)
+
     def _on_print_started(self, task_id: str | None = None) -> None:
+        self._remember_started_task(task_id)
         t = threading.Thread(
             target=self._save_print_job_init, args=(task_id,), daemon=True
         )
         t.start()
 
     def _reconcile_open_jobs(self) -> None:
-        """Close jobs whose finish event happened while we were offline."""
+        """Retry open jobs and finished jobs whose deduction was deferred."""
         if not self.serial:
             return
+        if not self._reconcile_lock.acquire(blocking=False):
+            return
         try:
+            cutoff = datetime.now(UTC) - timedelta(hours=DEDUCTION_RETRY_HOURS)
             with Session(engine) as session:
-                task_ids = session.exec(
+                open_ids = session.exec(
                     select(PrintJob.bambu_task_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.status == 4)
                     .where(col(PrintJob.bambu_task_id).is_not(None))
                 ).all()
-        except Exception as exc:
-            logger.error("Could not list open print jobs: %s", exc)
-            return
+                pending_ids = session.exec(
+                    select(PrintJob.bambu_task_id)
+                    .where(PrintJob.device_id == self.serial)
+                    .where(PrintJob.status != 4)
+                    .where(col(PrintJob.status).is_not(None))
+                    .where(col(PrintJob.filament_deducted_at).is_(None))
+                    .where(col(PrintJob.bambu_task_id).is_not(None))
+                    .where(col(PrintJob.finished_at).is_not(None))
+                    .where(col(PrintJob.finished_at) >= cutoff)
+                ).all()
 
-        for task_id in task_ids:
-            if task_id is None:
-                continue
-            try:
-                task = self._fetch_cloud_task(str(task_id))
-                if not task or task.get("status") == 4:
+            for task_id in dict.fromkeys([*open_ids, *pending_ids]):
+                if task_id is None:
                     continue
-                state = "FINISH" if task.get("status") == 2 else "FAILED"
-                self._save_print_job(str(task_id), state, task)
-            except Exception as exc:
-                # One unreadable task must not block the remaining jobs.
-                logger.error("Could not reconcile print task %s: %s", task_id, exc)
+                try:
+                    task = self._fetch_cloud_task(str(task_id))
+                    if not task or task.get("status") == 4:
+                        if task is None:
+                            # Record the failed pass so an unreachable task
+                            # cannot leave the job active forever.
+                            self._defer_finish(str(task_id), None)
+                        continue
+                    state = "FINISH" if task.get("status") == 2 else "FAILED"
+                    self._save_print_job(str(task_id), state, task)
+                except Exception as exc:
+                    # One unreadable task must not block the remaining jobs.
+                    logger.error("Could not reconcile print task %s: %s", task_id, exc)
+        except Exception as exc:
+            logger.error("Print job reconciliation failed: %s", exc)
+        finally:
+            self._reconcile_lock.release()
 
     def _active_spool(self, session: Session) -> Spool | None:
         """Return the spool loaded in this printer, not another printer.
@@ -637,15 +731,19 @@ class BambuClient:
                             filament.series = series
                             session.add(filament)
             else:
-                query = base.where(col(Filament.series).is_(None))
-                if weight is not None:
-                    query = query.order_by(
-                        (Filament.spool_weight_g == weight).desc(),
-                        col(Filament.created_at).asc(),
-                    )
-                else:
-                    query = query.order_by(col(Filament.created_at).asc())
-                filament = session.exec(query).first()
+                # A tray with no series cannot identify which product a
+                # legacy row belongs to in an ambiguous colour group.
+                known_series = catalog_series_for(brand, material, color)
+                if len(known_series) <= 1:
+                    query = base.where(col(Filament.series).is_(None))
+                    if weight is not None:
+                        query = query.order_by(
+                            (Filament.spool_weight_g == weight).desc(),
+                            col(Filament.created_at).asc(),
+                        )
+                    else:
+                        query = query.order_by(col(Filament.created_at).asc())
+                    filament = session.exec(query).first()
         if filament:
             return filament
 
@@ -719,9 +817,9 @@ class BambuClient:
                 best_delta = delta
         return best
 
-    def _sync_ams_trays(self, ams: dict, signature: str) -> None:
+    def _sync_ams_trays(self, ams: dict, signature: str) -> bool:
         if not self.serial:
-            return
+            return False
         with self._ams_lock:
             ok = self._sync_ams_trays_inner(ams)
         if ok:
@@ -734,6 +832,7 @@ class BambuClient:
             delay = min(300.0, 30.0 * (2 ** (self._ams_failures - 1)))
             self._ams_retry_after = time.time() + delay
             self._ams_signature = None
+        return ok
 
     def _sync_ams_trays_inner(self, ams: dict) -> bool:
         """Create and update spools from AMS trays reported by the printer."""
@@ -862,6 +961,11 @@ class BambuClient:
         """Fetch cloud data and save a PrintJob when a print starts."""
         try:
             task = self._fetch_cloud_task(task_id)
+            retries = 0
+            while not task and retries < TASK_LOOKUP_RETRIES:
+                time.sleep(TASK_LOOKUP_DELAY)
+                retries += 1
+                task = self._fetch_cloud_task(task_id)
             if not task:
                 logger.warning("No cloud task found on print start")
                 return
@@ -883,6 +987,7 @@ class BambuClient:
                 logger.info("Task %s reached printing on the last poll", task_id)
 
             cloud_task_id = str(task.get("id"))
+            self._remember_started_task(cloud_task_id)
             if task_id and cloud_task_id != task_id:
                 logger.warning(
                     "Cloud returned task %s instead of %s; skipping job",
@@ -946,12 +1051,12 @@ class BambuClient:
                 task = self._fetch_cloud_task(task_id)
             if not task:
                 # The task list lags the printer. Closing the row now would
-                # mark it finished with no weight, mapping or deduction, and
-                # reconcile only looks at status 4.
+                # mark it finished with no weight, mapping or deduction.
                 logger.warning(
                     "No cloud task for %s yet; leaving the job open for a retry",
                     task_id,
                 )
+                self._defer_finish(task_id, observed_state)
                 return
 
             mapping = task.get("amsDetailMapping") or []
@@ -964,6 +1069,11 @@ class BambuClient:
                     "Task %s has an AMS mapping but no AMS state yet; "
                     "finish deferred until the first report",
                     task_id,
+                )
+                resolved_id = task.get("id")
+                self._defer_finish(
+                    str(resolved_id) if resolved_id is not None else task_id,
+                    observed_state,
                 )
                 return
 
@@ -989,6 +1099,7 @@ class BambuClient:
                         "Cloud task %s disappeared while waiting; leaving the job open",
                         task_id,
                     )
+                    self._defer_finish(task_id, observed_state)
                     return
 
             if task.get("status") == 4:
@@ -1029,15 +1140,38 @@ class BambuClient:
                 ).first()
 
                 if not job:
-                    # Only the start handler creates a row. A bare
-                    # None -> FINISH after a restart (or after the user
-                    # deleted the print) must not create a phantom,
-                    # fully-deducted job.
-                    logger.warning(
-                        "No open print job for task %s; finish ignored",
+                    if not self._was_started(cloud_task_id):
+                        # A bare None -> FINISH after a restart (or after the
+                        # user deleted the print) must not create a phantom,
+                        # fully-deducted job.
+                        logger.warning(
+                            "No open print job for task %s; finish ignored",
+                            cloud_task_id,
+                        )
+                        return
+                    # The start was observed but its row insert was lost.
+                    # Recover the row and deduct normally.
+                    logger.info(
+                        "Recovering the missing start row for task %s",
                         cloud_task_id,
                     )
-                    return
+                    session.execute(
+                        pg_insert(PrintJob)
+                        .values(
+                            id=uuid.uuid4(),
+                            title=task.get("title") or "Unknown",
+                            bambu_task_id=cloud_task_id,
+                            device_id=self.serial or "",
+                        )
+                        .on_conflict_do_nothing(
+                            index_elements=["device_id", "bambu_task_id"]
+                        )
+                    )
+                    job = session.exec(
+                        select(PrintJob)
+                        .where(PrintJob.device_id == self.serial)
+                        .where(PrintJob.bambu_task_id == cloud_task_id)
+                    ).one()
 
                 job.title = task.get("title") or job.title or "Unknown"
                 if task.get("cover") is not None:
@@ -1057,6 +1191,9 @@ class BambuClient:
                 mapping = task.get("amsDetailMapping")
                 if mapping:
                     job.ams_detail_mapping = json.dumps(mapping)
+                job.finish_requested_at = None
+                job.finish_attempts = 0
+                job.finish_state = None
 
                 # Keep the spool and filament written at start; AMS slots
                 # already charged their own spools. Only fill blanks.
@@ -1091,10 +1228,22 @@ class BambuClient:
                 job.device_id = self.serial
                 session.add(job)
 
-                if timed_out:
+                can_deduct = not timed_out
+                if can_deduct and mapping:
+                    ams = self._current_status.get("ams")
+                    if not ams or not self._sync_ams_trays(
+                        ams, self._ams_signature_for(ams)
+                    ):
+                        can_deduct = False
+                        logger.warning(
+                            "AMS sync did not complete for task %s; leaving "
+                            "the deduction for a retry",
+                            cloud_task_id,
+                        )
+
+                if not can_deduct:
                     logger.warning(
-                        "Left the filament deduction for task %s unclaimed "
-                        "because the cloud task was still printing",
+                        "Left the filament deduction for task %s unclaimed",
                         cloud_task_id,
                     )
                 elif self._claim_filament_deduction(session, job.id):

@@ -11,6 +11,7 @@ from app.models import (
     PrintJobPublic,
     PrintJobsPublic,
 )
+from app.services.printer_service import printer_service
 
 router = APIRouter(
     prefix="/prints",
@@ -76,6 +77,12 @@ def delete_print(print_id: uuid.UUID, session: SessionDep) -> Any:
     job = session.get(PrintJob, print_id)
     if not job:
         raise HTTPException(status_code=404, detail="Print job not found")
+    if job.device_id and job.bambu_task_id:
+        client = printer_service.get_client(job.device_id)
+        if client is not None:
+            # Do not recreate a deleted record when the printer repeats its
+            # finish report.
+            client.forget_started_task(job.bambu_task_id)
     session.delete(job)
     session.commit()
     return Message(message="Print job deleted")

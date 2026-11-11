@@ -31,30 +31,49 @@ router = APIRouter(
 def read_filaments(session: SessionDep) -> Any:
     """Retrieve all filaments, including remaining stock and average price."""
     filaments = session.exec(select(Filament)).all()
+
+    remaining_rows = session.exec(
+        select(Spool.filament_id, func.sum(Spool.remaining_g))
+        .where(col(Spool.remaining_unknown).is_(False))
+        .group_by(col(Spool.filament_id))
+    ).all()
+    remaining = {filament_id: total or 0.0 for filament_id, total in remaining_rows}
+
+    # One window query keeps the five most recent prices per filament instead
+    # of issuing two queries for every row.
+    ranked_prices = (
+        select(
+            Spool.filament_id,
+            Spool.price_per_kg,
+            func.row_number()
+            .over(
+                partition_by=col(Spool.filament_id),
+                order_by=col(Spool.created_at).desc(),
+            )
+            .label("rn"),
+        )
+        .where(col(Spool.price_per_kg).is_not(None))
+        .subquery()
+    )
+    price_rows = session.exec(
+        select(ranked_prices.c.filament_id, ranked_prices.c.price_per_kg).where(
+            ranked_prices.c.rn <= 5
+        )
+    ).all()
+    prices_by_filament: dict[uuid.UUID, list[float]] = {}
+    for filament_id, price in price_rows:
+        if price is not None:
+            prices_by_filament.setdefault(filament_id, []).append(price)
+
     data: list[FilamentPublicWithStats] = []
     for filament in filaments:
-        total_remaining = (
-            session.exec(
-                select(func.sum(Spool.remaining_g))
-                .where(Spool.filament_id == filament.id)
-                .where(col(Spool.remaining_unknown).is_(False))
-            ).first()
-            or 0.0
-        )
-        recent_prices = session.exec(
-            select(Spool.price_per_kg)
-            .where(Spool.filament_id == filament.id)
-            .where(col(Spool.price_per_kg).is_not(None))
-            .order_by(col(Spool.created_at).desc())
-            .limit(5)
-        ).all()
-        prices = [price for price in recent_prices if price is not None]
+        prices = prices_by_filament.get(filament.id, [])
         avg_price = sum(prices) / len(prices) if prices else None
         data.append(
             FilamentPublicWithStats.model_validate(
                 filament,
                 update={
-                    "total_remaining_g": total_remaining,
+                    "total_remaining_g": remaining.get(filament.id, 0.0),
                     "avg_price_per_kg": round(avg_price, 2) if avg_price else None,
                 },
             )
@@ -71,6 +90,8 @@ def read_filament_stats(filament_id: uuid.UUID, session: SessionDep) -> Any:
 
 @router.get("/{filament_id}/spools", response_model=SpoolsPublic)
 def read_filament_spools(filament_id: uuid.UUID, session: SessionDep) -> Any:
+    if not session.get(Filament, filament_id):
+        raise HTTPException(status_code=404, detail="Filament not found")
     spools = session.exec(select(Spool).where(Spool.filament_id == filament_id)).all()
     return SpoolsPublic(
         data=[SpoolPublic.model_validate(s) for s in spools], count=len(spools)

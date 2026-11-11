@@ -393,3 +393,12 @@ re-opened.
 | Image variants and source references come from the shared manifest | `a493d34` | Human #20 |
 | Unmapped finishes charge the start spool; delayed deduction window extended to 7 days | `c60dd94` | Human #20 |
 | Mobile hero omits its source when the image is not in the manifest | `1bc0138` | Human #20 |
+| Partial AMS mappings retried; atomic finish weights; task-aware finish; stale liveness; AMS series filter | `a4fc6d1` | Human #20 |
+| Null-safe filament/printer updates, spool conflict 409s, activation unload, MQTT connect cancellation | `a4fc6d1` | Human #20 |
+| Per-filament usage for multi-colour jobs; atomic setting upsert | `8baedb6` | Human #20 |
+| Cloud task paths named by serial; bounded limit; redirected covers refused; UTC barcode downgrade | `0aa7c12`, `400bf86`, `15025b6` | Human #20 |
+| Demo stock filter, setup spinner/retry, touch actions, request guards, modal snapshots | `d68c9a9` | Human #20 |
+| Site returns 404 for unknown URLs | `bebeadd` | Human #20 |
+| Site/demo CI images, public compose validation/ports, Android main guard | `275de42` | Human #20 |
+| AA accent foregrounds; mobile loading-button label | `fd5944b`, `4d5da8a` | Human #20 |
+| Env example/site copy; dead site start script removed | `c0e31df`, `333d0f6` | Human #20 |

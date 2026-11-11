@@ -2890,6 +2890,124 @@ def test_unmapped_finish_charges_the_start_spool(db: Session, monkeypatch) -> No
     assert db.get(Spool, current_spool.id).remaining_g == 1000  # type: ignore[union-attr]
 
 
+def test_persisted_unmapped_deduction_writes_filament_usage(db: Session) -> None:
+    from app import crud
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Pending fallback",
+        color_hex="#040506",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+    job = PrintJob(
+        title="Pending fallback",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-pending",
+        spool_id=spool.id,
+        filament_id=filament.id,
+        weight=100,
+        estimated_cost=2.5,
+        finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._deduct_persisted_job(
+        "task-pending",
+        {"id": "task-pending", "status": 4, "weight": 100, "amsDetailMapping": []},
+    )
+
+    db.expire_all()
+    assert db.get(Spool, spool.id).remaining_g == 900  # type: ignore[union-attr]
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is not None
+    stats = crud.get_filament_stats(session=db, filament_id=filament.id)
+    assert stats.print_count == 1
+    assert stats.total_used_g == 100
+    assert stats.total_cost == 2.5
+
+
+def test_persist_filament_usage_upserts_the_same_filament(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Usage upsert",
+        color_hex="#030405",
+    )
+    other = Filament(
+        brand="Test",
+        material="PETG",
+        color_name="Usage replace",
+        color_hex="#020304",
+    )
+    db.add(filament)
+    db.add(other)
+    db.commit()
+    db.refresh(filament)
+    db.refresh(other)
+    job = PrintJob(
+        title="Usage upsert",
+        device_id=printer.serial,
+        bambu_task_id="task-upsert",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    client._persist_filament_usage(
+        db, job, {str(filament.id): {"weight": 10, "cost": 1.0}}
+    )
+    db.commit()
+    # A second finish/reconcile pass must update the row, not violate the
+    # unique constraint.
+    client._persist_filament_usage(
+        db, job, {str(filament.id): {"weight": 20, "cost": 2.0}}
+    )
+    db.commit()
+    rows = db.exec(
+        select(PrintJobFilamentUsage).where(
+            PrintJobFilamentUsage.print_job_id == job.id
+        )
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].weight_g == 20
+    assert rows[0].cost == 2.0
+
+    # Changing the attributed filament replaces the stale row.
+    client._persist_filament_usage(db, job, {str(other.id): {"weight": 5, "cost": 0.5}})
+    db.commit()
+    db.expire_all()
+    rows = db.exec(
+        select(PrintJobFilamentUsage).where(
+            PrintJobFilamentUsage.print_job_id == job.id
+        )
+    ).all()
+    assert [row.filament_id for row in rows] == [other.id]
+
+
 def test_partial_mapping_is_retried_instead_of_claimed(
     db: Session, monkeypatch
 ) -> None:

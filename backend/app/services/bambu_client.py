@@ -808,6 +808,15 @@ class BambuClient:
                     return
                 if self._claim_filament_deduction(session, job.id):
                     self._subtract_spool_weight(session, spool, weight)
+                    filament_id = spool.filament_id or job.filament_id
+                    if filament_id is not None:
+                        self._persist_fallback_usage(
+                            session,
+                            job,
+                            filament_id,
+                            weight,
+                            job.estimated_cost,
+                        )
                     session.commit()
                     logger.info("Deducted the persisted payload for task %s", task_id)
         except Exception as exc:
@@ -1361,26 +1370,78 @@ class BambuClient:
         job: PrintJob,
         usage: dict[str, dict[str, float | None]],
     ) -> None:
-        if not usage:
-            return
-        session.execute(
-            delete(PrintJobFilamentUsage).where(
-                PrintJobFilamentUsage.print_job_id == job.id
-            )
-        )
+        rows: dict[uuid.UUID, tuple[float, float | None]] = {}
         for raw_id, item in usage.items():
             try:
                 filament_id = uuid.UUID(raw_id)
             except (TypeError, ValueError):
                 continue
-            session.add(
-                PrintJobFilamentUsage(
-                    print_job_id=job.id,
-                    filament_id=filament_id,
-                    weight_g=float(item.get("weight") or 0),
-                    cost=item.get("cost"),
-                )
+            rows[filament_id] = (
+                float(item.get("weight") or 0),
+                item.get("cost"),
             )
+        if not rows:
+            return
+        # Upsert instead of delete-then-insert: a finish and a reconcile can
+        # persist the same job concurrently, and the unique constraint would
+        # abort the loser's status update.
+        stmt = pg_insert(PrintJobFilamentUsage).values(
+            [
+                {
+                    "id": uuid.uuid4(),
+                    "print_job_id": job.id,
+                    "filament_id": filament_id,
+                    "weight_g": weight,
+                    "cost": cost,
+                }
+                for filament_id, (weight, cost) in rows.items()
+            ]
+        )
+        session.execute(
+            stmt.on_conflict_do_update(
+                constraint="uq_printjob_filament_usage",
+                set_={
+                    "weight_g": stmt.excluded.weight_g,
+                    "cost": stmt.excluded.cost,
+                },
+            )
+        )
+        session.execute(
+            delete(PrintJobFilamentUsage).where(
+                PrintJobFilamentUsage.print_job_id == job.id,
+                or_(
+                    col(PrintJobFilamentUsage.filament_id).is_(None),
+                    col(PrintJobFilamentUsage.filament_id).notin_(list(rows)),
+                ),
+            )
+        )
+
+    def _persist_fallback_usage(
+        self,
+        session: Session,
+        job: PrintJob,
+        filament_id: uuid.UUID,
+        weight: float,
+        cost: float | None,
+    ) -> None:
+        """Attribute an unmapped deduction when no usage row exists.
+
+        Jobs closed from the persisted payload have no AMS mapping, so the
+        normal usage builder never runs; without this row the grams leave the
+        spool but never appear in filament statistics.
+        """
+        existing = session.exec(
+            select(PrintJobFilamentUsage.id)
+            .where(PrintJobFilamentUsage.print_job_id == job.id)
+            .limit(1)
+        ).first()
+        if existing is not None:
+            return
+        usage = {str(filament_id): {"weight": weight, "cost": cost}}
+        job.filament_usage = json.dumps(usage)
+        if job.filament_id is None:
+            job.filament_id = filament_id
+        self._persist_filament_usage(session, job, usage)
 
     def _build_filament_usage(
         self,

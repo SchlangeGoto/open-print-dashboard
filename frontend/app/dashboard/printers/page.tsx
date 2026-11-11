@@ -197,6 +197,10 @@ export default function PrintersPage() {
     );
   }
 
+  const currentSettingsPrinter = settingsPrinter
+    ? (printers.find((p) => p.serial === settingsPrinter.serial) ?? null)
+    : null;
+
   return (
     <div className="space-y-6 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -504,9 +508,9 @@ export default function PrintersPage() {
         />
       ) : null}
 
-      {settingsOpen ? (
+      {settingsOpen && currentSettingsPrinter ? (
         <PrinterSettingsModal
-          printer={settingsPrinter}
+          printer={currentSettingsPrinter}
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void load(true)}
         />

@@ -177,6 +177,10 @@ export default function DashboardPage() {
     );
   }
 
+  const currentSettingsPrinter = settingsPrinter
+    ? (printers.find((p) => p.serial === settingsPrinter.serial) ?? null)
+    : null;
+
   return (
     <div className="space-y-8 pb-8">
       <div>
@@ -623,9 +627,9 @@ export default function DashboardPage() {
         />
       ) : null}
 
-      {settingsOpen ? (
+      {settingsOpen && currentSettingsPrinter ? (
         <PrinterSettingsModal
-          printer={settingsPrinter}
+          printer={currentSettingsPrinter}
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void load(true)}
         />

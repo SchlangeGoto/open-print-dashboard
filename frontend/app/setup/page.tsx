@@ -111,6 +111,7 @@ export default function SetupPage() {
           );
           setStatusReady(true);
         } catch {
+          if (seq !== statusSeq.current) return;
           // The account exists but this browser has no session. Signing in
           // is the only way forward; creating the account would fail.
           router.replace("/");

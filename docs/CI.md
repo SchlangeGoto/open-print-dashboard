@@ -27,7 +27,7 @@ This repository uses GitHub Actions for three kinds of work:
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
 | Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
 | Release Android | `.github/workflows/release-android.yml` | Tags `v*`, manual | Requires the tag on `main`, builds an EAS signed APK and attaches it to the GitHub Release |
-| Dependabot | `.github/dependabot.yml` | Weekly | Grouped npm, uv, GitHub Actions, and Docker updates |
+| Dependabot | `.github/dependabot.yml` | Weekly | npm, uv, GitHub Actions and Docker updates; npm updates are grouped |
 
 The test and build workflows cancel superseded runs on the same ref, have a
 timeout, and use least-privilege `permissions`. All actions are pinned to commit

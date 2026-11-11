@@ -55,6 +55,18 @@ jobs:
           POSTGRES_PASSWORD: ci-password
         run: docker compose -f compose.ghcr.yml config > /dev/null
 
+      - name: Check pinned image tags
+        run: |
+          for image in postgres caddy; do
+            tags=$(grep -h "image: ${image}:" compose*.yml | sed 's/.*image: //' | sort -u || true)
+            test -n "$tags"
+            if [ "$(printf '%s\n' "$tags" | wc -l)" -ne 1 ]; then
+              echo "Inconsistent ${image} tags across compose files:" >&2
+              printf '%s\n' "$tags" >&2
+              exit 1
+            fi
+          done
+
       - name: Validate public Caddyfile
         env:
           SITE_DOMAIN: openprintdash.app

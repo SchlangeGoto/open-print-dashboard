@@ -140,9 +140,7 @@ export default function DashboardPage() {
       current ? filaments.find((f) => f.id === current.id) ?? null : null,
     );
     setSelectedPrinter((current: Printer | null) =>
-      current
-        ? printers.find((p) => p.serial === current.serial) ?? current
-        : null,
+      current ? printers.find((p) => p.serial === current.serial) ?? null : null,
     );
   }, [prints, spools, filaments, printers]);
 

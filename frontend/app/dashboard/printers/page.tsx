@@ -161,8 +161,7 @@ export default function PrintersPage() {
   }
 
   const currentSelectedPrinter = selectedPrinter
-    ? (printers.find((item) => item.serial === selectedPrinter.serial) ??
-      selectedPrinter)
+    ? (printers.find((item) => item.serial === selectedPrinter.serial) ?? null)
     : null;
   const selectedLoadedSpool = currentSelectedPrinter?.id
     ? spools.find((spool) => spool.printer_id === currentSelectedPrinter.id)

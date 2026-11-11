@@ -37,6 +37,10 @@ def test_barcode_lookup_and_duplicate_creation(
     # Start clean even if a previous run left this barcode behind.
     for existing in db.exec(select(Spool).where(Spool.barcode == code)).all():
         db.delete(existing)
+    for mapping in db.exec(
+        select(FilamentBarcode).where(FilamentBarcode.code == code)
+    ).all():
+        db.delete(mapping)
     db.commit()
 
     r = client.post(
@@ -46,10 +50,12 @@ def test_barcode_lookup_and_duplicate_creation(
     )
     assert r.status_code == 200
     lookup = r.json()
-    assert lookup["found"] is True
+    # A lookup must not create a product or a permanent mapping.
+    assert lookup["found"] is False
     assert lookup["created"] is False
     assert lookup["spool"] is None
     assert lookup["existing_spools"] == []
+    assert lookup["suggested_filament"]["series"] == "PLA Matte"
 
     r = client.post(
         f"{settings.API_V1_STR}/spools/scan/barcode",
@@ -471,11 +477,11 @@ def test_scan_normalizes_a_gtin14(
     r = client.post(
         f"{settings.API_V1_STR}/spools/scan/barcode",
         headers=superuser_token_headers,
-        json={"code": "06975337032380", "create": False},
+        json={"code": "06975337032380", "create": True},
     )
 
     assert r.status_code == 200, r.text
-    assert r.json()["found"] is True
+    assert r.json()["spool"]["barcode"] == "6975337032380"
 
 
 def test_unknown_barcode_uses_the_optional_sku(

@@ -51,6 +51,19 @@ def _unload_other_spools(
     session.flush()
 
 
+def _reconcile_filament_weight(filament: Filament, data: dict[str, Any]) -> bool:
+    """Adopt the scanned package weight without rewriting another product."""
+    weight = data.get("spool_weight_g")
+    series = (data.get("series") or "").strip()
+    same_series = not filament.series or (
+        bool(series) and filament.series.lower() == series.lower()
+    )
+    if weight is None or filament.spool_weight_g == weight or not same_series:
+        return False
+    filament.spool_weight_g = weight
+    return True
+
+
 def _find_or_create_catalog_filament(
     *, session: SessionDep, data: dict[str, Any]
 ) -> Filament:
@@ -66,6 +79,10 @@ def _find_or_create_catalog_filament(
             Filament.bambu_info_idx == info_idx,
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
         )
+        if series:
+            # A preset id and colour can be shared by two series (ABS and
+            # ABS-GF on some AMS rows); never hand back the other product.
+            query = query.where(func.lower(Filament.series) == series.lower())
         if weight is not None:
             query = query.order_by(
                 (Filament.spool_weight_g == weight).desc(),
@@ -130,15 +147,10 @@ def _find_or_create_catalog_filament(
                 query = query.order_by(col(Filament.created_at).asc())
             filament = session.exec(query).first()
     if filament:
-        same_series = not filament.series or (
-            bool(series) and filament.series.lower() == series.lower()
-        )
-        if weight is not None and filament.spool_weight_g != weight and same_series:
+        if _reconcile_filament_weight(filament, data):
             # The scanned box is authoritative for the package weight; keep
             # a later confirm without an explicit weight from falling back to
-            # an old default. Never rewrite a different product that happens
-            # to share the preset id and colour.
-            filament.spool_weight_g = weight
+            # an old default.
             session.add(filament)
             session.flush()
         return filament
@@ -292,22 +304,32 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     filament = session.get(Filament, mapping.filament_id) if mapping else None
     catalog = lookup_barcode(code)
 
-    if not filament and catalog:
+    if not filament and catalog and payload.create:
         candidate = _find_or_create_catalog_filament(session=session, data=catalog)
         filament = _link_barcode(session=session, code=code, filament=candidate)
 
     if not filament:
+        if catalog and not payload.create:
+            # A lookup must not create a zero-spool product or a permanent
+            # barcode mapping; hand the catalog data to the confirm form.
+            return BarcodeScanResult(
+                found=False,
+                code=code,
+                suggested_filament=catalog,
+            )
         return BarcodeScanResult(
             found=False,
             code=code,
             suggested_filament=parse_bambu_sku(payload.sku),
         )
 
+    if catalog and _reconcile_filament_weight(filament, catalog):
+        session.add(filament)
+        session.flush()
+
     existing = _existing_barcode_spools(session=session, code=code)
     if not payload.create:
-        # The lookup may have reconciled the catalog weight (and, for a new
-        # barcode, linked the catalog filament). Persist it so the following
-        # confirm does not fall back to the old default.
+        # Persist the weight reconciled for an already mapped product.
         session.commit()
         return BarcodeScanResult(
             found=True,

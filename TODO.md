@@ -211,17 +211,21 @@ These open issues should be solved as part of the epic, not separately:
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 30-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
+| S-07 | `frontend/lib/api.ts` | A transient 5xx/429 during the rotated-token retry clears both tabs. | Deferred to the auth overhaul. | Human #20 |
+| S-08 | `backend/app/api/routes/bambu.py`, `backend/app/services/printer_service.py` | Sign-out can be undone by a concurrent re-login. | Deferred to the auth overhaul. | Human #20 |
 
 ### 2.2 Printer and cloud backend
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
+| P-06 | `backend/app/services/bambu_client.py` | A slot that stays unresolved after `DEDUCTION_RETRY_HOURS` drops out of the retry query with no terminal log or marker. | Log the abandonment once per task (or add a terminal marker) in a follow-up. | Human #20 |
 
 ### 2.3 Spools, barcodes and filaments
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
+| U-01 | `backend/app/models.py` (`PrintJob.filament_usage`) | Kept as a debug mirror for one release; `printjob_filament_usage` is authoritative and nothing reads the JSON. | Drop the column and its writes in the next release. | Human #20 |
 
 ### 2.4 Frontend
 

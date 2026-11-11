@@ -585,7 +585,13 @@ class BambuClient:
                         if task is None:
                             # Record the failed pass so an unreachable task
                             # cannot leave the job active forever.
-                            self._defer_finish(str(task_id), None)
+                            last_state = self._current_status.get("gcode_state")
+                            self._defer_finish(
+                                str(task_id),
+                                last_state
+                                if last_state in ("FINISH", "FAILED")
+                                else None,
+                            )
                         continue
                     state = "FINISH" if task.get("status") == 2 else "FAILED"
                     self._save_print_job(str(task_id), state, task)

@@ -140,6 +140,19 @@ class FilamentUpdate(SQLModel):
     spool_weight_g: float | None = Field(default=None, gt=0)
     notes: str | None = Field(default=None, max_length=1000)
 
+    @model_validator(mode="after")
+    def _reject_null_non_nullable_fields(self) -> "FilamentUpdate":
+        for field in (
+            "brand",
+            "material",
+            "color_name",
+            "color_hex",
+            "spool_weight_g",
+        ):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
+
 
 class Filament(FilamentBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -436,6 +449,12 @@ class PrinterCreate(PrinterBase):
 
 class PrinterUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def _reject_null_name(self) -> "PrinterUpdate":
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("name cannot be null")
+        return self
 
 
 class Printer(PrinterBase, table=True):

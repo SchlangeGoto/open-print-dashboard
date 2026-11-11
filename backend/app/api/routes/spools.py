@@ -435,7 +435,14 @@ def create_spool(*, session: SessionDep, spool_in: SpoolCreate) -> Any:
     # through /spools/{id}/activate.
     spool.active = False
     session.add(spool)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Spool tag or barcode is already in use",
+        )
     session.refresh(spool)
     return spool
 
@@ -459,6 +466,14 @@ def update_spool(
             status_code=422,
             detail="Load the spool into a printer before activating it",
         )
+    # Unload the previous active spool before applying active=True so the
+    # partial unique index never sees two active rows in one flush.
+    target_printer = update_dict.get("printer_id", spool.printer_id)
+    will_be_active = update_dict.get("active", spool.active)
+    if will_be_active and target_printer is not None:
+        _unload_other_spools(
+            session=session, printer_id=target_printer, keep_id=spool.id
+        )
     spool.sqlmodel_update(update_dict)
     if "remaining_g" in update_dict:
         # A human-entered weight is real again.
@@ -480,7 +495,14 @@ def update_spool(
             detail="remaining_g cannot exceed total_weight_g",
         )
     session.add(spool)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Spool tag is already in use or another spool is active",
+        )
     session.refresh(spool)
     return spool
 

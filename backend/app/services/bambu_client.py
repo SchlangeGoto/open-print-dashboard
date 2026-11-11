@@ -610,6 +610,13 @@ class BambuClient:
         )
         t.start()
 
+    def _printer_is_live(self) -> bool:
+        return (
+            self._connected
+            and self._last_seen is not None
+            and time.monotonic() - self._last_seen < WATCHDOG_TIMER * 2
+        )
+
     def _close_stale_job(self, task_id: str) -> None:
         """Close a status-4 job whose cloud task has been missing for too long."""
         if not self.serial:
@@ -625,7 +632,14 @@ class BambuClient:
                     return
                 now = datetime.now(UTC)
                 state = self._current_status.get("gcode_state")
-                if state not in ("IDLE", "FINISH", "FAILED"):
+                live = self._printer_is_live()
+                if state == "RUNNING" and live:
+                    logger.info(
+                        "Not closing task %s while the printer is live and running",
+                        task_id,
+                    )
+                    return
+                if state not in ("IDLE", "FINISH", "FAILED") and live:
                     logger.info(
                         "Not closing task %s while the printer reports %s",
                         task_id,
@@ -687,15 +701,42 @@ class BambuClient:
 
                 resolved = self._load_deduction_spools(session, job)
                 if mapping:
+                    weighted = self._weighted_slot_keys(mapping)
                     if not resolved and len(mapping) == 1 and job.spool_id:
                         key = self._mapping_slot_key(mapping[0]) or (-1, 0)
                         spool = session.get(Spool, job.spool_id)
                         if key and spool:
                             resolved[key] = spool
-                    if not resolved:
+                    missing = weighted - set(resolved)
+                    if missing:
+                        # Retry only the unresolved slots. The known slots
+                        # stay pinned to the spools recorded earlier.
+                        ams = self._current_status.get("ams")
+                        if ams and self._sync_ams_trays(
+                            ams, self._ams_signature_for(ams)
+                        ):
+                            session.flush()
+                            session.expire_all()
+                            live = self._resolve_mapping_spools(
+                                session,
+                                task or {"amsDetailMapping": mapping},
+                            )
+                            for key in missing:
+                                if key in live:
+                                    resolved[key] = live[key]
+                            if resolved:
+                                job.deduction_spools = json.dumps(
+                                    {
+                                        f"{ams_id}:{slot_id}": str(spool.id)
+                                        for (ams_id, slot_id), spool in (
+                                            resolved.items()
+                                        )
+                                    }
+                                )
+                    if not weighted <= set(resolved):
                         logger.warning(
-                            "No recorded spool map for task %s; skipping "
-                            "the delayed deduction",
+                            "Unresolved AMS slot(s) for task %s; leaving "
+                            "the delayed deduction unclaimed",
                             task_id,
                         )
                         return
@@ -719,8 +760,7 @@ class BambuClient:
                 if not spool or spool.remaining_unknown:
                     return
                 if self._claim_filament_deduction(session, job.id):
-                    spool.remaining_g = max(0, spool.remaining_g - weight)
-                    spool.last_used_at = datetime.now(UTC)
+                    self._subtract_spool_weight(session, spool, weight)
                     session.commit()
                     logger.info("Deducted the persisted payload for task %s", task_id)
         except Exception as exc:
@@ -773,6 +813,12 @@ class BambuClient:
                             # The job is already closed locally. Deduct from
                             # the stored mapping even if the cloud stays at 4.
                             self._deduct_persisted_job(str(task_id), task)
+                        elif task is not None and task.get("status") == 4:
+                            started = open_started.get(task_id)
+                            if started and started < datetime.now(UTC) - timedelta(
+                                hours=STALE_OPEN_JOB_HOURS
+                            ):
+                                self._close_stale_job(str(task_id))
                         elif task is None and task_id in requested_ids:
                             # Only a finish that was already observed may
                             # start the bounded close countdown; a running
@@ -882,22 +928,30 @@ class BambuClient:
             else "Unknown"
         )
 
+        weight = self._reported_tray_weight(tray)
         filament = None
         if info_idx:
-            filament = session.exec(
-                select(Filament)
-                .where(
-                    Filament.bambu_info_idx == info_idx,
-                    func.lower(Filament.color_hex) == (color or "").lower(),
+            query = select(Filament).where(
+                Filament.bambu_info_idx == info_idx,
+                func.lower(Filament.color_hex) == (color or "").lower(),
+            )
+            if series:
+                # ABS and ABS-GF can share a preset id and colour; the
+                # reported series is what tells them apart.
+                query = query.where(func.lower(Filament.series) == series.lower())
+            if weight is not None:
+                query = query.order_by(
+                    (Filament.spool_weight_g == weight).desc(),
+                    col(Filament.created_at).asc(),
                 )
-                .order_by(col(Filament.created_at).asc())
-            ).first()
+            else:
+                query = query.order_by(col(Filament.created_at).asc())
+            filament = session.exec(query).first()
         if not filament and color:
             # The AMS sometimes reports a different preset id than the box
             # catalog. Fall back to brand + material + colour (+ series when
             # the tray names one) so a tray does not attach to another brand's
             # filament or collapse the white Support SKUs.
-            weight = self._reported_tray_weight(tray)
             base = select(Filament).where(
                 func.lower(Filament.color_hex) == color.lower(),
                 func.lower(Filament.material) == material.lower(),
@@ -1262,9 +1316,12 @@ class BambuClient:
     ) -> None:
         """Update an existing PrintJob and deduct filament once."""
         try:
-            if self._current_status.get("gcode_state") == "RUNNING":
+            current_task = self._current_task_id()
+            if self._current_status.get("gcode_state") == "RUNNING" and (
+                task_id is None or current_task is None or str(task_id) == current_task
+            ):
                 logger.info(
-                    "Ignoring finish for task %s while the printer is running",
+                    "Ignoring finish for task %s while that task is still running",
                     task_id,
                 )
                 return
@@ -1475,6 +1532,11 @@ class BambuClient:
                                 cloud_task_id,
                             )
                         else:
+                            # _sync_ams_trays committed a fresh remaining
+                            # weight in another session; keep our job writes,
+                            # then reload the spools before deducting.
+                            session.flush()
+                            session.expire_all()
                             resolved_spools = self._resolve_mapping_spools(
                                 session, task
                             )
@@ -1495,11 +1557,12 @@ class BambuClient:
                                         )
                                     }
                                 )
-                            else:
+                            weighted = self._weighted_slot_keys(mapping or [])
+                            if not weighted <= set(resolved_spools):
                                 can_deduct = False
                                 logger.warning(
-                                    "No spool resolved for task %s; leaving "
-                                    "the deduction for a retry",
+                                    "Unresolved AMS slot(s) for task %s; "
+                                    "leaving the deduction for a retry",
                                     cloud_task_id,
                                 )
                     elif has_persisted and not resolved_spools:
@@ -1671,6 +1734,16 @@ class BambuClient:
         except (TypeError, ValueError):
             return None
 
+    @classmethod
+    def _weighted_slot_keys(cls, mapping: list[dict]) -> set[tuple[int, int]]:
+        keys: set[tuple[int, int]] = set()
+        for index, slot in enumerate(mapping):
+            if not slot.get("weight"):
+                continue
+            key = cls._mapping_slot_key(slot)
+            keys.add(key if key is not None else (-1 - index, 0))
+        return keys
+
     def _resolve_mapping_spools(
         self, session: Session, task: dict
     ) -> dict[tuple[int, int], Spool]:
@@ -1733,6 +1806,20 @@ class BambuClient:
                 resolved[(ams_id, slot_id)] = spool
         return resolved
 
+    def _subtract_spool_weight(
+        self, session: Session, spool: Spool, grams: float
+    ) -> None:
+        """Atomically subtract grams so a concurrent AMS sync is not lost."""
+        session.execute(
+            update(Spool)
+            .where(Spool.id == spool.id)
+            .values(
+                remaining_g=func.greatest(0, Spool.remaining_g - grams),
+                last_used_at=datetime.now(UTC),
+            )
+        )
+        session.expire(spool)
+
     def _deduct_filament_from_spools(
         self,
         session: Session,
@@ -1784,8 +1871,7 @@ class BambuClient:
                     spool.id,
                 )
                 continue
-            spool.remaining_g = max(0, spool.remaining_g - used_g)
-            spool.last_used_at = datetime.now(UTC)
+            self._subtract_spool_weight(session, spool, used_g)
             logger.info(
                 "Deducted %sg (%s) from spool %s",
                 used_g,

@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -2548,6 +2549,8 @@ def test_reconcile_does_not_close_a_running_job_as_stale(
 
     client = BambuClient()
     client.serial = printer.serial
+    client._connected = True
+    client._last_seen = time.monotonic()
     client._current_status = {"gcode_state": "RUNNING"}
     client._reconcile_open_jobs()
 
@@ -2867,3 +2870,460 @@ def test_unmapped_finish_charges_the_start_spool(db: Session, monkeypatch) -> No
     db.expire_all()
     assert db.get(Spool, start_spool.id).remaining_g == 900  # type: ignore[union-attr]
     assert db.get(Spool, current_spool.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
+def test_partial_mapping_is_retried_instead_of_claimed(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament_a = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Partial A",
+        color_hex="#060708",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament_a)
+    db.commit()
+    db.refresh(filament_a)
+    roll_a = Spool(
+        filament_id=filament_a.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="PART-A",
+    )
+    db.add(roll_a)
+    db.commit()
+    db.refresh(roll_a)
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 60},
+        {"ams": 0, "slot": 1, "filamentId": "GFX99", "weight": 40},
+    ]
+    job = PrintJob(
+        title="Partial mapping",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-partial",
+        spool_id=roll_a.id,
+        filament_id=filament_a.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-partial",
+        "title": "Partial mapping",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "PART-A"},
+                        {"id": 1, "tag_uid": "0000000000000000"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._save_print_job("task-partial", "FINISH")
+
+    db.expire_all()
+    stored_job = db.get(PrintJob, job.id)
+    assert stored_job is not None
+    assert stored_job.filament_deducted_at is None
+    assert db.get(Spool, roll_a.id).remaining_g == 1000  # type: ignore[union-attr]
+
+    # The missing slot becomes resolvable; the retry must deduct both.
+    filament_b = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Partial B",
+        color_hex="#070809",
+        bambu_info_idx="GFX99",
+    )
+    db.add(filament_b)
+    db.commit()
+    db.refresh(filament_b)
+    roll_b = Spool(
+        filament_id=filament_b.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="PART-B",
+    )
+    db.add(roll_b)
+    db.commit()
+    db.refresh(roll_b)
+
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "PART-A"},
+                        {"id": 1, "tag_uid": "PART-B"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._deduct_persisted_job("task-partial", task)
+
+    db.expire_all()
+    assert db.get(Spool, roll_a.id).remaining_g == 940  # type: ignore[union-attr]
+    assert db.get(Spool, roll_b.id).remaining_g == 960  # type: ignore[union-attr]
+    stored_job = db.get(PrintJob, job.id)
+    assert stored_job is not None
+    assert stored_job.filament_deducted_at is not None
+
+
+def test_finish_uses_the_ams_synced_remaining_weight(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="AMS overwrite",
+        color_hex="#08090a",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="AMS-SYNC",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    mapping = [{"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100}]
+    job = PrintJob(
+        title="AMS overwrite",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-ams-sync",
+        spool_id=spool.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-ams-sync",
+        "title": "AMS overwrite",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {
+                            "id": 0,
+                            "tag_uid": "AMS-SYNC",
+                            "tray_weight": "1000",
+                            "remain": "60",
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    client._save_print_job("task-ams-sync", "FINISH")
+
+    db.expire_all()
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    # AMS writes 600, then the finish deducts 100 from that value.
+    assert stored.remaining_g == 500
+
+
+def test_finish_is_kept_while_another_task_runs(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Back to back",
+        color_hex="#090a0b",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+    job = PrintJob(
+        title="Task A",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-a",
+        spool_id=spool.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-a",
+        "title": "Task A",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"gcode_state": "RUNNING", "task_id": "task-b"}
+    client._save_print_job("task-a", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2
+    assert stored.filament_deducted_at is not None
+    assert db.get(Spool, spool.id).remaining_g == 900  # type: ignore[union-attr]
+
+
+def test_reconcile_closes_a_stale_job_with_a_stuck_status_4_task(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    old = datetime.now(UTC) - timedelta(hours=25)
+    job = PrintJob(
+        title="Stuck task",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-stuck-4",
+        start_time=old,
+        created_at=old,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    monkeypatch.setattr(
+        printer_service.cloud_client,
+        "get_task",
+        lambda _: {"id": "task-stuck-4", "status": 4},
+    )
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"gcode_state": "IDLE"}
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2
+    assert stored.finished_at is not None
+
+
+def test_reconcile_closes_a_stale_running_job_once_the_printer_is_offline(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    old = datetime.now(UTC) - timedelta(hours=25)
+    job = PrintJob(
+        title="Offline mid print",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-offline",
+        start_time=old,
+        created_at=old,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: None)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._connected = False
+    client._last_seen = time.monotonic() - 3600
+    client._current_status = {"gcode_state": "RUNNING"}
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2
+    assert stored.finished_at is not None
+
+
+def test_ams_info_idx_respects_the_reported_series(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    abs_row = Filament(
+        brand="Bambu Lab",
+        material="ABS",
+        series="ABS",
+        color_name="ABS",
+        color_hex="#112233",
+        spool_weight_g=1000,
+        bambu_info_idx="GFTEST-SERIES",
+    )
+    db.add(abs_row)
+    db.commit()
+    db.refresh(abs_row)
+    abs_gf = Filament(
+        brand="Bambu Lab",
+        material="ABS",
+        series="ABS-GF",
+        color_name="ABS-GF",
+        color_hex="#112233",
+        spool_weight_g=1000,
+        bambu_info_idx="GFTEST-SERIES",
+    )
+    db.add(abs_gf)
+    db.commit()
+    db.refresh(abs_gf)
+
+    client = BambuClient()
+    found = client._ams_filament(
+        db,
+        {
+            "tray_info_idx": "GFTEST-SERIES",
+            "tray_type": "ABS",
+            "tray_color": "112233",
+            "tray_sub_brands": "ABS",
+            "tray_weight": "1000",
+        },
+    )
+
+    assert found.id == abs_row.id
+
+
+def test_update_spool_rejects_a_duplicate_tag(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Duplicate tag",
+        color_hex="#0a0b0c",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    first = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="DUPLICATE-TAG",
+    )
+    second = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="OTHER-TAG",
+    )
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(second)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{second.id}",
+        headers=superuser_token_headers,
+        json={"tag_uid": "DUPLICATE-TAG"},
+    )
+    assert r.status_code == 409
+
+
+def test_put_active_unloads_the_other_spool(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Put active",
+        color_hex="#0b0c0d",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    first = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    second = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{second.id}",
+        headers=superuser_token_headers,
+        json={"active": True},
+    )
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    assert db.get(Spool, second.id).active is True  # type: ignore[union-attr]
+    assert db.get(Spool, first.id).active is False  # type: ignore[union-attr]

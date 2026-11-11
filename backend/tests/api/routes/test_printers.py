@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
 from app.models import Printer
@@ -109,3 +110,21 @@ def test_stale_gcode_state_does_not_mark_a_printer_online() -> None:
     )
 
     assert result.online is False
+
+
+def test_update_printer_rejects_a_null_name(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    printer = Printer(name="Null name", serial=f"null-{uuid.uuid4().hex}")
+    db.add(printer)
+    db.commit()
+    db.refresh(printer)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/printers/{printer.id}",
+        headers=superuser_token_headers,
+        json={"name": None},
+    )
+    assert r.status_code == 422

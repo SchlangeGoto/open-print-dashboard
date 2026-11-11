@@ -188,3 +188,26 @@ def test_list_runs_one_filament_and_two_spool_queries(
     assert r.status_code == 200
     assert sum("from filament" in statement for statement in statements) == 1
     assert sum("from spool" in statement for statement in statements) == 2
+
+
+def test_update_rejects_explicit_nulls(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    created = client.post(
+        f"{settings.API_V1_STR}/filaments/",
+        headers=superuser_token_headers,
+        json={
+            "brand": "Test",
+            "material": "PLA",
+            "color_name": "Null guard",
+            "color_hex": "#123456",
+        },
+    ).json()
+
+    r = client.put(
+        f"{settings.API_V1_STR}/filaments/{created['id']}",
+        headers=superuser_token_headers,
+        json={"color_hex": None},
+    )
+    assert r.status_code == 422

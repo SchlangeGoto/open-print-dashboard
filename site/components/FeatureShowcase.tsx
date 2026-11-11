@@ -68,9 +68,15 @@ export function FeatureShowcase() {
   const [active, setActive] = useState(0);
   const [phase, setPhase] = useState<"tour" | "done">("tour");
   const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
-  // Include the new active slide in the same render as the outgoing one so
-  // a tab jump cannot unmount the old image before the new one paints.
-  const mounted = visited.has(active) ? visited : new Set(visited).add(active);
+  // Keep past slides for the fade and mount the neighbours ahead of time so
+  // a tab jump does not show a blank frame while the new image decodes.
+  const mounted = new Set(visited);
+  for (let index = Math.max(0, active - 1); index <= Math.min(4, active + 1); index++) {
+    mounted.add(index);
+  }
+  if (active >= 4) {
+    mounted.add(5);
+  }
   const sectionRef = useRef<HTMLDivElement>(null);
   const previousHeight = useRef<number | null>(null);
   const scrollBefore = useRef(0);

@@ -141,7 +141,7 @@ def reconnect_printers() -> Any:
 
 
 @router.get("/tasks")
-def get_tasks(limit: int = 20) -> Any:
+def get_tasks(limit: int = Query(default=20, ge=1, le=1000)) -> Any:
     return printer_service.cloud_client.get_print_tasks(limit)
 
 

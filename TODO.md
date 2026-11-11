@@ -388,3 +388,6 @@ re-opened.
 | Release guard writes its tip output once | `2369d33` | Human #20 |
 | Feature slides preload on intent; shared image manifest catches deleted masters | `552781f` | Human #20 |
 | Setup query-param comment corrected | `f91f368` | Human #20 |
+| Delayed deductions use the slot→spool map recorded at finish; timeout persists it; single-slot falls back to the start spool | `d6489de` | Human #20 |
+| Stale open jobs are closed only on IDLE/FINISH/FAILED, never while RUNNING | `d6489de` | Human #20 |
+| Image variants and source references come from the shared manifest | `a493d34` | Human #20 |

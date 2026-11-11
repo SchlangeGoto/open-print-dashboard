@@ -32,14 +32,15 @@ jobs:
       - name: Require the tag to be on main
         id: main_tip
         run: |
-          echo "sha=" >> "$GITHUB_OUTPUT"
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+          main_tip=""
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            git fetch --no-tags origin main
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+            main_tip=$(git rev-parse origin/main)
+          else
             echo "Not a tag push; skipping the ancestry check."
-            exit 0
           fi
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-          echo "sha=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
+          echo "sha=${main_tip}" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: guard

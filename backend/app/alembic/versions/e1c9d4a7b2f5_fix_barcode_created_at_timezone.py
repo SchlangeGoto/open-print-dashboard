@@ -37,4 +37,5 @@ def downgrade() -> None:
         type_=sa.DateTime(),
         existing_type=sa.DateTime(timezone=True),
         existing_nullable=True,
+        postgresql_using="created_at AT TIME ZONE 'UTC'",
     )

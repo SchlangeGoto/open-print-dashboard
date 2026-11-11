@@ -569,6 +569,18 @@ def test_saving_the_same_finish_twice_deducts_once(db: Session, monkeypatch) -> 
     db.commit()
     db.refresh(spool)
 
+    job = PrintJob(
+        title="Deduction test",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-deduct-1",
+        spool_id=spool.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
     task = {
         "id": "task-deduct-1",
         "title": "Deduction test",
@@ -591,13 +603,11 @@ def test_saving_the_same_finish_twice_deducts_once(db: Session, monkeypatch) -> 
     assert stored is not None
     assert stored.remaining_g == 900
 
-    job = db.exec(
-        select(PrintJob).where(PrintJob.bambu_task_id == "task-deduct-1")
-    ).one()
-    assert job.filament_deducted_at is not None
-    assert job.weight == 100
-    # The production finish path writes the denormalised attribution.
-    assert job.filament_id == filament.id
+    stored_job = db.get(PrintJob, job.id)
+    assert stored_job is not None
+    assert stored_job.filament_deducted_at is not None
+    assert stored_job.weight == 100
+    assert stored_job.filament_id == filament.id
 
 
 def test_spool_rejects_remaining_above_total(
@@ -1175,6 +1185,26 @@ def test_finish_timeout_uses_the_printer_state(db: Session, monkeypatch) -> None
     from app.services.printer_service import printer_service
 
     printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Timeout spool",
+        color_hex="#112233",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
     job = PrintJob(
         title="Slow cloud",
         status=4,
@@ -1207,6 +1237,11 @@ def test_finish_timeout_uses_the_printer_state(db: Session, monkeypatch) -> None
     assert stored is not None
     assert stored.status == 2
     assert stored.finished_at is not None
+    # The payload still had status 4, so its per-slot weights were partial.
+    assert stored.filament_deducted_at is None
+    stored_spool = db.get(Spool, spool.id)
+    assert stored_spool is not None
+    assert stored_spool.remaining_g == 1000
 
 
 def test_start_poll_accepts_printing_on_the_last_try(db: Session, monkeypatch) -> None:
@@ -1269,7 +1304,7 @@ def test_reconcile_closes_a_job_that_finished_offline(db: Session, monkeypatch) 
     monkeypatch.setattr(
         client,
         "_save_print_job",
-        lambda task_id, state=None: saved.append((task_id, state)),
+        lambda task_id, state=None, task=None: saved.append((task_id, state)),
     )
 
     client._reconcile_open_jobs()
@@ -1307,3 +1342,277 @@ def test_ams_reported_default_weight_still_matches_a_750g_series(db: Session) ->
     )
 
     assert found.id == filament.id
+
+
+def test_finish_without_an_open_job_does_not_create_or_deduct(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Ghost finish",
+        color_hex="#445566",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    task = {
+        "id": "task-ghost",
+        "title": "Deleted by the user",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("task-ghost", "FINISH")
+
+    db.expire_all()
+    assert (
+        db.exec(select(PrintJob).where(PrintJob.bambu_task_id == "task-ghost")).first()
+        is None
+    )
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    assert stored.remaining_g == 1000
+
+
+def test_finish_with_a_missing_cloud_task_leaves_the_job_open(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    job = PrintJob(
+        title="Cloud lag",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-missing",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: None)
+    monkeypatch.setattr("app.services.bambu_client.time.sleep", lambda _: None)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("task-missing", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 4
+    assert stored.finished_at is None
+
+
+def test_finish_defers_until_ams_state_arrives(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Deferred",
+        color_hex="#667788",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+    job = PrintJob(
+        title="Deferred finish",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-deferred",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-deferred",
+        "title": "Deferred finish",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": [
+            {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100}
+        ],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {}
+    client._save_print_job("task-deferred", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 4
+    assert client._reconcile_on_ams is True
+    stored_spool = db.get(Spool, spool.id)
+    assert stored_spool is not None
+    assert stored_spool.remaining_g == 1000
+
+
+def test_reconcile_continues_after_one_task_fails(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    first = PrintJob(
+        title="Broken",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-broken",
+    )
+    second = PrintJob(
+        title="Healthy",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-healthy",
+    )
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    def fetch(task_id: str) -> dict:
+        if task_id == "task-broken":
+            raise RuntimeError("cloud unavailable")
+        return {
+            "id": "task-healthy",
+            "title": "Healthy",
+            "status": 2,
+            "weight": 10,
+            "amsDetailMapping": [],
+        }
+
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", fetch)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    assert db.get(PrintJob, first.id).status == 4  # type: ignore[union-attr]
+    assert db.get(PrintJob, second.id).status == 2  # type: ignore[union-attr]
+
+
+def test_ams_no_series_prefers_instead_of_filtering_weight(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    filament = Filament(
+        brand="Unknown",
+        material="PLA",
+        color_name="No series 750",
+        color_hex="#123abc",
+        spool_weight_g=750,
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    client = BambuClient()
+    found = client._ams_filament(
+        db,
+        {
+            "tray_type": "PLA",
+            "tray_color": "123ABC",
+            "tray_weight": "1000",
+        },
+    )
+
+    assert found.id == filament.id
+
+
+def test_ams_pre_series_adopts_a_single_series_across_weights(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    legacy = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Legacy Matte",
+        color_hex="#e8afcf",
+        spool_weight_g=750,
+    )
+    db.add(legacy)
+    db.commit()
+    db.refresh(legacy)
+
+    client = BambuClient()
+    found = client._ams_filament(
+        db,
+        {
+            "tray_info_idx": "GFA01",
+            "tray_type": "PLA",
+            "tray_color": "E8AFCF",
+            "tray_sub_brands": "PLA Matte",
+            "tray_weight": "1000",
+        },
+    )
+
+    assert found.id == legacy.id
+    assert found.series == "PLA Matte"
+
+
+def test_ams_ambiguous_group_creates_a_new_filament(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    legacy = Filament(
+        brand="Bambu Lab",
+        material="Support",
+        color_name="Legacy Support",
+        color_hex="#ffffff",
+        spool_weight_g=750,
+    )
+    db.add(legacy)
+    db.commit()
+    db.refresh(legacy)
+
+    client = BambuClient()
+    found = client._ams_filament(
+        db,
+        {
+            "tray_info_idx": "GFS77",
+            "tray_type": "Support",
+            "tray_color": "FFFFFF",
+            "tray_sub_brands": "Support G",
+            "tray_weight": "1000",
+        },
+    )
+
+    assert found.id != legacy.id
+    assert found.series == "Support G"

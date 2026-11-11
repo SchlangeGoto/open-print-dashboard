@@ -207,6 +207,7 @@ class BambuClient:
         self._started_tasks: OrderedDict[str, float] = OrderedDict()
         self._started_lock = threading.Lock()
         self._reconcile_lock = threading.Lock()
+        self._stale_job_counts: dict[str, int] = {}
 
         self.client: mqtt.Client | None = None
         self._mqtt_thread: MqttThread | None = None
@@ -639,12 +640,20 @@ class BambuClient:
                 now = datetime.now(UTC)
                 state = self._current_status.get("gcode_state")
                 live = self._printer_is_live()
-                if state == "RUNNING" and live:
-                    logger.info(
-                        "Not closing task %s while the printer is live and running",
-                        task_id,
-                    )
-                    return
+                current_task = self._current_task_id()
+                silence = (
+                    time.monotonic() - self._last_seen
+                    if self._last_seen is not None
+                    else None
+                )
+                if state == "RUNNING" and current_task == task_id:
+                    if silence is None or silence < STALE_OPEN_JOB_HOURS * 3600:
+                        logger.info(
+                            "Not closing task %s while it is the current print "
+                            "and the printer was heard from recently",
+                            task_id,
+                        )
+                        return
                 if state not in ("IDLE", "FINISH", "FAILED") and live:
                     logger.info(
                         "Not closing task %s while the printer reports %s",
@@ -652,6 +661,17 @@ class BambuClient:
                         state or "no state",
                     )
                     return
+                if not live:
+                    count = self._stale_job_counts.get(task_id, 0) + 1
+                    self._stale_job_counts[task_id] = count
+                    if count < 2:
+                        logger.info(
+                            "Waiting for a second non-live pass before closing task %s",
+                            task_id,
+                        )
+                        return
+                else:
+                    self._stale_job_counts.pop(task_id, None)
                 failed = state == "FAILED"
                 job.status = 3 if failed else 2
                 job.finished_at = now
@@ -661,6 +681,7 @@ class BambuClient:
                 )
                 session.add(job)
                 session.commit()
+                self._stale_job_counts.pop(task_id, None)
                 logger.warning(
                     "Closed stale open job %s after %s hours without a task",
                     task_id,
@@ -1723,6 +1744,7 @@ class BambuClient:
                         cloud_task_id,
                     )
 
+                self._stale_job_counts.pop(cloud_task_id, None)
                 session.commit()
                 logger.info(
                     "PrintJob saved: %s — %sg used",

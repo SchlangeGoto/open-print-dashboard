@@ -2313,6 +2313,8 @@ def test_reconcile_closes_a_stale_open_job_without_a_task(
 
     client = BambuClient()
     client.serial = printer.serial
+    client._connected = True
+    client._last_seen = time.monotonic()
     client._current_status = {"gcode_state": "IDLE"}
     client._reconcile_open_jobs()
 
@@ -3175,6 +3177,8 @@ def test_reconcile_closes_a_stale_job_with_a_stuck_status_4_task(
 
     client = BambuClient()
     client.serial = printer.serial
+    client._connected = True
+    client._last_seen = time.monotonic()
     client._current_status = {"gcode_state": "IDLE"}
     client._reconcile_open_jobs()
 
@@ -3213,7 +3217,10 @@ def test_reconcile_closes_a_stale_running_job_once_the_printer_is_offline(
     client._last_seen = time.monotonic() - 3600
     client._current_status = {"gcode_state": "RUNNING"}
     client._reconcile_open_jobs()
+    db.expire_all()
+    assert db.get(PrintJob, job.id).status == 4  # type: ignore[union-attr]
 
+    client._reconcile_open_jobs()
     db.expire_all()
     stored = db.get(PrintJob, job.id)
     assert stored is not None
@@ -3458,3 +3465,80 @@ def test_multi_material_print_attributes_each_filament(
     assert petg_stats.print_count == 1
     assert petg_stats.total_used_g == 40
     assert petg_stats.total_cost == 1.6
+
+
+def test_reconcile_keeps_a_long_print_through_a_short_mqtt_stall(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    old = datetime.now(UTC) - timedelta(hours=30)
+    job = PrintJob(
+        title="Long print",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-long-print",
+        start_time=old,
+        created_at=old,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: None)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._connected = True
+    client._last_seen = time.monotonic() - 120
+    client._current_status = {
+        "gcode_state": "RUNNING",
+        "task_id": "task-long-print",
+    }
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 4
+
+
+def test_reconcile_needs_two_offline_passes_to_close_a_running_job(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    old = datetime.now(UTC) - timedelta(hours=30)
+    job = PrintJob(
+        title="Offline long print",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-offline-long",
+        start_time=old,
+        created_at=old,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: None)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._connected = False
+    client._last_seen = time.monotonic() - 7200
+    client._current_status = {"gcode_state": "RUNNING"}
+
+    client._reconcile_open_jobs()
+    db.expire_all()
+    assert db.get(PrintJob, job.id).status == 4  # type: ignore[union-attr]
+
+    client._reconcile_open_jobs()
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2

@@ -55,6 +55,7 @@ export default function ScanScreen() {
   } | null>(null);
   const typeRef = useRef<string | null>(null);
   const intentRef = useRef<{ code: string; requestId: string } | null>(null);
+  const addIntentRef = useRef<{ code: string; requestId: string } | null>(null);
   const [focused, setFocused] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,6 +88,7 @@ export default function ScanScreen() {
         lastAttemptRef.current = null;
         typeRef.current = null;
         intentRef.current = null;
+        addIntentRef.current = null;
         setFocused(false);
         setPreviewReady(false);
         setTorch(false);
@@ -189,18 +191,27 @@ export default function ScanScreen() {
   async function addAnotherSpool(code: string) {
     if (scanLock.current) return;
 
+    // A deliberate second spool is a new intent, but a retry after a lost
+    // response must reuse the id so the server replays instead of inserting
+    // another spool.
+    const requestId =
+      addIntentRef.current?.code === code
+        ? addIntentRef.current.requestId
+        : newRequestId();
+    addIntentRef.current = { code, requestId };
+
     scanLock.current = true;
     setBusy(true);
     setError(null);
     try {
-      // A deliberate second spool is a new intent, unlike a camera retry.
       const created = await api.scanBarcode(
         code,
         true,
         typeRef.current ?? undefined,
-        newRequestId(),
+        requestId,
       );
       if (!focusedRef.current) return;
+      addIntentRef.current = null;
       const normalized: BarcodeScanResult = {
         ...created,
         created: created.created ?? true,
@@ -254,6 +265,7 @@ export default function ScanScreen() {
     lastAttemptRef.current = null;
     typeRef.current = null;
     intentRef.current = null;
+    addIntentRef.current = null;
     setResult(null);
     setScanType(null);
     setError(null);

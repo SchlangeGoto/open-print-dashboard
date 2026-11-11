@@ -50,9 +50,8 @@ function ForceParam({ onChange }: { onChange: (value: boolean) => void }) {
 
 export default function SetupPage() {
   const router = useRouter();
-  // Read the query string after hydration instead of with useSearchParams:
-  // that keeps the static page from needing a Suspense fallback that replaces
-  // the whole wizard with "Loading setup…".
+  // The query string is read by a tiny Suspense bridge below, so the page
+  // content is not replaced by a loading fallback.
   const [forceSetup, setForceSetup] = useState<boolean | null>(null);
   const { login, demoAvailable, enterDemo } = useAuth();
   const [step, setStep] = useState<SetupStep>("account");

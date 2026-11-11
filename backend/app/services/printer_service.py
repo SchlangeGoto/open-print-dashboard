@@ -36,6 +36,7 @@ class PrinterService:
         # race with disconnect()/reload_printer().
         self._connecting: set[str] = set()
         self._connect_epochs: dict[str, int] = {}
+        self._reconnect_pending: set[str] = set()
 
     def get_token(self) -> str | None:
         return self.cloud_client.token
@@ -92,7 +93,10 @@ class PrinterService:
     def _connect(self, printer: Printer) -> None:
         serial = printer.serial
         with self._lock:
-            if serial in self.clients or serial in self._connecting:
+            if serial in self.clients:
+                return
+            if serial in self._connecting:
+                self._reconnect_pending.add(serial)
                 return
             self._connecting.add(serial)
             epoch = self._connect_epochs.setdefault(serial, 0)
@@ -146,8 +150,14 @@ class PrinterService:
             if canceled:
                 client.disconnect()
         finally:
+            retry = False
             with self._lock:
                 self._connecting.discard(serial)
+                if serial in self._reconnect_pending:
+                    self._reconnect_pending.discard(serial)
+                    retry = True
+            if retry:
+                self._schedule_reconnect(serial, delay=0.5)
 
     def configure_and_connect(self) -> None:
         """Load all configured printers and start one MQTT client per printer."""
@@ -161,6 +171,7 @@ class PrinterService:
         with self._lock:
             for serial in self._connect_epochs:
                 self._connect_epochs[serial] += 1
+            self._reconnect_pending.clear()
             clients = list(self.clients.values())
             self.clients.clear()
             timers = list(self._reconnect_timers.values())

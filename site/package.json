@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "images:variants": "bash scripts/generate-image-variants.sh",
-    "images:check": "bash scripts/check-image-variants.sh"
+    "images:check": "node scripts/check-image-variants.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.70.0",

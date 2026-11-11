@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-android-${{ github.ref }}
@@ -39,6 +39,8 @@ jobs:
 
   build:
     needs: guard
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     # Free-tier EAS builds sit in a low-priority queue and can wait 90+ minutes.
     timeout-minutes: 180

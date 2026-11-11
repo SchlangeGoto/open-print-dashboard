@@ -221,6 +221,8 @@ These open issues should be solved as part of the epic, not separately:
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
 | P-06 | `backend/app/services/bambu_client.py` | A slot that stays unresolved after `DEDUCTION_RETRY_HOURS` drops out of the retry query with no terminal log or marker. | Log the abandonment once per task (or add a terminal marker) in a follow-up. | Human #20 |
 | P-07 | `backend/app/services/bambu_client.py`, `printjob` data | Legacy finished jobs may have a terminal status with `finished_at` NULL, excluding them from `/prints/stats` and the deduction retry. The new code no longer creates this state, but old rows were not audited. | Audit real data; if present, backfill `finished_at` from `start_time`/`created_at` in a follow-up migration. | Human #20 |
+| P-08 | `backend/app/services/bambu_client.py` | If one recorded roll is deleted, the whole deduction is abandoned rather than charging the surviving rolls; partial charging needs per-slot claim tracking to avoid double-charging. | Add a per-slot claimed marker, or charge the resolvable slots and record the gap. | Human #20 |
+| P-09 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | `printer_id` is the single active/loaded association, so two untagged rolls in one printer cannot both resolve; the second slot is left unclaimed. | Add a separate loaded-printer/tray association instead of overloading `printer_id`. | Human #20 |
 
 ### 2.3 Spools, barcodes and filaments
 
@@ -232,7 +234,7 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| F-01 | `frontend/app/setup/page.tsx`, `frontend/app/dashboard/settings/page.tsx` | Demo mode always redirects `/setup` to the dashboard, so after a demo sign-out the Bambu connect step cannot be reached again. The cleared state itself now persists. | Decide whether the demo should expose the Bambu step; otherwise document the limitation. | Human #20 |
+| F-01 | `frontend/app/setup/page.tsx`, `frontend/app/dashboard/settings/page.tsx`, `frontend/lib/demo-api.ts` | Demo sign-out clears the stored settings, but `/setup` still redirects to the dashboard and `getCloudAccount`/`getPrinters` keep reporting a connected account and cloud printers. | Make the demo auth state consistent and decide whether the Bambu step is reachable; otherwise document the limitation. | Human #20 |
 
 ### 2.5 Mobile
 
@@ -263,7 +265,7 @@ These open issues should be solved as part of the epic, not separately:
 | D-11 | Deactivation semantics are deferred to the multi-tenancy work. | S-06, T-02 |
 | D-12 | The backend runs **one worker** on purpose (documented in `scripts/start.sh`). Multi-worker is out of scope; the in-process registry is safe within one process, but its threads still need a lock. | P-01, T-06, I-04 |
 | D-14 | Scan and confirm accept a client-generated `request_id` for retry idempotency. This is not content dedupe (D-06): two different requests still add two spools. | Barcode scan/confirm |
-| D-15 | `:latest` moves only when the release tag is the tip of `main` at guard time, despite the version tags publishing from any main commit. Pin `IMAGE_TAG` in production so a skipped promotion cannot leave the server behind. | Release containers |
+| D-15 | `:latest` moves only when the tag is plain `vX.Y.Z`, the newest semver on `main`, and the `main` tip at guard time. Version tags still publish from any main commit. Pin `IMAGE_TAG` in production. | Release containers |
 | D-13 | AMS adoption is weight-aware: a partial tray never adopts a full spool; only untagged spools on no printer whose remaining weight is within max(50 g, 15 %) are candidates, FIFO breaks ties. A tray with no percentage creates a `remaining_unknown` spool (nominal capacity as placeholder), never 0 g or a fake full weight. Entering the remaining grams clears the flag. | AMS sync, spool UI |
 
 ---

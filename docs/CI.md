@@ -107,6 +107,10 @@ old `api/` + `web/` layout and has no workflows. After the migration PR lands on
 - `analyze (python)`
 - `dependency-review`
 
+The two `analyze (...)` checks come from the CodeQL language matrix. If a
+language is added or removed, update the ruleset in the same change (or require
+a single aggregator job instead) so PRs do not stall on an expected check.
+
 Do **not** require `test-site`, `test-mobile`, or `test-e2e` as they are
 path-filtered: they are skipped on unrelated PRs, and a skipped required check
 stays pending forever. If you want one stable required check, add an

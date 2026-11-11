@@ -71,9 +71,11 @@ IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
 IMAGE_TAG=0.2.0
 ```
 
-The `:latest` tag is promoted only when the release tag is the tip of `main`
-when the release guard runs. Pin `IMAGE_TAG` in production so a skipped
-promotion cannot leave the server on an older build.
+The `:latest` tag moves only when all three release gates pass: the tag is a
+plain `vX.Y.Z` semver tag (no pre-release suffix), it is the newest semver tag
+merged into `main`, and it was the `main` tip when the guard ran. Pin
+`IMAGE_TAG` in production so a skipped promotion cannot leave the server on an
+older build.
 
 Use a URL-safe password (hex or base64url) because `DATABASE_URL` embeds it
 without URL encoding. If you copied `.env.example`, change `FRONTEND_HOST` from

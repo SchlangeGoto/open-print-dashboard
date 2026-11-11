@@ -530,6 +530,7 @@ class BambuClient:
                 job.finish_requested_at = None
                 job.finish_attempts = 0
                 job.finish_state = None
+                job.deduction_spools = None
                 session.add(job)
                 session.commit()
         except Exception as exc:
@@ -622,6 +623,13 @@ class BambuClient:
                     return
                 now = datetime.now(UTC)
                 state = self._current_status.get("gcode_state")
+                if state not in ("IDLE", "FINISH", "FAILED"):
+                    logger.info(
+                        "Not closing task %s while the printer reports %s",
+                        task_id,
+                        state or "no state",
+                    )
+                    return
                 failed = state == "FAILED"
                 job.status = 3 if failed else 2
                 job.finished_at = now
@@ -675,19 +683,42 @@ class BambuClient:
                 elif not weight:
                     return
 
+                resolved = self._load_deduction_spools(session, job)
                 if mapping:
-                    ams = self._current_status.get("ams")
-                    if not ams:
-                        self._reconcile_on_ams = True
+                    if not resolved and len(mapping) == 1 and job.spool_id:
+                        key = self._mapping_slot_key(mapping[0]) or (-1, 0)
+                        spool = session.get(Spool, job.spool_id)
+                        if key and spool:
+                            resolved[key] = spool
+                    if not resolved:
+                        logger.warning(
+                            "No recorded spool map for task %s; skipping "
+                            "the delayed deduction",
+                            task_id,
+                        )
                         return
-                    if not self._sync_ams_trays(ams, self._ams_signature_for(ams)):
-                        return
+                    if self._claim_filament_deduction(session, job.id):
+                        self._deduct_filament_from_spools(
+                            session,
+                            {"weight": weight, "amsDetailMapping": mapping},
+                            resolved,
+                        )
+                        session.commit()
+                        logger.info(
+                            "Deducted the persisted payload for task %s", task_id
+                        )
+                    return
 
+                # No mapping: use the spool recorded at start, never the
+                # spool that happens to be loaded during the retry.
+                if not job.spool_id:
+                    return
+                spool = session.get(Spool, job.spool_id)
+                if not spool or spool.remaining_unknown:
+                    return
                 if self._claim_filament_deduction(session, job.id):
-                    self._deduct_filament_from_spools(
-                        session,
-                        {"weight": weight, "amsDetailMapping": mapping},
-                    )
+                    spool.remaining_g = max(0, spool.remaining_g - weight)
+                    spool.last_used_at = datetime.now(UTC)
                     session.commit()
                     logger.info("Deducted the persisted payload for task %s", task_id)
         except Exception as exc:
@@ -1212,6 +1243,7 @@ class BambuClient:
                         finish_requested_at=None,
                         finish_attempts=0,
                         finish_state=None,
+                        deduction_spools=None,
                     )
                 )
                 session.commit()
@@ -1424,16 +1456,49 @@ class BambuClient:
                 job.device_id = self.serial
                 session.add(job)
 
+                resolved_spools: dict[tuple[int, int], Spool] = {}
                 can_deduct = not timed_out
-                if can_deduct and mapping:
-                    ams = self._current_status.get("ams")
-                    if not ams or not self._sync_ams_trays(
-                        ams, self._ams_signature_for(ams)
-                    ):
+                if mapping:
+                    has_persisted = bool(job.deduction_spools)
+                    resolved_spools = self._load_deduction_spools(session, job)
+                    if not resolved_spools and not has_persisted:
+                        ams = self._current_status.get("ams")
+                        if not ams or not self._sync_ams_trays(
+                            ams, self._ams_signature_for(ams)
+                        ):
+                            can_deduct = False
+                            logger.warning(
+                                "AMS sync did not complete for task %s; leaving "
+                                "the deduction for a retry",
+                                cloud_task_id,
+                            )
+                        else:
+                            resolved_spools = self._resolve_mapping_spools(
+                                session, task
+                            )
+                            if resolved_spools:
+                                job.deduction_spools = json.dumps(
+                                    {
+                                        f"{ams_id}:{slot_id}": str(spool.id)
+                                        for (ams_id, slot_id), spool in (
+                                            resolved_spools.items()
+                                        )
+                                    }
+                                )
+                            else:
+                                can_deduct = False
+                                logger.warning(
+                                    "No spool resolved for task %s; leaving "
+                                    "the deduction for a retry",
+                                    cloud_task_id,
+                                )
+                    elif has_persisted and not resolved_spools:
+                        # The rolls recorded at finish were deleted; do not
+                        # fall back to whatever is loaded now.
                         can_deduct = False
                         logger.warning(
-                            "AMS sync did not complete for task %s; leaving "
-                            "the deduction for a retry",
+                            "The spools recorded for task %s are gone; "
+                            "leaving the deduction unclaimed",
                             cloud_task_id,
                         )
 
@@ -1443,7 +1508,9 @@ class BambuClient:
                         cloud_task_id,
                     )
                 elif self._claim_filament_deduction(session, job.id):
-                    self._deduct_filament_from_spools(session, task)
+                    self._deduct_filament_from_spools(
+                        session, task, resolved_spools or None
+                    )
                 else:
                     logger.info(
                         "Skipped deduction for task %s: already claimed",
@@ -1578,17 +1645,92 @@ class BambuClient:
                 return active_spool
         return None
 
-    def _deduct_filament_from_spools(self, session: Session, task: dict) -> None:
-        """Deduct filament usage per color slot from the correct spools.
+    @staticmethod
+    def _mapping_slot_key(slot: dict) -> tuple[int, int] | None:
+        ams_id = slot.get("amsId")
+        if ams_id is None:
+            ams_id = slot.get("ams")
+        slot_id = slot.get("slotId")
+        if slot_id is None:
+            slot_id = slot.get("slot")
+        try:
+            return (int(ams_id), int(slot_id))
+        except (TypeError, ValueError):
+            return None
 
-        Falls back to deducting from the active spool if mapping is unavailable.
-        """
-        ams_mapping = task.get("amsDetailMapping", [])
+    def _resolve_mapping_spools(
+        self, session: Session, task: dict
+    ) -> dict[tuple[int, int], Spool]:
+        """Resolve the mapped slots against the AMS state at finish time."""
         printer = session.exec(
             select(Printer).where(Printer.serial == self.serial)
         ).first()
         printer_id = printer.id if printer else None
+        used_spool_ids: set[uuid.UUID] = set()
+        resolved: dict[tuple[int, int], Spool] = {}
+        for index, slot in enumerate(task.get("amsDetailMapping", []) or []):
+            used_g = slot.get("weight", 0)
+            if not used_g:
+                continue
+            key = self._mapping_slot_key(slot)
+            resolved_key = key if key is not None else (-1 - index, 0)
+            if resolved_key in resolved:
+                continue
+            spool = self._spool_for_ams_slot(
+                session,
+                printer_id,
+                slot,
+                used_spool_ids,
+                slot.get("filamentId"),
+                slot.get("filamentType"),
+            )
+            if not spool:
+                logger.warning(
+                    "No matching spool for slot %s (%s); skipped %sg",
+                    slot,
+                    slot.get("filamentType"),
+                    used_g,
+                )
+                continue
+            used_spool_ids.add(spool.id)
+            resolved[resolved_key] = spool
+        return resolved
 
+    def _load_deduction_spools(
+        self, session: Session, job: PrintJob
+    ) -> dict[tuple[int, int], Spool]:
+        """Load the spool ids persisted at finish, ignoring deleted rows."""
+        if not job.deduction_spools:
+            return {}
+        try:
+            raw = json.loads(job.deduction_spools)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        resolved: dict[tuple[int, int], Spool] = {}
+        for key, value in raw.items():
+            try:
+                ams_id, slot_id = (int(part) for part in str(key).split(":"))
+                spool_id = uuid.UUID(str(value))
+            except (TypeError, ValueError):
+                continue
+            spool = session.get(Spool, spool_id)
+            if spool:
+                resolved[(ams_id, slot_id)] = spool
+        return resolved
+
+    def _deduct_filament_from_spools(
+        self,
+        session: Session,
+        task: dict,
+        resolved_by_slot: dict[tuple[int, int], Spool] | None = None,
+    ) -> None:
+        """Deduct filament usage per color slot from the correct spools.
+
+        Falls back to deducting from the active spool if mapping is unavailable.
+        """
+        ams_mapping = task.get("amsDetailMapping", []) or []
         if not ams_mapping:
             active_spool = self._active_spool(session)
             if (
@@ -1605,49 +1747,24 @@ class BambuClient:
                 )
             return
 
-        used_spool_ids: set[uuid.UUID] = set()
-        resolved_by_slot: dict[tuple[int, int], Spool] = {}
-        for slot in ams_mapping:
+        if resolved_by_slot is None:
+            resolved_by_slot = self._resolve_mapping_spools(session, task)
+
+        for index, slot in enumerate(ams_mapping):
             used_g = slot.get("weight", 0)
             if not used_g:
                 continue
-
-            filament_id = slot.get("filamentId")  # e.g. "GFL99"
-            filament_type = slot.get("filamentType")  # e.g. "PLA"
-
-            ams_id = slot.get("amsId")
-            if ams_id is None:
-                ams_id = slot.get("ams")
-            slot_id = slot.get("slotId")
-            if slot_id is None:
-                slot_id = slot.get("slot")
-            try:
-                slot_key = (int(ams_id), int(slot_id))
-            except (TypeError, ValueError):
-                slot_key = None
-
-            spool = resolved_by_slot.get(slot_key) if slot_key else None
-            if spool is None:
-                spool = self._spool_for_ams_slot(
-                    session,
-                    printer_id,
-                    slot,
-                    used_spool_ids,
-                    filament_id,
-                    filament_type,
-                )
-                if spool and slot_key:
-                    resolved_by_slot[slot_key] = spool
+            key = self._mapping_slot_key(slot)
+            resolved_key = key if key is not None else (-1 - index, 0)
+            spool = resolved_by_slot.get(resolved_key)
             if not spool:
                 logger.warning(
                     "No matching spool for slot %s (%s); skipped %sg",
                     slot,
-                    filament_type,
+                    slot.get("filamentType"),
                     used_g,
                 )
                 continue
-
-            used_spool_ids.add(spool.id)
             if spool.remaining_unknown:
                 logger.info(
                     "Skipped %sg deduction: spool %s has unknown weight",
@@ -1657,7 +1774,12 @@ class BambuClient:
                 continue
             spool.remaining_g = max(0, spool.remaining_g - used_g)
             spool.last_used_at = datetime.now(UTC)
-            logger.info(f"Deducted {used_g}g ({filament_type}) from spool {spool.id}")
+            logger.info(
+                "Deducted %sg (%s) from spool %s",
+                used_g,
+                slot.get("filamentType"),
+                spool.id,
+            )
 
     def _handle_info_update(self, info_data: dict) -> None:
         """Handle firmware version info."""

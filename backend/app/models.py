@@ -378,6 +378,9 @@ class PrintJob(PrintJobBase, table=True):
     finish_requested_at: datetime | None = None
     finish_attempts: int = 0
     finish_state: str | None = Field(default=None, max_length=10)
+    # JSON map of "ams:slot" -> spool UUID resolved at finish. A delayed
+    # retry must charge those rolls, not whatever is loaded later.
+    deduction_spools: str | None = None
     # Denormalised so filament statistics survive deleting the spool.
     filament_id: uuid.UUID | None = Field(
         default=None, foreign_key="filament.id", ondelete="SET NULL", index=True

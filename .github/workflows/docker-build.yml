@@ -7,6 +7,7 @@ on:
       - "backend/docker-entrypoint.sh"
       - "frontend/Dockerfile"
       - "frontend/Dockerfile.prod"
+      - "frontend/next.config.ts"
       - "compose.yml"
       - "compose.prod.yml"
       - "pyproject.toml"

@@ -85,13 +85,13 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-semibold tracking-tight text-[var(--color-ink)]">
-              A hosted option, later
+              Hosted beta
             </h2>
             <p className="mt-3">
-              A managed hosted version is planned. It does not exist yet. If it
-              launches, it will have its own privacy policy covering billing,
-              hosting and data processing, and a one-click export so you can
-              move back to self-hosting.
+              A small managed beta exists for people who want the dashboard
+              without running a server. It has its own privacy policy covering
+              billing, hosting and data processing, and a one-click export so
+              you can move back to self-hosting.
             </p>
           </section>
 

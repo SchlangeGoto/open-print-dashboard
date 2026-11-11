@@ -139,8 +139,6 @@ web screenshots.
 
 The screenshots are demo data. Keep the `Demo data` captions.
 
-## Screenshots
-
 The site serves pre-generated `-<width>.jpg` variants from
 `public/screenshots` through `srcset`. After replacing a master, regenerate
 them (requires ImageMagick):

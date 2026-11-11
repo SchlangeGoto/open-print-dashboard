@@ -391,3 +391,5 @@ re-opened.
 | Delayed deductions use the slot→spool map recorded at finish; timeout persists it; single-slot falls back to the start spool | `d6489de` | Human #20 |
 | Stale open jobs are closed only on IDLE/FINISH/FAILED, never while RUNNING | `d6489de` | Human #20 |
 | Image variants and source references come from the shared manifest | `a493d34` | Human #20 |
+| Unmapped finishes charge the start spool; delayed deduction window extended to 7 days | `c60dd94` | Human #20 |
+| Mobile hero omits its source when the image is not in the manifest | `1bc0138` | Human #20 |

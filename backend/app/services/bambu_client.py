@@ -559,12 +559,14 @@ class BambuClient:
         try:
             cutoff = datetime.now(UTC) - timedelta(hours=DEDUCTION_RETRY_HOURS)
             with Session(engine) as session:
-                open_ids = session.exec(
-                    select(PrintJob.bambu_task_id)
+                open_rows = session.exec(
+                    select(PrintJob.bambu_task_id, PrintJob.finish_requested_at)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.status == 4)
                     .where(col(PrintJob.bambu_task_id).is_not(None))
                 ).all()
+                open_ids = [row[0] for row in open_rows]
+                requested_ids = {row[0] for row in open_rows if row[1] is not None}
                 pending_ids = session.exec(
                     select(PrintJob.bambu_task_id)
                     .where(PrintJob.device_id == self.serial)
@@ -582,9 +584,10 @@ class BambuClient:
                 try:
                     task = self._fetch_cloud_task(str(task_id))
                     if not task or task.get("status") == 4:
-                        if task is None:
-                            # Record the failed pass so an unreachable task
-                            # cannot leave the job active forever.
+                        if task is None and task_id in requested_ids:
+                            # Only a finish that was already observed may
+                            # start the bounded close countdown; a running
+                            # print with a lagging task list must stay open.
                             last_state = self._current_status.get("gcode_state")
                             self._defer_finish(
                                 str(task_id),

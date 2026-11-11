@@ -2024,3 +2024,35 @@ def test_failed_ams_sync_leaves_the_deduction_unclaimed(
     stored_spool = db.get(Spool, spool.id)
     assert stored_spool is not None
     assert stored_spool.remaining_g == 1000
+
+
+def test_reconcile_does_not_close_a_running_print_with_a_missing_task(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    job = PrintJob(
+        title="Still running",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-running",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: None)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"gcode_state": "RUNNING"}
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 4
+    assert stored.finish_requested_at is None
+    assert stored.finish_attempts == 0

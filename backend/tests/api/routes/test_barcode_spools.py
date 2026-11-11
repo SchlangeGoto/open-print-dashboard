@@ -946,12 +946,13 @@ def test_scan_backfills_series_on_an_existing_filament(
     db: Session,
     superuser_token_headers: dict[str, str],
 ) -> None:
+    # A single-series colour group can safely adopt and relabel a legacy row.
     filament = Filament(
         brand="Bambu Lab",
-        material="Support",
-        color_name="Old Support",
-        color_hex="#FFFFFF",
-        spool_weight_g=750,
+        material="PLA",
+        color_name="Legacy Matte",
+        color_hex="#D3B7A7",
+        spool_weight_g=1000,
     )
     db.add(filament)
     db.commit()
@@ -960,41 +961,39 @@ def test_scan_backfills_series_on_an_existing_filament(
     r = client.post(
         f"{settings.API_V1_STR}/spools/scan/barcode",
         headers=superuser_token_headers,
-        json={"code": "6975337030409", "create": True},
+        json={"code": "6975337030126", "create": True},
     )
     assert r.status_code == 200, r.text
+    assert r.json()["spool"]["filament_id"] == str(filament.id)
 
     db.expire_all()
     updated = db.get(Filament, filament.id)
     assert updated is not None
-    assert updated.series == "Support W"
-
-    support = db.exec(select(Filament).where(Filament.material == "Support")).all()
-    assert len(support) == 1
+    assert updated.series == "PLA Matte"
 
 
-def test_series_backfill_requires_the_same_spool_weight(
+def test_ambiguous_colour_group_is_not_relabelled(
     client: TestClient,
     db: Session,
     superuser_token_headers: dict[str, str],
 ) -> None:
     legacy = Filament(
         brand="Bambu Lab",
-        material="Support",
-        color_name="Legacy Support W",
-        color_hex="#FFFFFF",
-        spool_weight_g=750,
+        material="ABS",
+        color_name="Legacy Black",
+        color_hex="#000000",
+        spool_weight_g=1000,
     )
     db.add(legacy)
     db.commit()
     db.refresh(legacy)
 
-    # 6975337038078 is the 1000 g Support for ABS SKU. It must not relabel the
-    # 750 g legacy row and then create a 250 g short spool.
+    # The colour group contains both ABS and ABS-GF. The legacy row could be
+    # either, so it must not be relabelled; the scan creates ABS-GF instead.
     r = client.post(
         f"{settings.API_V1_STR}/spools/scan/barcode",
         headers=superuser_token_headers,
-        json={"code": "6975337038078", "create": True},
+        json={"code": "6975337037293", "create": True},
     )
     assert r.status_code == 200, r.text
 
@@ -1002,10 +1001,13 @@ def test_series_backfill_requires_the_same_spool_weight(
     unchanged = db.get(Filament, legacy.id)
     assert unchanged is not None
     assert unchanged.series is None
-    assert unchanged.spool_weight_g == 750
+    assert unchanged.spool_weight_g == 1000
 
-    spool = db.exec(select(Spool).where(Spool.barcode == "6975337038078")).one()
-    assert spool.total_weight_g == 1000
+    spool = db.exec(select(Spool).where(Spool.barcode == "6975337037293")).one()
+    assert spool.filament_id != legacy.id
+    created = db.get(Filament, spool.filament_id)
+    assert created is not None
+    assert created.series == "ABS-GF"
 
 
 def test_whitespace_barcode_is_rejected(
@@ -1095,7 +1097,48 @@ def test_scan_prefers_a_series_match_over_the_stored_weight(
     assert r.json()["spool"]["filament_id"] == str(existing.id)
 
     db.expire_all()
-    support = db.exec(select(Filament).where(Filament.material == "Support")).all()
-    assert len(support) == 1
+    updated = db.get(Filament, existing.id)
+    assert updated is not None
+    assert updated.spool_weight_g == 750
     spool = db.exec(select(Spool).where(Spool.barcode == "6975337030409")).one()
     assert spool.total_weight_g == 750
+
+
+def test_scan_prefers_the_same_weight_inside_a_series(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    light = Filament(
+        brand="Bambu Lab",
+        material="ABS",
+        series="ABS",
+        color_name="Black 750",
+        color_hex="#000000",
+        spool_weight_g=750,
+    )
+    heavy = Filament(
+        brand="Bambu Lab",
+        material="ABS",
+        series="ABS",
+        color_name="Black 1000",
+        color_hex="#000000",
+        spool_weight_g=1000,
+    )
+    db.add(light)
+    db.add(heavy)
+    db.commit()
+    db.refresh(light)
+    db.refresh(heavy)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337030331", "create": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["spool"]["filament_id"] == str(heavy.id)
+
+    db.expire_all()
+    assert db.get(Filament, light.id).spool_weight_g == 750  # type: ignore[union-attr]
+    assert db.get(Filament, heavy.id).spool_weight_g == 1000  # type: ignore[union-attr]

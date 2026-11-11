@@ -24,7 +24,11 @@ from app.models import (
     SpoolsPublic,
     SpoolUpdate,
 )
-from app.services.bambu_catalog import lookup_barcode, parse_bambu_sku
+from app.services.bambu_catalog import (
+    catalog_series_for,
+    lookup_barcode,
+    parse_bambu_sku,
+)
 
 router = APIRouter(
     prefix="/spools",
@@ -63,13 +67,13 @@ def _find_or_create_catalog_filament(
             )
             .order_by(col(Filament.created_at).asc())
         ).first()
+    weight = data.get("spool_weight_g")
     if not filament:
         # Match an AMS-created filament whose preset id differs from the box
         # catalog. Brand, material, colour and series identify a product;
         # Support W/G/ABS all share brand/material/colour, so series is what
         # keeps them apart.
         series = (data.get("series") or "").strip()
-        weight = data.get("spool_weight_g")
         base = select(Filament).where(
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
             func.lower(Filament.material) == data["material"].lower(),
@@ -89,25 +93,45 @@ def _find_or_create_catalog_filament(
                 query = query.order_by(col(Filament.created_at).asc())
             filament = session.exec(query).first()
             if not filament:
-                # Existing rows predate series. Adopt one and backfill it.
-                query = base.where(col(Filament.series).is_(None))
-                if weight is not None:
-                    query = query.where(Filament.spool_weight_g == weight)
-                filament = session.exec(
-                    query.order_by(col(Filament.created_at).asc())
-                ).first()
-                if filament:
-                    filament.series = series
-                    session.add(filament)
-                    session.flush()
+                # Existing rows predate series. Only adopt one when the
+                # brand/material/colour group names a single product;
+                # otherwise a white legacy row could be Support W while the
+                # scanned box is Support for ABS.
+                known_series = catalog_series_for(
+                    data["brand"], data["material"], data["color_hex"]
+                )
+                if len(known_series) <= 1:
+                    query = base.where(col(Filament.series).is_(None))
+                    if weight is not None:
+                        query = query.order_by(
+                            (Filament.spool_weight_g == weight).desc(),
+                            col(Filament.created_at).asc(),
+                        )
+                    else:
+                        query = query.order_by(col(Filament.created_at).asc())
+                    filament = session.exec(query).first()
+                    if filament:
+                        filament.series = series
+                        session.add(filament)
+                        session.flush()
         else:
             query = base.where(col(Filament.series).is_(None))
             if weight is not None:
-                query = query.where(Filament.spool_weight_g == weight)
-            filament = session.exec(
-                query.order_by(col(Filament.created_at).asc())
-            ).first()
+                query = query.order_by(
+                    (Filament.spool_weight_g == weight).desc(),
+                    col(Filament.created_at).asc(),
+                )
+            else:
+                query = query.order_by(col(Filament.created_at).asc())
+            filament = session.exec(query).first()
     if filament:
+        if weight is not None and filament.spool_weight_g != weight:
+            # The scanned box is authoritative for the package weight; keep
+            # a later confirm without an explicit weight from falling back to
+            # an old default.
+            filament.spool_weight_g = weight
+            session.add(filament)
+            session.flush()
         return filament
 
     filament = Filament(

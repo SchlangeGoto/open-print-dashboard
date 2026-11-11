@@ -110,6 +110,48 @@ def _catalog() -> dict[str, dict[str, Any]]:
     return barcodes
 
 
+def _product_key(brand: Any, material: Any, color_hex: Any) -> tuple[str, str, str]:
+    color = str(color_hex or "").strip().lower()
+    if color and not color.startswith("#"):
+        color = f"#{color}"
+    return (
+        str(brand or "").strip().lower(),
+        str(material or "").strip().lower(),
+        color,
+    )
+
+
+@lru_cache(maxsize=1)
+def _series_by_product() -> dict[tuple[str, str, str], frozenset[str]]:
+    groups: dict[tuple[str, str, str], set[str]] = {}
+    entries = list(_catalog().values()) + list(BAMBU_BARCODES.values())
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        series = entry.get("series")
+        if not series:
+            continue
+        key = _product_key(
+            entry.get("brand") or "Bambu Lab",
+            entry.get("material") or "PLA",
+            entry.get("color_hex") or "",
+        )
+        groups.setdefault(key, set()).add(str(series))
+    return {key: frozenset(values) for key, values in groups.items()}
+
+
+def catalog_series_for(brand: Any, material: Any, color_hex: Any) -> frozenset[str]:
+    """Return every series known for one brand/material/colour group.
+
+    ``Support W``, ``Support for ABS`` and the other white supports share a
+    colour, so a legacy row without a series cannot be assigned one safely
+    when this set has more than one entry.
+    """
+    return _series_by_product().get(
+        _product_key(brand, material, color_hex), frozenset()
+    )
+
+
 def lookup_barcode(code: str) -> dict[str, Any] | None:
     """Return catalog data for a known Bambu packaging barcode."""
     cleaned = normalize_barcode(code)

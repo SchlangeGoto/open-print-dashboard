@@ -95,7 +95,7 @@ class PrinterService:
             if serial in self.clients or serial in self._connecting:
                 return
             self._connecting.add(serial)
-            epoch = self._connect_epochs.get(serial, 0)
+            epoch = self._connect_epochs.setdefault(serial, 0)
         try:
             client = BambuClient()
 

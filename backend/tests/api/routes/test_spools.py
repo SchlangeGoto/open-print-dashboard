@@ -1275,3 +1275,35 @@ def test_reconcile_closes_a_job_that_finished_offline(db: Session, monkeypatch) 
     client._reconcile_open_jobs()
 
     assert saved == [("task-reconcile", "FINISH")]
+
+
+def test_ams_reported_default_weight_still_matches_a_750g_series(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        series="Support W",
+        color_name="Support W",
+        color_hex="#ffffff",
+        spool_weight_g=750,
+        bambu_info_idx=None,
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    client = BambuClient()
+    found = client._ams_filament(
+        db,
+        {
+            "tray_info_idx": "GFS00",
+            "tray_type": "PLA",
+            "tray_color": "FFFFFFFF",
+            "tray_sub_brands": "Support W",
+            "tray_id_name": "Support W",
+            "tray_weight": "1000",
+        },
+    )
+
+    assert found.id == filament.id

@@ -588,30 +588,37 @@ class BambuClient:
                 func.lower(Filament.material) == material.lower(),
                 func.lower(Filament.brand) == brand.lower(),
             )
-            if weight is not None:
-                base = base.where(Filament.spool_weight_g == weight)
             if series:
-                filament = session.exec(
-                    base.where(func.lower(Filament.series) == series.lower()).order_by(
-                        col(Filament.created_at).asc()
+                # The series identifies the product. A package weight that
+                # differs from the stored default is still the same product,
+                # so prefer a same-weight row without excluding the others.
+                query = base.where(func.lower(Filament.series) == series.lower())
+                if weight is not None:
+                    query = query.order_by(
+                        (Filament.spool_weight_g == weight).desc(),
+                        col(Filament.created_at).asc(),
                     )
-                ).first()
+                else:
+                    query = query.order_by(col(Filament.created_at).asc())
+                filament = session.exec(query).first()
                 if not filament:
                     # Adopt a pre-series row and backfill it rather than
                     # splitting the same product into a duplicate.
+                    query = base.where(col(Filament.series).is_(None))
+                    if weight is not None:
+                        query = query.where(Filament.spool_weight_g == weight)
                     filament = session.exec(
-                        base.where(col(Filament.series).is_(None)).order_by(
-                            col(Filament.created_at).asc()
-                        )
+                        query.order_by(col(Filament.created_at).asc())
                     ).first()
                     if filament:
                         filament.series = series
                         session.add(filament)
             else:
+                query = base.where(col(Filament.series).is_(None))
+                if weight is not None:
+                    query = query.where(Filament.spool_weight_g == weight)
                 filament = session.exec(
-                    base.where(col(Filament.series).is_(None)).order_by(
-                        col(Filament.created_at).asc()
-                    )
+                    query.order_by(col(Filament.created_at).asc())
                 ).first()
         if filament:
             return filament

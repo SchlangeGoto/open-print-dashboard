@@ -71,6 +71,10 @@ IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
 IMAGE_TAG=0.2.0
 ```
 
+The `:latest` tag is promoted only when the release tag is the tip of `main`
+when the release guard runs. Pin `IMAGE_TAG` in production so a skipped
+promotion cannot leave the server on an older build.
+
 Use a URL-safe password (hex or base64url) because `DATABASE_URL` embeds it
 without URL encoding. If you copied `.env.example`, change `FRONTEND_HOST` from
 `http://localhost:3000` to the public URL; otherwise CORS and password-reset

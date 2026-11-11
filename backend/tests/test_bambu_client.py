@@ -174,3 +174,29 @@ def test_get_task_filters_the_account_task_list(monkeypatch) -> None:
 
     assert client.get_task("2") == {"id": 2, "title": "B"}
     assert client.get_task("3") is None
+
+
+def test_finish_is_detected_after_a_restart_or_pause() -> None:
+    client = BambuClient()
+    finished: list[tuple[str, str | None]] = []
+    client._on_print_finished = lambda state, task_id=None: finished.append(  # type: ignore[method-assign]
+        (state, task_id)
+    )
+
+    # The first report after a reconnect is already FINISH: there is no
+    # witnessed RUNNING edge to catch.
+    client._handle_print_update({"gcode_state": "FINISH", "task_id": "42"})
+    client._handle_print_update({"gcode_state": "PAUSE"})
+    client._handle_print_update({"gcode_state": "FAILED"})
+
+    assert finished == [("FINISH", "42"), ("FAILED", "42")]
+
+
+def test_first_running_report_after_a_restart_starts_the_job() -> None:
+    client = BambuClient()
+    started: list[str | None] = []
+    client._on_print_started = lambda task_id=None: started.append(task_id)  # type: ignore[method-assign]
+
+    client._handle_print_update({"gcode_state": "RUNNING", "task_id": "7"})
+
+    assert started == ["7"]

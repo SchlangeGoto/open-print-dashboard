@@ -280,6 +280,9 @@ class BambuClient:
             client.subscribe(f"device/{self.serial}/report")
             self._publish(GET_VERSION)
             self._publish(PUSH_ALL)
+            # Close jobs that finished while the backend was offline; the
+            # live report may only show their final state, not the edge.
+            threading.Thread(target=self._reconcile_open_jobs, daemon=True).start()
         else:
             codes = {
                 1: "wrong protocol",
@@ -421,13 +424,19 @@ class BambuClient:
                 ).start()
 
         if (
-            old_state in ("IDLE", "FINISH", "FAILED", "PREPARE")
+            old_state in (None, "IDLE", "FINISH", "FAILED", "PREPARE", "PAUSE")
             and new_state == "RUNNING"
         ):
             logger.info("Print started")
             self._on_print_started(self._current_task_id())
 
-        if old_state == "RUNNING" and new_state in ("FINISH", "FAILED"):
+        # After a restart the first report is already RUNNING or FINISH, so
+        # waiting for a witnessed RUNNING -> FINISH edge loses the print.
+        # The finish handler is idempotent, so a repeated edge is harmless.
+        if old_state in (None, "RUNNING", "PAUSE") and new_state in (
+            "FINISH",
+            "FAILED",
+        ):
             logger.info(f"Print finished with state: {new_state}")
             self._on_print_finished(new_state, self._current_task_id())
 
@@ -443,7 +452,9 @@ class BambuClient:
 
     def _on_print_finished(self, state: str, task_id: str | None = None) -> None:
         """Called when a print completes or fails."""
-        t = threading.Thread(target=self._save_print_job, args=(task_id,), daemon=True)
+        t = threading.Thread(
+            target=self._save_print_job, args=(task_id, state), daemon=True
+        )
         t.start()
 
     def _on_print_started(self, task_id: str | None = None) -> None:
@@ -451,6 +462,29 @@ class BambuClient:
             target=self._save_print_job_init, args=(task_id,), daemon=True
         )
         t.start()
+
+    def _reconcile_open_jobs(self) -> None:
+        """Close jobs whose finish event happened while we were offline."""
+        if not self.serial:
+            return
+        try:
+            with Session(engine) as session:
+                task_ids = session.exec(
+                    select(PrintJob.bambu_task_id)
+                    .where(PrintJob.device_id == self.serial)
+                    .where(PrintJob.status == 4)
+                    .where(col(PrintJob.bambu_task_id).is_not(None))
+                ).all()
+            for task_id in task_ids:
+                if task_id is None:
+                    continue
+                task = self._fetch_cloud_task(str(task_id))
+                if not task or task.get("status") == 4:
+                    continue
+                state = "FINISH" if task.get("status") == 2 else "FAILED"
+                self._save_print_job(str(task_id), state)
+        except Exception as exc:
+            logger.error("Print job reconciliation failed: %s", exc)
 
     def _active_spool(self, session: Session) -> Spool | None:
         """Return the spool loaded in this printer, not another printer.
@@ -487,12 +521,16 @@ class BambuClient:
         return f"#{raw[:6].lower()}"
 
     @staticmethod
-    def _tray_weight(tray: dict) -> float:
+    def _reported_tray_weight(tray: dict) -> float | None:
         try:
             value = float(tray.get("tray_weight") or 0)
         except (TypeError, ValueError):
-            value = 0
-        return value if value > 0 else 1000.0
+            return None
+        return value if value > 0 else None
+
+    @staticmethod
+    def _tray_weight(tray: dict) -> float:
+        return BambuClient._reported_tray_weight(tray) or 1000.0
 
     @staticmethod
     def _tray_remain_percent(tray: dict) -> float | None:
@@ -544,13 +582,14 @@ class BambuClient:
             # catalog. Fall back to brand + material + colour (+ series when
             # the tray names one) so a tray does not attach to another brand's
             # filament or collapse the white Support SKUs.
-            weight = self._tray_weight(tray)
+            weight = self._reported_tray_weight(tray)
             base = select(Filament).where(
                 func.lower(Filament.color_hex) == color.lower(),
                 func.lower(Filament.material) == material.lower(),
                 func.lower(Filament.brand) == brand.lower(),
-                Filament.spool_weight_g == weight,
             )
+            if weight is not None:
+                base = base.where(Filament.spool_weight_g == weight)
             if series:
                 filament = session.exec(
                     base.where(func.lower(Filament.series) == series.lower()).order_by(
@@ -803,13 +842,12 @@ class BambuClient:
                 if not task:
                     break
 
-            if trys >= maxTrys:
-                logger.error(f"Failed to fetch cloud task after {maxTrys} tries")
-                return
-
             if not task or task.get("status") != 4:
                 logger.warning("Task %s never reached the printing state", task_id)
                 return
+            if trys >= maxTrys:
+                # The 30th poll may be the one that reported status 4.
+                logger.info("Task %s reached printing on the last poll", task_id)
 
             cloud_task_id = str(task.get("id"))
             if task_id and cloud_task_id != task_id:
@@ -858,69 +896,74 @@ class BambuClient:
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
 
-    def _save_print_job(self, task_id: str | None = None) -> None:
+    def _save_print_job(
+        self, task_id: str | None = None, observed_state: str | None = None
+    ) -> None:
         """Update the PrintJob and deduct filament once when a print finishes."""
         try:
             task = self._fetch_cloud_task(task_id)
-
             if not task:
-                logger.warning("No cloud task found after print finished")
-                return
-
-            logger.info("Print finished — waiting for cloud to catch up...")
-
-            trys = 0
-            maxTrys = 30
-            while task.get("status") == 4 and trys < maxTrys:
-                time.sleep(1)
-                trys += 1
-                task = self._fetch_cloud_task(task_id)
-                if not task:
-                    break
-
-            if trys >= maxTrys:
-                logger.error(f"Failed to fetch cloud task after {maxTrys} tries")
-                return
-
-            if not task or task.get("status") == 4:
                 logger.warning(
-                    "Task %s was still printing when polling stopped", task_id
+                    "No cloud task found after print finished; closing the local job"
                 )
-                return
 
-            cloud_task_id = str(task.get("id"))
-            if task_id and cloud_task_id != task_id:
-                logger.warning(
-                    "Cloud returned task %s instead of the finished %s; skipping",
-                    cloud_task_id,
-                    task_id,
-                )
+            fallback_status = (
+                2
+                if observed_state == "FINISH"
+                else 3
+                if observed_state == "FAILED"
+                else None
+            )
+            timed_out = False
+
+            if task:
+                logger.info("Print finished — waiting for cloud to catch up...")
+
+                trys = 0
+                maxTrys = 30
+                while task.get("status") == 4 and trys < maxTrys:
+                    time.sleep(1)
+                    trys += 1
+                    task = self._fetch_cloud_task(task_id)
+                    if not task:
+                        break
+
+                if task and task.get("status") == 4 and fallback_status is not None:
+                    # The cloud is slow. Trust the printer's final state so
+                    # the job does not stay active forever, but keep the task
+                    # payload for weight, timestamps and the AMS mapping.
+                    logger.warning(
+                        "Task %s was still printing when polling stopped; "
+                        "using printer state %s",
+                        task_id,
+                        observed_state,
+                    )
+                    timed_out = True
+                    task = {**task, "status": fallback_status}
+                elif task and task.get("status") == 4:
+                    logger.warning(
+                        "Task %s was still printing when polling stopped", task_id
+                    )
+                    return
+
+            if task:
+                cloud_task_id = str(task.get("id"))
+                if task_id and cloud_task_id != task_id:
+                    logger.warning(
+                        "Cloud returned task %s instead of the finished %s; skipping",
+                        cloud_task_id,
+                        task_id,
+                    )
+                    return
+            elif fallback_status is None or not task_id:
+                # Without a cloud payload or a printer state there is nothing
+                # reliable to persist.
                 return
+            else:
+                cloud_task_id = str(task_id)
 
             with Session(engine) as session:
                 active_spool = self._active_spool(session)
-
-                estimated_cost = None
-                if active_spool and task.get("weight"):
-                    recent_spools = session.exec(
-                        select(Spool)
-                        .where(Spool.filament_id == active_spool.filament_id)
-                        .where(Spool.price_per_kg.is_not(None))
-                        .order_by(desc(Spool.created_at))
-                        .limit(5)
-                    ).all()
-
-                    prices = [
-                        s.price_per_kg
-                        for s in recent_spools
-                        if s.price_per_kg and s.price_per_kg > 0
-                    ]
-                    if prices:
-                        avg_price = sum(prices) / len(prices)
-                        estimated_cost = round((task["weight"] / 1000) * avg_price, 2)
-                        logger.info(
-                            f"Estimated cost: €{estimated_cost} (avg €{avg_price}/kg)"
-                        )
 
                 job = session.exec(
                     select(PrintJob)
@@ -929,6 +972,11 @@ class BambuClient:
                 ).first()
 
                 if not job:
+                    if not task:
+                        logger.warning(
+                            "No local job for task %s; nothing to close", task_id
+                        )
+                        return
                     # The start handler may have missed the row. Insert it
                     # without racing another finish thread.
                     session.execute(
@@ -949,38 +997,85 @@ class BambuClient:
                         .where(PrintJob.bambu_task_id == cloud_task_id)
                     ).one()
 
-                job.spool_id = active_spool.id if active_spool else None
-                # Keep the filament set at start even if the spool was deleted
-                # before the print finished.
-                if active_spool:
+                if task:
+                    job.title = task.get("title") or job.title or "Unknown"
+                    if task.get("cover") is not None:
+                        job.cover = task.get("cover")
+                    if task.get("weight") is not None:
+                        job.weight = task.get("weight")
+                    if task.get("costTime") is not None:
+                        job.duration_seconds = task.get("costTime")
+                    job.start_time = (
+                        parse_task_datetime(task.get("startTime")) or job.start_time
+                    )
+                    job.finished_at = parse_task_datetime(task.get("endTime")) or (
+                        datetime.now(UTC) if timed_out else job.finished_at
+                    )
+                    if task.get("status") is not None:
+                        job.status = task.get("status")
+                    mapping = task.get("amsDetailMapping")
+                    if mapping:
+                        job.ams_detail_mapping = json.dumps(mapping)
+                else:
+                    job.finished_at = job.finished_at or datetime.now(UTC)
+                    job.status = fallback_status
+
+                # Keep the spool and filament written at start; AMS slots
+                # already charged their own spools. Only fill blanks.
+                if job.spool_id is None and active_spool:
+                    job.spool_id = active_spool.id
+                if job.filament_id is None and active_spool:
                     job.filament_id = active_spool.filament_id
-                job.title = task.get("title")
-                job.cover = task.get("cover")
-                job.weight = task.get("weight")
-                job.estimated_cost = estimated_cost
-                job.duration_seconds = task.get("costTime")
-                job.start_time = parse_task_datetime(task.get("startTime"))
-                job.finished_at = parse_task_datetime(task.get("endTime"))
-                job.status = task.get("status")
+
+                if task and task.get("weight") and job.filament_id:
+                    recent_spools = session.exec(
+                        select(Spool)
+                        .where(Spool.filament_id == job.filament_id)
+                        .where(Spool.price_per_kg.is_not(None))
+                        .order_by(desc(Spool.created_at))
+                        .limit(5)
+                    ).all()
+
+                    prices = [
+                        s.price_per_kg
+                        for s in recent_spools
+                        if s.price_per_kg and s.price_per_kg > 0
+                    ]
+                    if prices:
+                        avg_price = sum(prices) / len(prices)
+                        estimated_cost = round((task["weight"] / 1000) * avg_price, 2)
+                        job.estimated_cost = estimated_cost
+                        logger.info(
+                            f"Estimated cost: €{estimated_cost} (avg €{avg_price}/kg)"
+                        )
+
                 job.bambu_task_id = cloud_task_id
                 job.device_id = self.serial
-                job.ams_detail_mapping = json.dumps(task.get("amsDetailMapping", []))
-
                 session.add(job)
 
-                # Claim the one deduction for this job atomically. The second
-                # thread blocks on the row lock, then sees the marker and
-                # skips; check-then-write was not enough.
-                if self._claim_filament_deduction(session, job.id):
-                    self._deduct_filament_from_spools(session, task)
+                if task:
+                    # Claim the one deduction for this job atomically. The
+                    # second thread blocks on the row lock, then sees the
+                    # marker and skips; check-then-write was not enough.
+                    if self._claim_filament_deduction(session, job.id):
+                        self._deduct_filament_from_spools(session, task)
+                    else:
+                        logger.info(
+                            "Skipped deduction for task %s: already claimed",
+                            cloud_task_id,
+                        )
                 else:
                     logger.info(
-                        "Skipped deduction for task %s: already claimed",
+                        "Closed task %s from printer state without a cloud payload",
                         cloud_task_id,
                     )
 
                 session.commit()
-                logger.info(f"PrintJob saved: {job.title} — {task.get('weight')}g used")
+                logger.info(
+                    "PrintJob saved: %s — %sg used",
+                    job.title,
+                    task.get("weight") if task else None,
+                )
 
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
@@ -1014,6 +1109,7 @@ class BambuClient:
         if slot_id is None:
             slot_id = slot.get("slot")
 
+        untagged_tray = False
         if ams_id is not None and slot_id is not None:
             for unit in self._current_status.get("ams", []) or []:
                 try:
@@ -1041,6 +1137,7 @@ class BambuClient:
                         # A tagged tray names one physical roll. If it is
                         # missing or already claimed, do not charge another.
                         return None
+                    untagged_tray = True
                     break
 
         if printer_id:
@@ -1049,6 +1146,7 @@ class BambuClient:
                 .join(Filament, Spool.filament_id == Filament.id)
                 .where(Spool.printer_id == printer_id)
                 .where(col(Spool.remaining_unknown).is_(False))
+                .where(col(Spool.tag_uid).is_(None))
                 .order_by(
                     col(Spool.active).desc(),
                     col(Spool.created_at).asc(),
@@ -1076,6 +1174,8 @@ class BambuClient:
             and active_spool.id not in used_spool_ids
             and not active_spool.remaining_unknown
         ):
+            if untagged_tray and self._real_tag(active_spool.tag_uid):
+                return None
             if not (filament_id or filament_type):
                 return active_spool
             filament = (
@@ -1122,6 +1222,7 @@ class BambuClient:
             return
 
         used_spool_ids: set[uuid.UUID] = set()
+        resolved_by_slot: dict[tuple[int, int], Spool] = {}
         for slot in ams_mapping:
             used_g = slot.get("weight", 0)
             if not used_g:
@@ -1130,14 +1231,29 @@ class BambuClient:
             filament_id = slot.get("filamentId")  # e.g. "GFL99"
             filament_type = slot.get("filamentType")  # e.g. "PLA"
 
-            spool = self._spool_for_ams_slot(
-                session,
-                printer_id,
-                slot,
-                used_spool_ids,
-                filament_id,
-                filament_type,
-            )
+            ams_id = slot.get("amsId")
+            if ams_id is None:
+                ams_id = slot.get("ams")
+            slot_id = slot.get("slotId")
+            if slot_id is None:
+                slot_id = slot.get("slot")
+            try:
+                slot_key = (int(ams_id), int(slot_id))
+            except (TypeError, ValueError):
+                slot_key = None
+
+            spool = resolved_by_slot.get(slot_key) if slot_key else None
+            if spool is None:
+                spool = self._spool_for_ams_slot(
+                    session,
+                    printer_id,
+                    slot,
+                    used_spool_ids,
+                    filament_id,
+                    filament_type,
+                )
+                if spool and slot_key:
+                    resolved_by_slot[slot_key] = spool
             if not spool:
                 logger.warning(
                     "No matching spool for slot %s (%s); skipped %sg",

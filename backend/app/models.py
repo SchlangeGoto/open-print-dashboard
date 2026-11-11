@@ -252,12 +252,13 @@ class Spool(SpoolBase, table=True):
             postgresql_where=text("active"),
         ),
         Index("uq_spool_request_id", "request_id", unique=True),
+        Index("ix_spool_filament_created", "filament_id", "created_at"),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     filament_id: uuid.UUID | None = Field(
-        default=None, foreign_key="filament.id", ondelete="CASCADE", index=True
+        default=None, foreign_key="filament.id", ondelete="CASCADE"
     )
     printer_id: uuid.UUID | None = Field(
         default=None, foreign_key="printer.id", ondelete="SET NULL", index=True
@@ -372,6 +373,11 @@ class PrintJob(PrintJobBase, table=True):
     # Set when filament was subtracted for this job, so a repeated finish
     # event cannot deduct the same print twice.
     filament_deducted_at: datetime | None = None
+    # A finish that cannot resolve its AMS mapping yet is retried. These
+    # fields survive a restart so /prints/active cannot stay stuck forever.
+    finish_requested_at: datetime | None = None
+    finish_attempts: int = 0
+    finish_state: str | None = Field(default=None, max_length=10)
     # Denormalised so filament statistics survive deleting the spool.
     filament_id: uuid.UUID | None = Field(
         default=None, foreign_key="filament.id", ondelete="SET NULL", index=True

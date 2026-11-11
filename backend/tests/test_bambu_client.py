@@ -200,3 +200,22 @@ def test_first_running_report_after_a_restart_starts_the_job() -> None:
     client._handle_print_update({"gcode_state": "RUNNING", "task_id": "7"})
 
     assert started == ["7"]
+
+
+def test_first_ams_report_retries_a_deferred_finish(monkeypatch) -> None:
+    import threading
+
+    client = BambuClient()
+    client._reconcile_on_ams = True
+    retried = threading.Event()
+
+    monkeypatch.setattr(client, "_sync_ams_trays", lambda *args: None)
+    monkeypatch.setattr(client, "_on_print_started", lambda *args: None)
+    monkeypatch.setattr(client, "_on_print_finished", lambda *args: None)
+    monkeypatch.setattr(client, "_reconcile_open_jobs", lambda: retried.set())
+
+    client._handle_print_update(
+        {"gcode_state": "FINISH", "ams": {"ams": [{"id": 0, "tray": []}]}}
+    )
+
+    assert retried.wait(1)

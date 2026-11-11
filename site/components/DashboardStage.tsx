@@ -138,7 +138,7 @@ export function DashboardStage({
                 >
                   <img
                     src={layer.src}
-                    srcSet={imageSrcSet(layer.src)}
+                    srcSet={imageSrcSet(layer.src, [1600, 2400], 3200)}
                     alt=""
                     width={width}
                     height={height}
@@ -158,7 +158,7 @@ export function DashboardStage({
               />
               <img
                 src={src}
-                srcSet={imageSrcSet(src)}
+                srcSet={imageSrcSet(src, [1600, 2400], 3200)}
                 alt={alt}
                 width={width}
                 height={height}

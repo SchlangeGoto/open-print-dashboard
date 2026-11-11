@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import SQLModel
@@ -269,11 +269,13 @@ def reconnect_printer(*, session: SessionDep, printer_id: uuid.UUID) -> Any:
     return Message(message="Printer connection restarted")
 
 
-@router.get("/{printer_id}/tasks")
-def get_printer_tasks(printer_id: str, limit: int = 20) -> Any:
-    return printer_service.cloud_client.get_print_tasks_for_printer(printer_id, limit)
+@router.get("/{serial}/tasks")
+def get_printer_tasks(
+    serial: str, limit: int = Query(default=20, ge=1, le=1000)
+) -> Any:
+    return printer_service.cloud_client.get_print_tasks_for_printer(serial, limit)
 
 
-@router.get("/{printer_id}/firmware")
-def get_printer_firmware(printer_id: str) -> Any:
-    return printer_service.cloud_client.get_firmware_info(printer_id)
+@router.get("/{serial}/firmware")
+def get_printer_firmware(serial: str) -> Any:
+    return printer_service.cloud_client.get_firmware_info(serial)

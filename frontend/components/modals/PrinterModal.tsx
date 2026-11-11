@@ -86,7 +86,7 @@ export default function PrinterModal({
             </p>
           ) : (
             <Progress
-              aria-label="Loaded spool remaining"
+              aria-label={`Loaded spool remaining for ${loadedFilament.color_name}`}
               value={spoolPct}
               className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
               style={

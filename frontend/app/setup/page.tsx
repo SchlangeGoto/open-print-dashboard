@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   Check,
@@ -41,23 +41,11 @@ const steps = [
 ];
 
 export default function SetupPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-dvh items-center justify-center p-6">
-          <p className="text-sm text-muted-foreground">Loading setup…</p>
-        </main>
-      }
-    >
-      <SetupContent />
-    </Suspense>
-  );
-}
-
-function SetupContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const forceSetup = searchParams.get("force") === "1";
+  // Read the query string after hydration instead of with useSearchParams:
+  // that keeps the static page from needing a Suspense fallback that replaces
+  // the whole wizard with "Loading setup…".
+  const [forceSetup, setForceSetup] = useState<boolean | null>(null);
   const { login, demoAvailable, enterDemo } = useAuth();
   const [step, setStep] = useState<SetupStep>("account");
   const [error, setError] = useState("");
@@ -80,6 +68,11 @@ function SetupContent() {
   const [printerLoadError, setPrinterLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    setForceSetup(new URLSearchParams(window.location.search).get("force") === "1");
+  }, []);
+
+  useEffect(() => {
+    if (forceSetup === null) return;
     api
       .getSetupStatus()
       .then(async (status) => {

@@ -263,7 +263,7 @@ export default function SpoolsPage() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {spools.map((s) => {
+          {spools.map((s, spoolIndex) => {
             const fil = getFilament(s.filament_id);
             const unknown = Boolean(s.remaining_unknown);
             const pct =
@@ -364,7 +364,7 @@ export default function SpoolsPage() {
                           <span className="tabular-nums">{pct}%</span>
                         </div>
                         <Progress
-                          aria-label={`Spool remaining for ${fil?.color_name ?? "spool"}`}
+                          aria-label={`Spool remaining for ${fil?.color_name ?? "spool"}, item ${spoolIndex + 1} of ${spools.length}`}
                           value={pct}
                           className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                           style={

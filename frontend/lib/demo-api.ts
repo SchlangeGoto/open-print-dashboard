@@ -375,10 +375,14 @@ export const demoApi: ApiShape = {
     return delay({ message: "Filament deleted (demo mode)" }, 120);
   },
 
-  getFilamentSpools: (filamentId) =>
-    delay(
+  getFilamentSpools: (filamentId) => {
+    if (!getFilamentsRaw().some((filament) => filament.id === filamentId)) {
+      throw new Error("Filament not found");
+    }
+    return delay(
       getSpoolsRaw().filter((spool) => spool.filament_id === filamentId),
-    ),
+    );
+  },
 
   getFilamentStats: (filamentId) => {
     const spools = getSpoolsRaw().filter(

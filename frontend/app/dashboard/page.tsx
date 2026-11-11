@@ -317,7 +317,7 @@ export default function DashboardPage() {
                         <span className="tabular-nums">{pct}%</span>
                       </div>
                       <Progress
-                        aria-label={`Print progress for ${p.title}`}
+                        aria-label={`Print progress for ${p.title} on ${printer?.name ?? p.device_id ?? "printer"}`}
                         value={pct}
                         className="[&_[data-slot=progress-track]]:h-2"
                       />
@@ -515,7 +515,7 @@ export default function DashboardPage() {
                               </p>
                             ) : (
                               <Progress
-                                aria-label="Loaded spool remaining"
+                                aria-label={`Loaded spool remaining for ${dev.name}`}
                                 value={loadedPct}
                                 className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                                 style={

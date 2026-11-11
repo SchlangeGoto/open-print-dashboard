@@ -401,7 +401,7 @@ export default function PrintersPage() {
                             </p>
                           ) : (
                             <Progress
-                              aria-label="Loaded spool remaining"
+                              aria-label={`Loaded spool remaining for ${printer.name}`}
                               value={loadedPct}
                               className="mt-1.5 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-[var(--spool-color)]"
                               style={

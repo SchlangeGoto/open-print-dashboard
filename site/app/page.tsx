@@ -86,7 +86,7 @@ export default function HomePage() {
             </h1>
             <p className="mt-6 max-w-[52ch] text-lead leading-8 text-[var(--color-muted)]">
               Live status, filament stock and material costs, self-hosted in one
-              Docker container.
+              Docker Compose stack.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a

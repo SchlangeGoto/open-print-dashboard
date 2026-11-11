@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Check,
@@ -40,6 +40,14 @@ const steps = [
   { key: "printer", label: "Choose Printer" },
 ];
 
+function ForceParam({ onChange }: { onChange: (value: boolean) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    onChange(searchParams.get("force") === "1");
+  }, [onChange, searchParams]);
+  return null;
+}
+
 export default function SetupPage() {
   const router = useRouter();
   // Read the query string after hydration instead of with useSearchParams:
@@ -66,10 +74,6 @@ export default function SetupPage() {
   const [selectedSerial, setSelectedSerial] = useState("");
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [printerLoadError, setPrinterLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setForceSetup(new URLSearchParams(window.location.search).get("force") === "1");
-  }, []);
 
   useEffect(() => {
     if (forceSetup === null) return;
@@ -230,6 +234,9 @@ export default function SetupPage() {
 
   return (
     <main className="flex min-h-svh items-center justify-center p-6">
+      <Suspense fallback={null}>
+        <ForceParam onChange={setForceSetup} />
+      </Suspense>
       <div className="w-full max-w-lg">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex rounded-2xl bg-primary/10 p-4 ring-1 ring-primary/20">

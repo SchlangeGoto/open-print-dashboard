@@ -2208,7 +2208,7 @@ def test_reconcile_retries_a_stuck_finished_job(db: Session, monkeypatch) -> Non
         status=2,
         device_id=printer.serial,
         bambu_task_id="task-stuck",
-        finished_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC) - timedelta(hours=8),
         weight=100,
         spool_id=spool.id,
         ams_detail_mapping=json.dumps(mapping),
@@ -2798,3 +2798,72 @@ def test_finish_prefers_the_start_spool_for_a_single_slot(
     assert stored is not None
     assert stored.deduction_spools is not None
     assert str(roll_a.id) in stored.deduction_spools
+
+
+def test_unmapped_finish_charges_the_start_spool(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Unmapped finish",
+        color_hex="#050607",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    start_spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(start_spool)
+    db.commit()
+    db.refresh(start_spool)
+
+    job = PrintJob(
+        title="Unmapped finish",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-unmapped",
+        spool_id=start_spool.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # The user activates another spool before the finish arrives.
+    start_spool.active = False
+    start_spool.printer_id = None
+    current_spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(current_spool)
+    db.commit()
+    db.refresh(current_spool)
+
+    task = {
+        "id": "task-unmapped",
+        "title": "Unmapped finish",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("task-unmapped", "FINISH")
+
+    db.expire_all()
+    assert db.get(Spool, start_spool.id).remaining_g == 900  # type: ignore[union-attr]
+    assert db.get(Spool, current_spool.id).remaining_g == 1000  # type: ignore[union-attr]

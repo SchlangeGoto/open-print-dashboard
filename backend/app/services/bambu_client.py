@@ -26,7 +26,9 @@ TASK_LOOKUP_DELAY = 1.0
 # A deferred finish is retried on the next reports/reconcile passes.
 MAX_FINISH_ATTEMPTS = 3
 RECONCILE_INTERVAL = 300
-DEDUCTION_RETRY_HOURS = 6
+# A weekend outage must not drop deductions; the recorded spool map
+# keeps the retry safe.
+DEDUCTION_RETRY_HOURS = 168
 STALE_OPEN_JOB_HOURS = 24
 
 
@@ -1517,7 +1519,10 @@ class BambuClient:
                     )
                 elif self._claim_filament_deduction(session, job.id):
                     self._deduct_filament_from_spools(
-                        session, task, resolved_spools or None
+                        session,
+                        task,
+                        resolved_spools or None,
+                        job.spool_id,
                     )
                 else:
                     logger.info(
@@ -1733,6 +1738,7 @@ class BambuClient:
         session: Session,
         task: dict,
         resolved_by_slot: dict[tuple[int, int], Spool] | None = None,
+        preferred_spool_id: uuid.UUID | None = None,
     ) -> None:
         """Deduct filament usage per color slot from the correct spools.
 
@@ -1740,19 +1746,17 @@ class BambuClient:
         """
         ams_mapping = task.get("amsDetailMapping", []) or []
         if not ams_mapping:
-            active_spool = self._active_spool(session)
-            if (
-                active_spool
-                and task.get("weight")
-                and not active_spool.remaining_unknown
-            ):
-                active_spool.remaining_g = max(
-                    0, active_spool.remaining_g - task["weight"]
-                )
-                active_spool.last_used_at = datetime.now(UTC)
-                logger.info(
-                    f"Deducted {task['weight']}g from active spool {active_spool.id}"
-                )
+            # An unmapped print must charge the spool recorded at start,
+            # not whichever spool is active when the finish arrives.
+            spool = (
+                session.get(Spool, preferred_spool_id) if preferred_spool_id else None
+            )
+            if spool is None:
+                spool = self._active_spool(session)
+            if spool and task.get("weight") and not spool.remaining_unknown:
+                spool.remaining_g = max(0, spool.remaining_g - task["weight"])
+                spool.last_used_at = datetime.now(UTC)
+                logger.info(f"Deducted {task['weight']}g from spool {spool.id}")
             return
 
         if resolved_by_slot is None:

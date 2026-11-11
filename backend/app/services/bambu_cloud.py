@@ -253,6 +253,16 @@ class BambuCloudClient:
                 if resp.is_redirect or resp.status_code >= 300:
                     logger.warning("Cover URL redirected; refusing %s", url)
                     return None
+                content_type = (resp.headers.get("Content-Type") or "").lower()
+                if not content_type.startswith(
+                    ("image/", "application/octet-stream", "binary/octet-stream")
+                ):
+                    logger.warning(
+                        "Cover URL returned %s; refusing %s",
+                        content_type or "no content type",
+                        url,
+                    )
+                    return None
                 content = bytearray()
                 for chunk in resp.iter_content(chunk_size=64 * 1024):
                     content.extend(chunk)
@@ -261,6 +271,9 @@ class BambuCloudClient:
                             "Cover image at %s exceeds %s bytes", url, MAX_COVER_BYTES
                         )
                         return None
+                if not content:
+                    logger.warning("Cover URL returned an empty body: %s", url)
+                    return None
                 return bytes(content)
         except requests.RequestException as e:
             logger.error(f"Failed to download cover image: {e}")

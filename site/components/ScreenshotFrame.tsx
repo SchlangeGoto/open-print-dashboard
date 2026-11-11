@@ -44,8 +44,8 @@ export function ScreenshotFrame({
   caption,
   tone = "dark",
   responsive = false,
-  variantWidths = [1600, 2400],
-  nativeWidth = 3200,
+  variantWidths,
+  nativeWidth,
   sizes = "(max-width: 768px) 100vw, 1100px",
 }: ScreenshotFrameProps) {
   const reduce = useReducedMotion();

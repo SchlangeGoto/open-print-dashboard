@@ -35,7 +35,7 @@ export function NativePhones() {
               <div className="phone-screen">
                 <img
                   src={screen.src}
-                  srcSet={imageSrcSet(screen.src, [390, 585, 780], 1170)}
+                  srcSet={imageSrcSet(screen.src)}
                   alt={screen.alt}
                   width={1170}
                   height={2532}

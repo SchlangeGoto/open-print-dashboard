@@ -1,13 +1,38 @@
-/** Pre-generated variants; the master/variant list is scripts/image-variants.json. */
+import manifest from "../scripts/image-variants.json";
+
+type ImageEntry = {
+  file: string;
+  width: number;
+  variants: number[];
+};
+
+const entries = new Map<string, ImageEntry>(
+  (manifest.masters as ImageEntry[]).map((entry) => [entry.file, entry]),
+);
+
+function entryFor(src: string): ImageEntry | undefined {
+  return entries.get(src.split("/").pop() ?? src);
+}
+
+/** Width of the first generated variant, used by the hero mobile source. */
+export function imageMobileVariantWidth(src: string): number {
+  return entryFor(src)?.variants[0] ?? 1600;
+}
+
 export function imageVariant(src: string, width: number): string {
   return src.replace(/\.jpg$/, `-${width}.jpg`);
 }
 
 export function imageSrcSet(
   src: string,
-  widths: number[],
-  nativeWidth: number,
+  widths?: number[],
+  nativeWidth?: number,
 ): string {
-  const variants = widths.map((width) => `${imageVariant(src, width)} ${width}w`);
-  return [...variants, `${src} ${nativeWidth}w`].join(", ");
+  const entry = entryFor(src);
+  const candidates = (widths ?? entry?.variants ?? []).map(
+    (width) => `${imageVariant(src, width)} ${width}w`,
+  );
+  const native = nativeWidth ?? entry?.width;
+  candidates.push(native ? `${src} ${native}w` : src);
+  return candidates.join(", ");
 }

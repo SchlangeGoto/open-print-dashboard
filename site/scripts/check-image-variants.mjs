@@ -3,7 +3,7 @@
 // exists at the expected width. This reads JPEG SOF headers directly so CI
 // does not need ImageMagick. Run `npm run images:variants` after replacing a
 // master.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,11 +63,45 @@ function checkFile(name, expectedWidth) {
   }
 }
 
+const manifestFiles = new Set(manifest.masters.map((entry) => entry.file));
+
 for (const entry of manifest.masters) {
   checkFile(entry.file, entry.width);
   const base = entry.file.slice(0, -4);
   for (const width of entry.variants) {
     checkFile(`${base}-${width}.jpg`, width);
+  }
+}
+
+// Every screenshot referenced by the site must have a manifest entry, so a
+// new capture cannot silently ship without generated variants.
+const sourceRoots = [join(here, "..", "app"), join(here, "..", "components")];
+const referenced = new Set();
+
+function collectReferences(dir) {
+  for (const item of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, item.name);
+    if (item.isDirectory()) {
+      collectReferences(path);
+      continue;
+    }
+    if (!item.name.endsWith(".tsx")) {
+      continue;
+    }
+    const source = readFileSync(path, "utf8");
+    for (const match of source.matchAll(/\/screenshots\/([A-Za-z0-9._-]+\.jpg)/g)) {
+      referenced.add(match[1]);
+    }
+  }
+}
+
+for (const dir of sourceRoots) {
+  collectReferences(dir);
+}
+for (const name of referenced) {
+  if (!manifestFiles.has(name)) {
+    console.error(`screenshot not listed in scripts/image-variants.json: ${name}`);
+    failed = true;
   }
 }
 

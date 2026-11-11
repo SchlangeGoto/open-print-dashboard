@@ -3,7 +3,11 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
-import { imageSrcSet, imageVariant } from "@/lib/images";
+import {
+  imageMobileVariantWidth,
+  imageSrcSet,
+  imageVariant,
+} from "@/lib/images";
 import {
   motion,
   useMotionTemplate,
@@ -52,6 +56,7 @@ export function DashboardStage({
   const reduce = useReducedMotion();
   const [canTilt, setCanTilt] = useState(false);
   const [showBackLayers, setShowBackLayers] = useState(false);
+  const mobileWidth = imageMobileVariantWidth(src);
 
   const pointerX = useMotionValue(0);
   const pointerY = useMotionValue(0);
@@ -97,7 +102,8 @@ export function DashboardStage({
     updateLayers();
     tiltQuery.addEventListener("change", updateTilt);
     layerQuery.addEventListener("change", updateLayers);
-    return () => {
+
+  return () => {
       tiltQuery.removeEventListener("change", updateTilt);
       layerQuery.removeEventListener("change", updateLayers);
     };
@@ -138,7 +144,7 @@ export function DashboardStage({
                 >
                   <img
                     src={layer.src}
-                    srcSet={imageSrcSet(layer.src, [1600, 2400], 3200)}
+                    srcSet={imageSrcSet(layer.src)}
                     alt=""
                     width={width}
                     height={height}
@@ -153,12 +159,12 @@ export function DashboardStage({
             <picture>
               <source
                 media="(max-width: 768px)"
-                srcSet={`${imageVariant(src, 1600)} 1600w`}
+                srcSet={`${imageVariant(src, mobileWidth)} ${mobileWidth}w`}
                 sizes="100vw"
               />
               <img
                 src={src}
-                srcSet={imageSrcSet(src, [1600, 2400], 3200)}
+                srcSet={imageSrcSet(src)}
                 alt={alt}
                 width={width}
                 height={height}

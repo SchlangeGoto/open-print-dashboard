@@ -261,7 +261,7 @@ export function FeatureShowcase() {
                 <img
                   key={item.image}
                   src={item.image}
-                  srcSet={imageSrcSet(item.image, [1600, 2400], 3200)}
+                  srcSet={imageSrcSet(item.image)}
                   alt={index === active ? item.alt : ""}
                   loading="lazy"
                   sizes="(max-width: 1360px) 100vw, 1360px"
@@ -283,11 +283,7 @@ export function FeatureShowcase() {
                 <>
                   <img
                     src="/screenshots/app-scan-crop.jpg"
-                    srcSet={imageSrcSet(
-                      "/screenshots/app-scan-crop.jpg",
-                      [390, 585, 780],
-                      1170,
-                    )}
+                    srcSet={imageSrcSet("/screenshots/app-scan-crop.jpg")}
                     alt={
                       active === 5
                         ? "Open Print mobile scanner framing a Bambu filament box barcode"
@@ -300,11 +296,7 @@ export function FeatureShowcase() {
                   <div className="absolute inset-0 hidden lg:block">
                     <img
                       src="/screenshots/app-scan-crop.jpg"
-                      srcSet={imageSrcSet(
-                        "/screenshots/app-scan-crop.jpg",
-                        [390, 585, 780],
-                        1170,
-                      )}
+                      srcSet={imageSrcSet("/screenshots/app-scan-crop.jpg")}
                       alt=""
                       loading="lazy"
                       sizes="(max-width: 1360px) 100vw, 1360px"
@@ -315,11 +307,7 @@ export function FeatureShowcase() {
                       <div className="relative aspect-[1170/2532] h-full overflow-hidden rounded-[1.75rem] border border-[var(--color-rule-strong)] bg-[var(--color-paper)] shadow-[0_30px_70px_-20px_var(--color-paper-deep)]">
                         <img
                           src="/screenshots/app-scan.jpg"
-                          srcSet={imageSrcSet(
-                            "/screenshots/app-scan.jpg",
-                            [390, 585, 780],
-                            1170,
-                          )}
+                          srcSet={imageSrcSet("/screenshots/app-scan.jpg")}
                           alt={
                             active === 5
                               ? "Open Print mobile scanner framing a Bambu filament box barcode"

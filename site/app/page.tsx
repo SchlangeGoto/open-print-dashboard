@@ -173,8 +173,6 @@ export default function HomePage() {
             height={1000}
             caption="Demo data"
             responsive
-            variantWidths={[620, 930]}
-            nativeWidth={1240}
             sizes="(max-width: 768px) 100vw, 700px"
           />
         </div>

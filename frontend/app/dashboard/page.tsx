@@ -317,7 +317,7 @@ export default function DashboardPage() {
                         <span className="tabular-nums">{pct}%</span>
                       </div>
                       <Progress
-                        aria-label="Print progress"
+                        aria-label={`Print progress for ${p.title}`}
                         value={pct}
                         className="[&_[data-slot=progress-track]]:h-2"
                       />
@@ -459,7 +459,7 @@ export default function DashboardPage() {
                           {deviceStatus?.subtask_name ?? printerPrint?.title ?? "Unknown"}
                         </p>
                         <Progress
-                          aria-label="Print progress"
+                          aria-label={`Print progress for ${dev.name}`}
                           value={
                             deviceStatus?.mc_percent ??
                             printerPrint?.mc_percent ??

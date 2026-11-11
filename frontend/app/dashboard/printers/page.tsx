@@ -354,7 +354,7 @@ export default function PrintersPage() {
                         {activePrint?.title ?? status?.subtask_name ?? "Unknown"}
                       </p>
                       <Progress
-                        aria-label="Print progress"
+                        aria-label={`Print progress for ${printer.name}`}
                         value={pct}
                         className="mt-2 [&_[data-slot=progress-track]]:h-1.5"
                       />

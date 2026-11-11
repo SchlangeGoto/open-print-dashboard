@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "images:variants": "bash scripts/generate-image-variants.sh",
+    "images:variants": "node scripts/generate-image-variants.mjs",
     "images:check": "node scripts/check-image-variants.mjs"
   },
   "dependencies": {

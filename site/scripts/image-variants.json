@@ -1,0 +1,15 @@
+{
+  "masters": [
+    { "file": "overview.jpg", "width": 3200, "variants": [1600, 2400] },
+    { "file": "printers.jpg", "width": 3200, "variants": [1600, 2400] },
+    { "file": "print-jobs.jpg", "width": 3200, "variants": [1600, 2400] },
+    { "file": "filaments.jpg", "width": 3200, "variants": [1600, 2400] },
+    { "file": "spools.jpg", "width": 3200, "variants": [1600, 2400] },
+    { "file": "analytics.jpg", "width": 3200, "variants": [1600, 2400] },
+    { "file": "app-spools.jpg", "width": 1170, "variants": [390, 585, 780] },
+    { "file": "app-spool.jpg", "width": 1170, "variants": [390, 585, 780] },
+    { "file": "app-scan.jpg", "width": 1170, "variants": [390, 585, 780] },
+    { "file": "app-scan-crop.jpg", "width": 1170, "variants": [390, 585, 780] },
+    { "file": "printer-detail.jpg", "width": 1240, "variants": [620, 930] }
+  ]
+}

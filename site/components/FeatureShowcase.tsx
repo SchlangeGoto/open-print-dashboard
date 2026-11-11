@@ -83,6 +83,19 @@ export function FeatureShowcase() {
   const reduce = useReducedMotion();
   const feature = features[active];
 
+  function warmSlide(index: number) {
+    setVisited((current) =>
+      current.has(index) ? current : new Set(current).add(index),
+    );
+  }
+
+  useEffect(() => {
+    // The scanner slide is a common jump target; load it once the section
+    // has settled so the fade never starts with an empty frame.
+    const timer = window.setTimeout(() => warmSlide(5), 2000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start start", "end end"],
@@ -192,7 +205,12 @@ export function FeatureShowcase() {
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => selectFeature(index)}
-                onFocus={() => setActive(index)}
+                onPointerEnter={() => warmSlide(index)}
+                onPointerDown={() => warmSlide(index)}
+                onFocus={() => {
+                  warmSlide(index);
+                  setActive(index);
+                }}
                 className={`relative flex items-center gap-2 border-b border-[var(--color-rule)] py-3 text-left transition-colors ${
                   isActive
                     ? "text-[var(--color-ink)]"

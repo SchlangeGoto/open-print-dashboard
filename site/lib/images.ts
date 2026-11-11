@@ -1,4 +1,4 @@
-/** Pre-generated responsive variants for the 3200×2000 screenshots. */
+/** Pre-generated variants; the master/variant list is scripts/image-variants.json. */
 export function imageVariant(src: string, width: number): string {
   return src.replace(/\.jpg$/, `-${width}.jpg`);
 }

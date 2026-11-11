@@ -40,7 +40,7 @@ export function NativePhones() {
                   width={1170}
                   height={2532}
                   loading="lazy"
-                  sizes="(max-width: 767px) 72vw, 420px"
+                  sizes="(max-width: 767px) 72vw, (max-width: 1023px) 30vw, 420px"
                   className="block h-auto w-full"
                 />
               </div>

@@ -217,20 +217,28 @@ export function FeatureShowcase() {
                 : ""
             }`}
           >
-            {features.slice(0, 5).map((item, index) => (
-              <img
-                key={item.image}
-                src={item.image}
-                srcSet={imageSrcSet(item.image, [1600, 2400], 3200)}
-                alt={index === active ? item.alt : ""}
-                loading="lazy"
-                sizes="(max-width: 1360px) 100vw, 1360px"
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 motion-reduce:transition-none ${
-                  index === active ? "opacity-100" : "opacity-0"
-                }`}
-                aria-hidden={index !== active}
-              />
-            ))}
+            {features.slice(0, 5).map((item, index) => {
+              // opacity-0 still downloads the image. Keep the active slide
+              // and its neighbours (for the cross-fade) and leave the rest
+              // unmounted until they are about to be shown.
+              if (Math.abs(index - active) > 1) {
+                return null;
+              }
+              return (
+                <img
+                  key={item.image}
+                  src={item.image}
+                  srcSet={imageSrcSet(item.image, [1600, 2400], 3200)}
+                  alt={index === active ? item.alt : ""}
+                  loading="lazy"
+                  sizes="(max-width: 1360px) 100vw, 1360px"
+                  className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 motion-reduce:transition-none ${
+                    index === active ? "opacity-100" : "opacity-0"
+                  }`}
+                  aria-hidden={index !== active}
+                />
+              );
+            })}
 
             <div
               className={`absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none ${
@@ -238,45 +246,61 @@ export function FeatureShowcase() {
               }`}
               aria-hidden={active !== 5}
             >
-              <img
-                src="/screenshots/app-scan-crop.jpg"
-                srcSet={imageSrcSet("/screenshots/app-scan-crop.jpg", [390, 585, 780], 1170)}
-                alt={
-                  active === 5
-                    ? "Open Print mobile scanner framing a Bambu filament box barcode"
-                    : ""
-                }
-                loading="lazy"
-                sizes="(max-width: 1360px) 100vw, 1360px"
-                className="absolute inset-0 h-full w-full object-cover lg:hidden"
-              />
-              <div className="absolute inset-0 hidden lg:block">
-                <img
-                  src="/screenshots/app-scan-crop.jpg"
-                  srcSet={imageSrcSet("/screenshots/app-scan-crop.jpg", [390, 585, 780], 1170)}
-                  alt=""
-                  loading="lazy"
-                  sizes="(max-width: 1360px) 100vw, 1360px"
-                  className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
-                />
-                <div className="absolute inset-0 bg-[var(--color-paper)] opacity-55" />
-                <div className="relative flex h-full items-center justify-center p-6">
-                  <div className="relative aspect-[1170/2532] h-full overflow-hidden rounded-[1.75rem] border border-[var(--color-rule-strong)] bg-[var(--color-paper)] shadow-[0_30px_70px_-20px_var(--color-paper-deep)]">
+              {active >= 4 ? (
+                <>
+                  <img
+                    src="/screenshots/app-scan-crop.jpg"
+                    srcSet={imageSrcSet(
+                      "/screenshots/app-scan-crop.jpg",
+                      [390, 585, 780],
+                      1170,
+                    )}
+                    alt={
+                      active === 5
+                        ? "Open Print mobile scanner framing a Bambu filament box barcode"
+                        : ""
+                    }
+                    loading="lazy"
+                    sizes="(max-width: 1360px) 100vw, 1360px"
+                    className="absolute inset-0 h-full w-full object-cover lg:hidden"
+                  />
+                  <div className="absolute inset-0 hidden lg:block">
                     <img
-                      src="/screenshots/app-scan.jpg"
-                      srcSet={imageSrcSet("/screenshots/app-scan.jpg", [390, 585, 780], 1170)}
-                      alt={
-                        active === 5
-                          ? "Open Print mobile scanner framing a Bambu filament box barcode"
-                          : ""
-                      }
+                      src="/screenshots/app-scan-crop.jpg"
+                      srcSet={imageSrcSet(
+                        "/screenshots/app-scan-crop.jpg",
+                        [390, 585, 780],
+                        1170,
+                      )}
+                      alt=""
                       loading="lazy"
-                      sizes="(max-width: 1360px) 40vw, 540px"
-                      className="absolute inset-0 h-full w-full object-cover"
+                      sizes="(max-width: 1360px) 100vw, 1360px"
+                      className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
                     />
+                    <div className="absolute inset-0 bg-[var(--color-paper)] opacity-55" />
+                    <div className="relative flex h-full items-center justify-center p-6">
+                      <div className="relative aspect-[1170/2532] h-full overflow-hidden rounded-[1.75rem] border border-[var(--color-rule-strong)] bg-[var(--color-paper)] shadow-[0_30px_70px_-20px_var(--color-paper-deep)]">
+                        <img
+                          src="/screenshots/app-scan.jpg"
+                          srcSet={imageSrcSet(
+                            "/screenshots/app-scan.jpg",
+                            [390, 585, 780],
+                            1170,
+                          )}
+                          alt={
+                            active === 5
+                              ? "Open Print mobile scanner framing a Bambu filament box barcode"
+                              : ""
+                          }
+                          loading="lazy"
+                          sizes="(max-width: 1360px) 40vw, 540px"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              ) : null}
             </div>
           </div>
 

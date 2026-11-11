@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "images:variants": "bash scripts/generate-image-variants.sh",
+    "images:check": "bash scripts/check-image-variants.sh"
   },
   "dependencies": {
     "lucide-react": "^1.70.0",

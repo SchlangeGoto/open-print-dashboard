@@ -250,6 +250,9 @@ class BambuCloudClient:
                 url, timeout=DEFAULT_TIMEOUT, allow_redirects=False, stream=True
             ) as resp:
                 resp.raise_for_status()
+                if resp.is_redirect or resp.status_code >= 300:
+                    logger.warning("Cover URL redirected; refusing %s", url)
+                    return None
                 content = bytearray()
                 for chunk in resp.iter_content(chunk_size=64 * 1024):
                     content.extend(chunk)

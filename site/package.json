@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
     "lint": "eslint",
     "images:variants": "node scripts/generate-image-variants.mjs",
     "images:check": "node scripts/check-image-variants.mjs"

@@ -20,13 +20,13 @@ This repository uses GitHub Actions for three kinds of work:
 | Lint Workflows | `.github/workflows/lint-workflows.yml` | Workflow changes, manual | Runs `actionlint` on GitHub Actions files |
 | Zizmor | `.github/workflows/zizmor.yml` | Every PR, push to `main`, manual | Security analysis of workflows (template injection, permissions, unpinned actions) |
 | OpenSSF Scorecard | `.github/workflows/scorecard.yml` | Push to `main`, weekly, branch-rule changes | Supply-chain posture; publishes SARIF |
-| Docker Build | `.github/workflows/docker-build.yml` | PRs touching Docker/Compose/dependency files, manual | Builds the backend image and the production frontend image (no push) |
-| Test Docker Compose | `.github/workflows/test-docker-compose.yml` | Docker/Compose/dependency changes, manual | Builds and starts `compose.prod.yml`, checks backend health and frontend |
+| Docker Build | `.github/workflows/docker-build.yml` | PRs touching Docker/Compose/dependency files, manual | Builds backend, frontend, demo and site images (no push) |
+| Test Docker Compose | `.github/workflows/test-docker-compose.yml` | Docker/Compose/dependency changes, manual | Validates the public/GHCR compose stacks, then builds and starts `compose.prod.yml` |
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
 | Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
-| Release Android | `.github/workflows/release-android.yml` | Tags `v*`, manual | EAS signed APK; uploads it as an artifact and attaches it to the GitHub Release |
+| Release Android | `.github/workflows/release-android.yml` | Tags `v*`, manual | Requires the tag on `main`, builds an EAS signed APK and attaches it to the GitHub Release |
 | Dependabot | `.github/dependabot.yml` | Weekly | Grouped npm, uv, GitHub Actions, and Docker updates |
 
 The test and build workflows cancel superseded runs on the same ref, have a

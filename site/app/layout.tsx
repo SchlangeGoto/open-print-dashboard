@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 
 const title = `${SITE_NAME}: self-hosted Bambu Lab dashboard`;
 const description =
-  "Live status, filament stock and the real material cost of every print. A self-hosted dashboard for Bambu Lab printers, in one Docker container.";
+  "Live status, filament stock and the real material cost of every print. A self-hosted dashboard for Bambu Lab printers, in one Docker Compose stack.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

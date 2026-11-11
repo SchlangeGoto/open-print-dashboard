@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "backend/Dockerfile"
+      - "backend/docker-entrypoint.sh"
       - "frontend/Dockerfile"
       - "frontend/Dockerfile.prod"
       - "compose.yml"

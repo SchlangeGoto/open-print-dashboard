@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Check,
@@ -41,7 +41,23 @@ const steps = [
 ];
 
 export default function SetupPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-dvh items-center justify-center p-6">
+          <p className="text-sm text-muted-foreground">Loading setup…</p>
+        </main>
+      }
+    >
+      <SetupContent />
+    </Suspense>
+  );
+}
+
+function SetupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const forceSetup = searchParams.get("force") === "1";
   const { login, demoAvailable, enterDemo } = useAuth();
   const [step, setStep] = useState<SetupStep>("account");
   const [error, setError] = useState("");
@@ -71,7 +87,7 @@ export default function SetupPage() {
           router.push("/dashboard");
           return;
         }
-        if (status.setup_complete) {
+        if (status.setup_complete && !forceSetup) {
           router.push("/");
           return;
         }
@@ -95,7 +111,7 @@ export default function SetupPage() {
         }
       })
       .catch(() => {});
-  }, [router]);
+  }, [router, forceSetup]);
 
   const loadCloudPrinters = useCallback(async () => {
     setLoadingPrinters(true);

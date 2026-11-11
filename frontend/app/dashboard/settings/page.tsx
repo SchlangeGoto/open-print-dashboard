@@ -91,7 +91,7 @@ export default function SettingsPage() {
 
   async function handleBambuConnection() {
     if (!cloudConnected) {
-      router.push("/setup");
+      router.push("/setup?force=1");
       return;
     }
     setBambuBusy(true);
@@ -106,7 +106,7 @@ export default function SettingsPage() {
       });
       toast.success("Bambu Lab session cleared");
       // The setup wizard shows the Bambu step whenever no account is connected.
-      router.push("/setup");
+      router.push("/setup?force=1");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not sign out",

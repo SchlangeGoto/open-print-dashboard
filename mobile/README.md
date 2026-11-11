@@ -206,3 +206,8 @@ testing. It is not a store artifact.
 
 Set `EXPO_PUBLIC_*` values only for non-secret configuration. The server URL is
 configured per device in the app, not baked into the build.
+
+## Dependency updates
+
+Run `npx expo install --check` after an Expo SDK patch release. CI fails when
+the native module patches drift from the expected versions.

@@ -39,69 +39,92 @@ def _backfill_usage() -> None:
     """
     bind = op.get_bind()
     known = {
-        row[0] for row in bind.execute(sa.text("SELECT id FROM filament")).all()
+        uuid_module.UUID(str(row[0]))
+        for row in bind.execute(sa.text("SELECT id FROM filament")).all()
     }
-    rows = bind.execute(
-        sa.text(
+    insert = sa.text(
+        "INSERT INTO printjob_filament_usage "
+        "(id, print_job_id, filament_id, weight_g, cost) "
+        "VALUES (:id, :print_job_id, :filament_id, :weight_g, :cost)"
+    )
+    # Stream the history in pages so a large printjob table cannot blow up
+    # the migration's memory at container start.
+    page_size = 1000
+    last_id = None
+    while True:
+        statement = (
             "SELECT id, filament_id, weight, estimated_cost, filament_usage "
-            "FROM printjob"
-        )
-    ).all()
-
-    payload: list[dict[str, Any]] = []
-    for job_id, legacy_id, weight, cost, raw in rows:
-        parsed: dict[str, Any] | None = None
-        if raw:
-            try:
-                candidate = json.loads(raw)
-            except (TypeError, ValueError):
-                candidate = None
-            if isinstance(candidate, dict):
-                parsed = candidate
-
-        if parsed:
-            # The JSON is authoritative for multi-material jobs. Deleted
-            # filaments are skipped instead of falling back to the primary
-            # row, which would credit the whole job to one filament.
-            seen: set[uuid_module.UUID] = set()
-            for raw_key, item in parsed.items():
-                try:
-                    filament_id = uuid_module.UUID(str(raw_key))
-                except (TypeError, ValueError, AttributeError):
-                    continue
-                if filament_id not in known or filament_id in seen:
-                    continue
-                seen.add(filament_id)
-                values = item if isinstance(item, dict) else {}
-                payload.append(
-                    {
-                        "id": uuid_module.uuid4(),
-                        "print_job_id": job_id,
-                        "filament_id": filament_id,
-                        "weight_g": _as_float(values.get("weight"), 0.0),
-                        "cost": _as_float(values.get("cost")),
-                    }
-                )
-        elif legacy_id is not None and legacy_id in known:
-            payload.append(
-                {
-                    "id": uuid_module.uuid4(),
-                    "print_job_id": job_id,
-                    "filament_id": legacy_id,
-                    "weight_g": _as_float(weight, 0.0),
-                    "cost": _as_float(cost),
-                }
+            "FROM printjob ORDER BY id LIMIT :limit"
+            if last_id is None
+            else (
+                "SELECT id, filament_id, weight, estimated_cost, filament_usage "
+                "FROM printjob WHERE id > :last_id ORDER BY id LIMIT :limit"
             )
-
-    if payload:
-        bind.execute(
-            sa.text(
-                "INSERT INTO printjob_filament_usage "
-                "(id, print_job_id, filament_id, weight_g, cost) "
-                "VALUES (:id, :print_job_id, :filament_id, :weight_g, :cost)"
-            ),
-            payload,
         )
+        params: dict[str, Any] = {"limit": page_size}
+        if last_id is not None:
+            params["last_id"] = last_id
+        rows = bind.execute(sa.text(statement), params).all()
+        if not rows:
+            break
+
+        payload: list[dict[str, Any]] = []
+        for job_id, legacy_id, weight, cost, raw in rows:
+            parsed: dict[str, Any] | None = None
+            if raw:
+                try:
+                    candidate = json.loads(raw)
+                except (TypeError, ValueError):
+                    candidate = None
+                if isinstance(candidate, dict):
+                    parsed = candidate
+
+            if parsed:
+                # The JSON is authoritative for multi-material jobs. Deleted
+                # filaments are skipped instead of falling back to the primary
+                # row, which would credit the whole job to one filament.
+                seen: set[uuid_module.UUID] = set()
+                for raw_key, item in parsed.items():
+                    try:
+                        filament_id = uuid_module.UUID(str(raw_key))
+                    except (TypeError, ValueError, AttributeError):
+                        continue
+                    if filament_id not in known or filament_id in seen:
+                        continue
+                    seen.add(filament_id)
+                    values = item if isinstance(item, dict) else {}
+                    payload.append(
+                        {
+                            "id": uuid_module.uuid4(),
+                            "print_job_id": job_id,
+                            "filament_id": filament_id,
+                            "weight_g": _as_float(values.get("weight"), 0.0),
+                            "cost": _as_float(values.get("cost")),
+                        }
+                    )
+            else:
+                try:
+                    legacy_uuid = (
+                        uuid_module.UUID(str(legacy_id))
+                        if legacy_id is not None
+                        else None
+                    )
+                except (TypeError, ValueError, AttributeError):
+                    legacy_uuid = None
+                if legacy_uuid is not None and legacy_uuid in known:
+                    payload.append(
+                        {
+                            "id": uuid_module.uuid4(),
+                            "print_job_id": job_id,
+                            "filament_id": legacy_uuid,
+                            "weight_g": _as_float(weight, 0.0),
+                            "cost": _as_float(cost),
+                        }
+                    )
+
+        if payload:
+            bind.execute(insert, payload)
+        last_id = rows[-1][0]
 
 
 def upgrade() -> None:

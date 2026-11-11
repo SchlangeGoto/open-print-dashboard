@@ -5,6 +5,7 @@ Revises: b1f7a2c9d4e5
 Create Date: 2026-11-08 00:00:00.000000
 
 """
+
 import uuid
 from datetime import UTC, datetime
 
@@ -22,9 +23,7 @@ depends_on = None
 def upgrade():
     op.create_table(
         "printer",
-        sa.Column(
-            "name", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
-        ),
+        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
         sa.Column(
             "serial", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
         ),
@@ -81,5 +80,29 @@ def upgrade():
 
 
 def downgrade():
+    # Restore the single-printer settings before dropping the migrated row.
+    bind = op.get_bind()
+    row = bind.execute(
+        sa.text(
+            "SELECT serial, ip, access_code FROM printer "
+            "ORDER BY created_at NULLS LAST LIMIT 1"
+        )
+    ).first()
+    if row:
+        for key, value in (
+            ("printer_serial", row[0]),
+            ("printer_ip", row[1]),
+            ("printer_access_code", row[2]),
+        ):
+            if value:
+                bind.execute(
+                    sa.text(
+                        "INSERT INTO appsetting (key, value) "
+                        "VALUES (:key, :value) "
+                        "ON CONFLICT (key) DO UPDATE "
+                        "SET value = EXCLUDED.value"
+                    ),
+                    {"key": key, "value": value},
+                )
     op.drop_index(op.f("ix_printer_serial"), table_name="printer")
     op.drop_table("printer")

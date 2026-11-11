@@ -191,16 +191,15 @@ The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
 `https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, rebuild the site
 image with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
 
-For local testing, the base stack publishes no host ports; add the local
-override and use hostnames that Caddy can issue locally:
+For local testing, the base stack publishes only Caddy's 80/443. To skip Caddy
+and run just the site and demo, add the local override:
 
 ```bash
-SITE_DOMAIN=localhost DEMO_DOMAIN=demo.localhost \
-  docker compose -f compose.public.yml -f compose.public.local.yml up -d
+docker compose -f compose.public.yml -f compose.public.local.yml up -d site demo
 ```
 
-The override only binds `127.0.0.1:8080` and `127.0.0.1:8081`; never use it on
-a public host.
+Then open `http://localhost:8080` and `http://localhost:8081`. The override
+binds only `127.0.0.1:8080` and `127.0.0.1:8081`; never use it on a public host.
 
 There is no Vercel or Cloudflare dependency. The site and demo are self-hosted.
 

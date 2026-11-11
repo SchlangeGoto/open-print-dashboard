@@ -50,6 +50,9 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: "docker-compose"
+    # Dependabot only reads standard filenames (compose.yml /
+    # docker-compose.yml); compose.prod.yml, compose.ghcr.yml and
+    # compose.public.yml reference the same images and are updated by hand.
     directory: "/"
     schedule:
       interval: "weekly"

@@ -60,7 +60,10 @@ jobs:
           SITE_DOMAIN: openprintdash.app
           DEMO_DOMAIN: demo.openprintdash.app
         run: |
-          docker run --rm             -e SITE_DOMAIN -e DEMO_DOMAIN             -v "$PWD/deploy:/etc/caddy:ro"             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile.public
+          docker run --rm \
+            -e SITE_DOMAIN -e DEMO_DOMAIN \
+            -v "$PWD/deploy:/etc/caddy:ro" \
+            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile.public
 
       - name: Build and start production stack
         run: docker compose -f compose.prod.yml up -d --build

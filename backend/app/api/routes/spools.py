@@ -55,25 +55,30 @@ def _find_or_create_catalog_filament(
     *, session: SessionDep, data: dict[str, Any]
 ) -> Filament:
     info_idx = data.get("bambu_info_idx")
+    weight = data.get("spool_weight_g")
+    series = (data.get("series") or "").strip()
     filament = None
     if info_idx:
         # ``bambu_info_idx`` is nullable; ``== None`` would compile to IS NULL
-        # and collapse unrelated products that share a colour.
-        filament = session.exec(
-            select(Filament)
-            .where(
-                Filament.bambu_info_idx == info_idx,
-                func.lower(Filament.color_hex) == data["color_hex"].lower(),
+        # and collapse unrelated products that share a colour. Prefer the
+        # same package weight before falling back to the oldest row.
+        query = select(Filament).where(
+            Filament.bambu_info_idx == info_idx,
+            func.lower(Filament.color_hex) == data["color_hex"].lower(),
+        )
+        if weight is not None:
+            query = query.order_by(
+                (Filament.spool_weight_g == weight).desc(),
+                col(Filament.created_at).asc(),
             )
-            .order_by(col(Filament.created_at).asc())
-        ).first()
-    weight = data.get("spool_weight_g")
+        else:
+            query = query.order_by(col(Filament.created_at).asc())
+        filament = session.exec(query).first()
     if not filament:
         # Match an AMS-created filament whose preset id differs from the box
         # catalog. Brand, material, colour and series identify a product;
         # Support W/G/ABS all share brand/material/colour, so series is what
         # keeps them apart.
-        series = (data.get("series") or "").strip()
         base = select(Filament).where(
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
             func.lower(Filament.material) == data["material"].lower(),
@@ -125,10 +130,14 @@ def _find_or_create_catalog_filament(
                 query = query.order_by(col(Filament.created_at).asc())
             filament = session.exec(query).first()
     if filament:
-        if weight is not None and filament.spool_weight_g != weight:
+        same_series = not filament.series or (
+            bool(series) and filament.series.lower() == series.lower()
+        )
+        if weight is not None and filament.spool_weight_g != weight and same_series:
             # The scanned box is authoritative for the package weight; keep
             # a later confirm without an explicit weight from falling back to
-            # an old default.
+            # an old default. Never rewrite a different product that happens
+            # to share the preset id and colour.
             filament.spool_weight_g = weight
             session.add(filament)
             session.flush()
@@ -296,6 +305,10 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
 
     existing = _existing_barcode_spools(session=session, code=code)
     if not payload.create:
+        # The lookup may have reconciled the catalog weight (and, for a new
+        # barcode, linked the catalog filament). Persist it so the following
+        # confirm does not fall back to the old default.
+        session.commit()
         return BarcodeScanResult(
             found=True,
             code=code,

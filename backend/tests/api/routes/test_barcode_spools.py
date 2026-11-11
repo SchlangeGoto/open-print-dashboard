@@ -979,21 +979,22 @@ def test_ambiguous_colour_group_is_not_relabelled(
 ) -> None:
     legacy = Filament(
         brand="Bambu Lab",
-        material="ABS",
-        color_name="Legacy Black",
-        color_hex="#000000",
+        material="Support",
+        color_name="Legacy Support",
+        color_hex="#FFFFFF",
         spool_weight_g=1000,
     )
     db.add(legacy)
     db.commit()
     db.refresh(legacy)
 
-    # The colour group contains both ABS and ABS-GF. The legacy row could be
-    # either, so it must not be relabelled; the scan creates ABS-GF instead.
+    # The white Support group contains several catalog series. The legacy row
+    # could be any of them, so it must not be relabelled; the scan creates
+    # Support for PLA instead.
     r = client.post(
         f"{settings.API_V1_STR}/spools/scan/barcode",
         headers=superuser_token_headers,
-        json={"code": "6975337037293", "create": True},
+        json={"code": "6975337031055", "create": True},
     )
     assert r.status_code == 200, r.text
 
@@ -1003,11 +1004,12 @@ def test_ambiguous_colour_group_is_not_relabelled(
     assert unchanged.series is None
     assert unchanged.spool_weight_g == 1000
 
-    spool = db.exec(select(Spool).where(Spool.barcode == "6975337037293")).one()
+    spool = db.exec(select(Spool).where(Spool.barcode == "6975337031055")).one()
     assert spool.filament_id != legacy.id
     created = db.get(Filament, spool.filament_id)
     assert created is not None
-    assert created.series == "ABS-GF"
+    assert created.series == "Support for PLA"
+    assert created.spool_weight_g == 500
 
 
 def test_whitespace_barcode_is_rejected(
@@ -1116,6 +1118,7 @@ def test_scan_prefers_the_same_weight_inside_a_series(
         color_name="Black 750",
         color_hex="#000000",
         spool_weight_g=750,
+        bambu_info_idx="GFB00",
     )
     heavy = Filament(
         brand="Bambu Lab",
@@ -1124,6 +1127,7 @@ def test_scan_prefers_the_same_weight_inside_a_series(
         color_name="Black 1000",
         color_hex="#000000",
         spool_weight_g=1000,
+        bambu_info_idx="GFB00",
     )
     db.add(light)
     db.add(heavy)

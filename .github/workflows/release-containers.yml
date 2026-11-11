@@ -142,6 +142,8 @@ jobs:
 
       - name: Check this is the newest semver release
         id: release_tag
+        env:
+          GUARD_MAIN_TIP: ${{ needs.guard.outputs.main_tip }}
         run: |
           echo "eligible=false" >> "$GITHUB_OUTPUT"
           if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -160,7 +162,7 @@ jobs:
           fi
           # Compare with the tip captured by the guard, not the tip after
           # the 45-minute publish: main may legitimately advance meanwhile.
-          if [[ "$GITHUB_SHA" != "${{ needs.guard.outputs.main_tip }}" ]]; then
+          if [[ "$GITHUB_SHA" != "${GUARD_MAIN_TIP}" ]]; then
             echo "::warning::${GITHUB_REF_NAME} was not tagged from the main tip at release time; latest was not moved."
             exit 0
           fi

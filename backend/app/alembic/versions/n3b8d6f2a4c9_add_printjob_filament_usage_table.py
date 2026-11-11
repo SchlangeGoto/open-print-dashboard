@@ -7,7 +7,10 @@ Normalise per-filament usage so stats can aggregate with SQL instead of
 parsing every job's JSON.
 """
 
+import json
+import uuid as uuid_module
 from collections.abc import Sequence
+from typing import Any
 
 import sqlalchemy as sa
 from alembic import op
@@ -16,6 +19,89 @@ revision: str = "n3b8d6f2a4c9"
 down_revision: str | Sequence[str] | None = "m2a7c5e9f1b3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+
+def _as_float(value: object, default: float | None = None) -> float | None:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _backfill_usage() -> None:
+    """Copy JSON and legacy usage into the child table.
+
+    Production data may contain invalid JSON, non-object payloads, non-UUID
+    keys, non-numeric values, or keys for filaments that were deleted (the
+    ``filament_usage`` JSON has no foreign key). None of those may abort the
+    upgrade, so every row is validated individually and bad entries are
+    skipped.
+    """
+    bind = op.get_bind()
+    known = {
+        row[0] for row in bind.execute(sa.text("SELECT id FROM filament")).all()
+    }
+    rows = bind.execute(
+        sa.text(
+            "SELECT id, filament_id, weight, estimated_cost, filament_usage "
+            "FROM printjob"
+        )
+    ).all()
+
+    payload: list[dict[str, Any]] = []
+    for job_id, legacy_id, weight, cost, raw in rows:
+        parsed: dict[str, Any] | None = None
+        if raw:
+            try:
+                candidate = json.loads(raw)
+            except (TypeError, ValueError):
+                candidate = None
+            if isinstance(candidate, dict):
+                parsed = candidate
+
+        if parsed:
+            # The JSON is authoritative for multi-material jobs. Deleted
+            # filaments are skipped instead of falling back to the primary
+            # row, which would credit the whole job to one filament.
+            seen: set[uuid_module.UUID] = set()
+            for raw_key, item in parsed.items():
+                try:
+                    filament_id = uuid_module.UUID(str(raw_key))
+                except (TypeError, ValueError, AttributeError):
+                    continue
+                if filament_id not in known or filament_id in seen:
+                    continue
+                seen.add(filament_id)
+                values = item if isinstance(item, dict) else {}
+                payload.append(
+                    {
+                        "id": uuid_module.uuid4(),
+                        "print_job_id": job_id,
+                        "filament_id": filament_id,
+                        "weight_g": _as_float(values.get("weight"), 0.0),
+                        "cost": _as_float(values.get("cost")),
+                    }
+                )
+        elif legacy_id is not None and legacy_id in known:
+            payload.append(
+                {
+                    "id": uuid_module.uuid4(),
+                    "print_job_id": job_id,
+                    "filament_id": legacy_id,
+                    "weight_g": _as_float(weight, 0.0),
+                    "cost": _as_float(cost),
+                }
+            )
+
+    if payload:
+        bind.execute(
+            sa.text(
+                "INSERT INTO printjob_filament_usage "
+                "(id, print_job_id, filament_id, weight_g, cost) "
+                "VALUES (:id, :print_job_id, :filament_id, :weight_g, :cost)"
+            ),
+            payload,
+        )
 
 
 def upgrade() -> None:
@@ -52,27 +138,7 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.execute(
-        """
-        INSERT INTO printjob_filament_usage
-            (id, print_job_id, filament_id, weight_g, cost)
-        SELECT gen_random_uuid(), p.id, (kv.key)::uuid,
-               COALESCE((kv.value->>'weight')::float, 0),
-               (kv.value->>'cost')::float
-        FROM printjob p, jsonb_each(p.filament_usage::jsonb) kv
-        WHERE p.filament_usage IS NOT NULL
-        """
-    )
-    op.execute(
-        """
-        INSERT INTO printjob_filament_usage
-            (id, print_job_id, filament_id, weight_g, cost)
-        SELECT gen_random_uuid(), p.id, p.filament_id,
-               COALESCE(p.weight, 0), p.estimated_cost
-        FROM printjob p
-        WHERE p.filament_usage IS NULL AND p.filament_id IS NOT NULL
-        """
-    )
+    _backfill_usage()
 
 
 def downgrade() -> None:

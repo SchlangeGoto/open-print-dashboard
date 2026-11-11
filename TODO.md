@@ -402,3 +402,9 @@ re-opened.
 | Site/demo CI images, public compose validation/ports, Android main guard | `275de42` | Human #20 |
 | AA accent foregrounds; mobile loading-button label | `fd5944b`, `4d5da8a` | Human #20 |
 | Env example/site copy; dead site start script removed | `c0e31df`, `333d0f6` | Human #20 |
+| Per-filament usage child table; cloud credentials written atomically | `6292f41` | Human #20 |
+| Printer settings restored on the f3a9 downgrade | `b2abaa1` | Human #20 |
+| Cover responses require an image and a non-empty body | `b0fea11` | Human #20 |
+| GHCR/Caddy compose validation; public local override; entrypoint path filter | `04dd190` | Human #20 |
+| Deleted dashboard printers close their modal | `451e409` | Human #20 |
+| Reconnect retry queue; partial-slot and long-print guards; stale-error and modal guards; setup retry sequence | `281901e`, `7ddf828`, `62d07f1`, `bfc3e8c` | Human #20 |

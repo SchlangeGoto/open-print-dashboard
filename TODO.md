@@ -369,3 +369,9 @@ re-opened.
 | Mobile add-another request id reused on retry | `b8ec24f` | Human #20 |
 | Feature carousel lazy mounts; committed image variant tooling | `e0a792d` | Human #20 |
 | Release tags must be the main tip; merged-tag comparison | `8254cfa` | Human #20 |
+| Finish only updates an open job; missing tasks retry; AMS-dependent finishes defer; timeout leaves the deduction unclaimed | `2e11325` | Human #20 |
+| Ambiguous series groups are not relabelled; reused series reconcile the package weight | `af24071` | Human #20 |
+| `spool.filament_id` index; filaments list query shape pinned | `0d3e3dc` | Human #20 |
+| Release ancestry guard restored; skipped latest warns instead of failing | `c6b07bc` | Human #20 |
+| Visited feature slides stay mounted; native-width masters checked | `d434adf` | Human #20 |
+| Setup first paint, unique progress labels, demo filament-spools 404 | `27aab49` | Human #20 |

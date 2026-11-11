@@ -50,6 +50,9 @@ jobs:
           sed -i 's/^SMTP_HOST=.*/SMTP_HOST=/' .env
 
       - name: Validate public compose
+        run: docker compose -f compose.public.yml config > /dev/null
+
+      - name: Validate public compose with the local override
         run: docker compose -f compose.public.yml -f compose.public.local.yml config > /dev/null
 
       - name: Validate GHCR compose

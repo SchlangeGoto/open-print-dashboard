@@ -2739,3 +2739,62 @@ def test_timeout_persists_the_resolved_spool_map(db: Session, monkeypatch) -> No
     assert stored.deduction_spools is not None
     assert str(roll_a.id) in stored.deduction_spools
     assert db.get(Spool, roll_a.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
+def test_finish_prefers_the_start_spool_for_a_single_slot(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Late finish",
+        color_hex="#040506",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    roll_a = _tagged_spool(db, printer, filament, "LATE-A")
+    roll_b = _tagged_spool(db, printer, filament, "LATE-B")
+
+    mapping = [{"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 40}]
+    job = PrintJob(
+        title="Late finish",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-late-finish",
+        spool_id=roll_a.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-late-finish",
+        "title": "Late finish",
+        "status": 2,
+        "weight": 40,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    # The tray already shows roll B when the finish report arrives.
+    client._current_status = {
+        "ams": {"ams": [{"id": 0, "tray": [{"id": 0, "tag_uid": "LATE-B"}]}]}
+    }
+    client._save_print_job("task-late-finish", "FINISH")
+
+    db.expire_all()
+    assert db.get(Spool, roll_a.id).remaining_g == 960  # type: ignore[union-attr]
+    assert db.get(Spool, roll_b.id).remaining_g == 1000  # type: ignore[union-attr]
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.deduction_spools is not None
+    assert str(roll_a.id) in stored.deduction_spools

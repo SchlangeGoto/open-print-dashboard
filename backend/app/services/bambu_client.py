@@ -1476,6 +1476,14 @@ class BambuClient:
                             resolved_spools = self._resolve_mapping_spools(
                                 session, task
                             )
+                            if len(mapping) == 1 and job.spool_id:
+                                # One slot means the spool recorded at start
+                                # is authoritative; a late finish may already
+                                # see a swapped tray.
+                                key = self._mapping_slot_key(mapping[0]) or (-1, 0)
+                                preferred = session.get(Spool, job.spool_id)
+                                if preferred:
+                                    resolved_spools = {key: preferred}
                             if resolved_spools:
                                 job.deduction_spools = json.dumps(
                                     {

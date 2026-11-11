@@ -729,7 +729,7 @@ class BambuClient:
                 elif not weight:
                     return
 
-                if (task or {}).get("status") == 4:
+                if mapping and (task or {}).get("status") == 4:
                     # A still-running task may report partial per-slot
                     # weights. Only deduct when the reported total matches the
                     # job weight; otherwise wait for the final payload.
@@ -737,7 +737,7 @@ class BambuClient:
                         job_weight = float(weight or 0)
                     except (TypeError, ValueError):
                         job_weight = 0.0
-                    if not mapping or job_weight <= 0 or total + 0.5 < job_weight:
+                    if job_weight <= 0 or total + 0.5 < job_weight:
                         logger.info(
                             "Task %s is still running with a partial mapping; "
                             "leaving the deduction for a later pass",
@@ -1278,11 +1278,8 @@ class BambuClient:
                             col(Spool.id) != active_spool.id,
                         )
                     ).all():
-                        # Keep the roll associated with the printer: it is
-                        # still loaded, just not the active tray. The partial
-                        # unique index only constrains active rows.
                         other.active = False
-                        session.add(other)
+                        other.printer_id = None
                     # Flush the unload before the new active row is written;
                     # the partial unique index checks each row as it lands.
                     session.flush()
@@ -1491,7 +1488,7 @@ class BambuClient:
         recent = session.exec(
             select(Spool.price_per_kg)
             .where(Spool.filament_id == filament_id)
-            .where(col(Spool.price_per_kg).is_not(None))
+            .where(Spool.price_per_kg > 0)
             .order_by(desc(Spool.created_at))
             .limit(5)
         ).all()
@@ -1721,7 +1718,7 @@ class BambuClient:
                     recent_spools = session.exec(
                         select(Spool)
                         .where(Spool.filament_id == job.filament_id)
-                        .where(Spool.price_per_kg.is_not(None))
+                        .where(Spool.price_per_kg > 0)
                         .order_by(desc(Spool.created_at))
                         .limit(5)
                     ).all()

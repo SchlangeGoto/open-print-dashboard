@@ -112,8 +112,7 @@ def test_only_one_active_spool_per_printer(
     ).json()["data"]
     by_id = {spool["id"]: spool for spool in spools}
     assert by_id[first["id"]]["active"] is False
-    # The first roll is still loaded in the printer; only "active" moved.
-    assert by_id[first["id"]]["printer_id"] == str(printer.id)
+    assert by_id[first["id"]]["printer_id"] is None
     assert by_id[second["id"]]["active"] is True
     assert by_id[second["id"]]["printer_id"] == str(printer.id)
 
@@ -3909,48 +3908,6 @@ def test_finish_without_an_end_time_still_gets_finished_at(
     assert stored.finished_at.year >= 2025
 
 
-def test_activating_another_spool_keeps_the_first_loaded(
-    client: TestClient,
-    db: Session,
-    superuser_token_headers: dict[str, str],
-) -> None:
-    printer = _create_printer(db)
-    filament = Filament(
-        brand="Test",
-        material="PLA",
-        color_name="Two loaded",
-        color_hex="#555555",
-    )
-    db.add(filament)
-    db.commit()
-    db.refresh(filament)
-    first = Spool(filament_id=filament.id, total_weight_g=1000, remaining_g=1000)
-    second = Spool(filament_id=filament.id, total_weight_g=1000, remaining_g=1000)
-    db.add(first)
-    db.add(second)
-    db.commit()
-    db.refresh(first)
-    db.refresh(second)
-
-    for spool in (first, second):
-        r = client.put(
-            f"{settings.API_V1_STR}/spools/{spool.id}/activate",
-            headers=superuser_token_headers,
-            json={"printer_id": str(printer.id)},
-        )
-        assert r.status_code == 200, r.text
-
-    db.expire_all()
-    first_stored = db.get(Spool, first.id)
-    second_stored = db.get(Spool, second.id)
-    assert first_stored is not None
-    assert second_stored is not None
-    assert first_stored.printer_id == printer.id
-    assert first_stored.active is False
-    assert second_stored.printer_id == printer.id
-    assert second_stored.active is True
-
-
 def test_average_price_ignores_zero_priced_spools(
     client: TestClient,
     db: Session,
@@ -3975,14 +3932,17 @@ def test_average_price_ignores_zero_priced_spools(
             price_per_kg=20.0,
         )
     )
-    db.add(
-        Spool(
-            filament_id=filament.id,
-            total_weight_g=1000,
-            remaining_g=1000,
-            price_per_kg=0.0,
+    db.commit()
+    # Five newer zero-priced spools must not hide the older real price.
+    for _ in range(5):
+        db.add(
+            Spool(
+                filament_id=filament.id,
+                total_weight_g=1000,
+                remaining_g=1000,
+                price_per_kg=0.0,
+            )
         )
-    )
     db.commit()
 
     stats = crud.get_filament_stats(session=db, filament_id=filament.id)
@@ -3992,3 +3952,61 @@ def test_average_price_ignores_zero_priced_spools(
     assert r.status_code == 200, r.text
     row = next(item for item in r.json()["data"] if item["id"] == str(filament.id))
     assert row["avg_price_per_kg"] == 20.0
+
+
+def test_stuck_running_task_without_a_mapping_uses_the_start_spool(
+    db: Session,
+) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="No mapping running",
+        color_hex="#777777",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+    job = PrintJob(
+        title="No mapping running",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-no-mapping-running",
+        spool_id=spool.id,
+        filament_id=filament.id,
+        weight=100,
+        finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._deduct_persisted_job(
+        "task-no-mapping-running",
+        {
+            "id": "task-no-mapping-running",
+            "status": 4,
+            "weight": 100,
+            "amsDetailMapping": [],
+        },
+    )
+
+    db.expire_all()
+    assert db.get(Spool, spool.id).remaining_g == 900  # type: ignore[union-attr]
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is not None

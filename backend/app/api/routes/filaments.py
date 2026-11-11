@@ -52,7 +52,7 @@ def read_filaments(session: SessionDep) -> Any:
             )
             .label("rn"),
         )
-        .where(col(Spool.price_per_kg).is_not(None))
+        .where(col(Spool.price_per_kg) > 0)
         .subquery()
     )
     price_rows = session.exec(

@@ -44,11 +44,8 @@ def _unload_other_spools(
         select(Spool).where(Spool.printer_id == printer_id, col(Spool.id) != keep_id)
     ).all()
     for spool in others:
-        # The spool is still loaded in this printer; only the "currently
-        # feeding" flag moves. Clearing printer_id here made a second
-        # untagged roll impossible to resolve for a later AMS slot.
         spool.active = False
-        session.add(spool)
+        spool.printer_id = None
     # Flush the unload before the caller activates the new spool; the partial
     # unique index checks each row as it is written.
     session.flush()

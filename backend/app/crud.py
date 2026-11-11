@@ -292,11 +292,11 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
     recent_prices = session.exec(
         select(Spool.price_per_kg)
         .where(Spool.filament_id == filament_id)
-        .where(col(Spool.price_per_kg).is_not(None))
+        .where(col(Spool.price_per_kg) > 0)
         .order_by(col(Spool.created_at).desc())
         .limit(5)
     ).all()
-    prices = [price for price in recent_prices if price and price > 0]
+    prices = [price for price in recent_prices if price is not None and price > 0]
     avg_price = sum(prices) / len(prices) if prices else None
 
     return FilamentStats(

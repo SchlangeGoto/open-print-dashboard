@@ -1,6 +1,6 @@
 # TODO
 
-Last updated: 2026-11-10.
+Last updated: 2026-11-11.
 
 This is the single backlog for the project. It combines the human review
 comments from PRs #4–#10, the CodeRabbit findings from those PRs, and product
@@ -360,3 +360,12 @@ re-opened.
 | Client request ids; slot exclusion/tag/preset/ratio; series backfill | `79249b1`, `5de89c1` | Human #20 |
 | Setup skip persisted; replay 409; repair-safe invariant; progress labels | `79249b1`, `d519562`, `306c8c6` | Human #20 |
 | Release guard for all tags; latest concurrency + highest semver | `a3201fd` | Human #20 |
+| AMS untagged trays, duplicate slots; restart finish; attribution and slow-cloud close | `a5befa6` | Human #20 |
+| Series product reused across weights; scanned box weight used for the spool | `63add5c` | Human #20 |
+| Filaments list N+1 removed; unknown filament spools 404 | `ca71295` | Human #20 |
+| Setup wizard can be reopened with `?force=1` | `dc035fa` | Human #20 |
+| Backfill-only server defaults removed | `f9c5164` | Human #20 |
+| Unique progress-bar accessible names | `401dc87` | Human #20 |
+| Mobile add-another request id reused on retry | `b8ec24f` | Human #20 |
+| Feature carousel lazy mounts; committed image variant tooling | `e0a792d` | Human #20 |
+| Release tags must be the main tip; merged-tag comparison | `8254cfa` | Human #20 |

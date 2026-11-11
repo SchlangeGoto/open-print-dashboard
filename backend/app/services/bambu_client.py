@@ -815,7 +815,7 @@ class BambuClient:
                             job,
                             filament_id,
                             weight,
-                            job.estimated_cost,
+                            self._filament_usage_cost(session, filament_id, weight),
                         )
                     session.commit()
                     logger.info("Deducted the persisted payload for task %s", task_id)
@@ -1443,6 +1443,25 @@ class BambuClient:
             job.filament_id = filament_id
         self._persist_filament_usage(session, job, usage)
 
+    def _filament_usage_cost(
+        self,
+        session: Session,
+        filament_id: uuid.UUID,
+        grams: float,
+    ) -> float | None:
+        """Price a usage row from the filament's recent spool prices."""
+        recent = session.exec(
+            select(Spool.price_per_kg)
+            .where(Spool.filament_id == filament_id)
+            .where(col(Spool.price_per_kg).is_not(None))
+            .order_by(desc(Spool.created_at))
+            .limit(5)
+        ).all()
+        prices = [price for price in recent if price and price > 0]
+        if not prices:
+            return None
+        return round((grams / 1000) * (sum(prices) / len(prices)), 2)
+
     def _build_filament_usage(
         self,
         session: Session,
@@ -1471,18 +1490,9 @@ class BambuClient:
 
         usage: dict[str, dict[str, float | None]] = {}
         for filament_id, grams in weights.items():
-            recent = session.exec(
-                select(Spool.price_per_kg)
-                .where(Spool.filament_id == filament_id)
-                .where(col(Spool.price_per_kg).is_not(None))
-                .order_by(desc(Spool.created_at))
-                .limit(5)
-            ).all()
-            prices = [price for price in recent if price and price > 0]
-            avg_price = sum(prices) / len(prices) if prices else None
             usage[str(filament_id)] = {
                 "weight": round(grams, 1),
-                "cost": (round((grams / 1000) * avg_price, 2) if avg_price else None),
+                "cost": self._filament_usage_cost(session, filament_id, grams),
             }
         return usage
 

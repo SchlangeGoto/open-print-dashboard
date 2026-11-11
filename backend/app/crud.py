@@ -265,7 +265,9 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
         select(func.count()).select_from(Spool).where(Spool.filament_id == filament_id)
     ).one()
     # Per-filament usage rows are indexed by filament, so stats no longer
-    # scan and parse every print job.
+    # scan and parse every print job. A job whose AMS mapping never resolved
+    # has no row here on purpose: its stock was never reduced either, and the
+    # print history still shows it.
     print_count = session.exec(
         select(func.count())
         .select_from(PrintJobFilamentUsage)

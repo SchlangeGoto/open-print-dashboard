@@ -2909,6 +2909,7 @@ def test_persisted_unmapped_deduction_writes_filament_usage(db: Session) -> None
         printer_id=printer.id,
         total_weight_g=1000,
         remaining_g=1000,
+        price_per_kg=25.0,
     )
     db.add(spool)
     db.commit()
@@ -2921,7 +2922,9 @@ def test_persisted_unmapped_deduction_writes_filament_usage(db: Session) -> None
         spool_id=spool.id,
         filament_id=filament.id,
         weight=100,
-        estimated_cost=2.5,
+        # Deliberately different from the charged filament's price; the usage
+        # row must be priced from the spool that was actually charged.
+        estimated_cost=99.0,
         finished_at=datetime.now(UTC),
     )
     db.add(job)

@@ -90,6 +90,7 @@ export default function FilamentsPage() {
       if (seq !== loadSeq.current) return;
       setLoadError(null);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       setLoadError(
         error instanceof Error ? error.message : "Could not reach the server",
       );

@@ -108,6 +108,7 @@ export default function PrintsPage() {
       if (seq !== loadSeq.current) return;
       setLoadError(null);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       setLoadError(
         error instanceof Error ? error.message : "Could not reach the server",
       );
@@ -119,6 +120,15 @@ export default function PrintsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelectedPrint((current: any) =>
+      current ? prints.find((p) => p.id === current.id) ?? null : null,
+    );
+    setSelectedFilament((current: any) =>
+      current ? filaments.find((f) => f.id === current.id) ?? null : null,
+    );
+  }, [prints, filaments]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {

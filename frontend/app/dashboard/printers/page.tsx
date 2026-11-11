@@ -115,6 +115,18 @@ export default function PrintersPage() {
   }, [load]);
 
   useEffect(() => {
+    setSelectedPrint((current: any) =>
+      current ? prints.find((p) => p.id === current.id) ?? null : null,
+    );
+    setSelectedSpool((current: any) =>
+      current ? spools.find((s) => s.id === current.id) ?? null : null,
+    );
+    setSelectedFilament((current: any) =>
+      current ? filaments.find((f) => f.id === current.id) ?? null : null,
+    );
+  }, [prints, spools, filaments]);
+
+  useEffect(() => {
     if (printers.length > 0) {
       setCloudStatus(null);
       return;

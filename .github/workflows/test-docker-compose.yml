@@ -7,6 +7,8 @@ on:
       - "frontend/Dockerfile.prod"
       - "compose.yml"
       - "compose.prod.yml"
+      - "compose.public.yml"
+      - "deploy/Caddyfile.public"
       - "backend/scripts/start.sh"
       - "backend/scripts/prestart.sh"
       - "pyproject.toml"
@@ -41,6 +43,9 @@ jobs:
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-password/' .env
           sed -i 's/^EMAILS_FROM_EMAIL=.*/EMAILS_FROM_EMAIL=/' .env
           sed -i 's/^SMTP_HOST=.*/SMTP_HOST=/' .env
+
+      - name: Validate public compose
+        run: docker compose -f compose.public.yml config > /dev/null
 
       - name: Build and start production stack
         run: docker compose -f compose.prod.yml up -d --build

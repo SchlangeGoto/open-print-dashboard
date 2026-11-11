@@ -17,7 +17,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    # Only tags on main may publish an APK.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the tag to be on main
+        run: |
+          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+            echo "Not a tag push; skipping the ancestry check."
+            exit 0
+          fi
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
   build:
+    needs: guard
     runs-on: ubuntu-latest
     # Free-tier EAS builds sit in a low-priority queue and can wait 90+ minutes.
     timeout-minutes: 180

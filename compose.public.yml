@@ -7,17 +7,22 @@ name: openprint-public
 #   export DEMO_DOMAIN=demo.openprintdash.app
 #   docker compose -f compose.public.yml up -d
 #
-# For local testing, use ports instead of hostnames:
-#   SITE_DOMAIN=:8080 DEMO_DOMAIN=:8081 docker compose -f compose.public.yml up -d
+# For local testing, start only the app containers (no Caddy):
+#   docker compose -f compose.public.yml up -d site demo
+#   http://localhost:8080 and http://localhost:8081
 
 services:
   site:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/site:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
 
   demo:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/demo:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:3000"
 
   caddy:
     image: caddy:2-alpine

@@ -13,6 +13,7 @@ on:
       - "backend/pyproject.toml"
       - "frontend/package.json"
       - "frontend/package-lock.json"
+      - "site/**"
       - ".github/workflows/docker-build.yml"
   workflow_dispatch:
 
@@ -37,6 +38,18 @@ jobs:
           - name: frontend
             context: frontend
             file: frontend/Dockerfile.prod
+            build_args: |
+              NEXT_PUBLIC_API_URL=
+              NEXT_PUBLIC_DEMO_MODE=false
+          - name: demo
+            context: frontend
+            file: frontend/Dockerfile.prod
+            build_args: |
+              NEXT_PUBLIC_API_URL=
+              NEXT_PUBLIC_DEMO_MODE=true
+          - name: site
+            context: site
+            file: site/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -53,6 +66,7 @@ jobs:
           file: ${{ matrix.file }}
           push: false
           load: false
+          build-args: ${{ matrix.build_args }}
           tags: openprintdashboard/${{ matrix.name }}:ci
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

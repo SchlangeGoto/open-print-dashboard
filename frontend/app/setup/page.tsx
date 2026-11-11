@@ -53,6 +53,9 @@ export default function SetupPage() {
   // The query string is read by a tiny Suspense bridge below, so the page
   // content is not replaced by a loading fallback.
   const [forceSetup, setForceSetup] = useState<boolean | null>(null);
+  const [statusReady, setStatusReady] = useState(false);
+  const [statusError, setStatusError] = useState(false);
+  const [statusAttempt, setStatusAttempt] = useState(0);
   const { login, demoAvailable, enterDemo } = useAuth();
   const [step, setStep] = useState<SetupStep>("account");
   const [error, setError] = useState("");
@@ -76,6 +79,7 @@ export default function SetupPage() {
 
   useEffect(() => {
     if (forceSetup === null) return;
+    setStatusError(false);
     api
       .getSetupStatus()
       .then(async (status) => {
@@ -88,7 +92,8 @@ export default function SetupPage() {
           return;
         }
         if (!status.user_created) {
-          // Fresh instance: the account step is already showing.
+          // Fresh instance: the account step is ready.
+          setStatusReady(true);
           return;
         }
         try {
@@ -100,14 +105,18 @@ export default function SetupPage() {
                 ? "done"
                 : "printer",
           );
+          setStatusReady(true);
         } catch {
           // The account exists but this browser has no session. Signing in
           // is the only way forward; creating the account would fail.
           router.replace("/");
         }
       })
-      .catch(() => {});
-  }, [router, forceSetup]);
+      .catch(() => {
+        setStatusReady(false);
+        setStatusError(true);
+      });
+  }, [router, forceSetup, statusAttempt]);
 
   const loadCloudPrinters = useCallback(async () => {
     setLoadingPrinters(true);
@@ -229,6 +238,52 @@ export default function SetupPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (forceSetup === null || !statusReady || statusError) {
+    return (
+      <main className="flex min-h-svh items-center justify-center p-6">
+        <Suspense fallback={null}>
+          <ForceParam onChange={setForceSetup} />
+        </Suspense>
+        {statusError ? (
+          <Card className="w-full max-w-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <AlertCircle className="size-5 text-destructive" />
+                Could not load setup
+              </CardTitle>
+              <CardDescription>
+                The server did not answer. Check the connection and try again.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={() => {
+                  setStatusError(false);
+                  setStatusReady(false);
+                  setStatusAttempt((attempt) => attempt + 1);
+                }}
+              >
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div
+            className="flex flex-col items-center gap-3"
+            role="status"
+            aria-label="Loading setup"
+          >
+            <div
+              className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
+              aria-hidden="true"
+            />
+            <p className="text-sm text-muted-foreground">Loading setup…</p>
+          </div>
+        )}
+      </main>
+    );
   }
 
   return (

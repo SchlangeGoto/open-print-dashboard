@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
 import { Eye, Palette, Pencil, Plus, Thermometer, Trash2 } from "lucide-react";
 
@@ -70,7 +70,9 @@ export default function FilamentsPage() {
   const [selectedFilament, setSelectedFilament] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       // One request instead of one /filaments/{id}/spools call per filament.
       const [fils, allSpools] = await Promise.all([
@@ -82,15 +84,17 @@ export default function FilamentsPage() {
         if (!spool.filament_id) continue;
         (spoolMap[spool.filament_id] ??= []).push(spool);
       }
+      if (seq !== loadSeq.current) return;
       setFilaments(fils);
       setSpoolsByFilament(spoolMap);
+      if (seq !== loadSeq.current) return;
       setLoadError(null);
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Could not reach the server",
       );
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 
@@ -223,7 +227,7 @@ export default function FilamentsPage() {
                 className="group relative cursor-pointer transition-colors hover:ring-primary/40"
               >
                 <CardContent className="space-y-4">
-                  <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                  <div className="card-actions absolute right-3 top-3 z-10 flex gap-1 transition-opacity">
                     <Button
                       variant="secondary"
                       size="icon-sm"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -348,7 +348,9 @@ export default function AnalyticsPage() {
   const [printerFilter, setPrinterFilter] = useState("all");
   const [now, setNow] = useState(() => new Date());
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const [jobs, devices, filamentList, spoolList] = await Promise.all([
         api.getAllPrintJobs(),
@@ -356,17 +358,19 @@ export default function AnalyticsPage() {
         api.getFilaments(),
         api.getSpools(),
       ]);
+      if (seq !== loadSeq.current) return;
       setPrints(jobs);
       setPrinters(devices);
       setFilaments(filamentList);
       setSpools(spoolList);
+      if (seq !== loadSeq.current) return;
       setLoadError(null);
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Could not reach the server",
       );
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 

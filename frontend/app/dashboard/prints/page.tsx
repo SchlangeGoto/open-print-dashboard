@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
 import { ChevronDown, ChevronUp, ChevronsUpDown, History, Trash2 } from "lucide-react";
 
@@ -92,23 +92,27 @@ export default function PrintsPage() {
   const [filamentFilter, setFilamentFilter] = useState<string>("all");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const [jobs, spoolList, filamentList] = await Promise.all([
         api.getAllPrintJobs(),
         api.getSpools(),
         api.getFilaments(),
       ]);
+      if (seq !== loadSeq.current) return;
       setPrints(jobs);
       setSpools(spoolList);
       setFilaments(filamentList);
+      if (seq !== loadSeq.current) return;
       setLoadError(null);
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Could not reach the server",
       );
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 

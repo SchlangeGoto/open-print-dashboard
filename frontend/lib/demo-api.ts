@@ -119,13 +119,14 @@ function filamentsWithStats(): any[] {
   const spools = getSpoolsRaw();
   return getFilamentsRaw().map((filament) => {
     const owned = spools.filter((spool) => spool.filament_id === filament.id);
+    const known = owned.filter((spool) => !spool.remaining_unknown);
     const prices = owned
       .map((spool) => spool.price_per_kg)
       .filter((price): price is number => typeof price === "number");
     return {
       ...filament,
       total_remaining_g: round(
-        owned.reduce((sum, spool) => sum + (spool.remaining_g ?? 0), 0),
+        known.reduce((sum, spool) => sum + (spool.remaining_g ?? 0), 0),
       ),
       avg_price_per_kg:
         prices.length > 0

@@ -128,13 +128,34 @@ export default function DashboardPage() {
     setSettingsOpen(true);
   }
 
+  useEffect(() => {
+    // Keep the open modals on the latest rows; a deleted row closes them.
+    setSelectedPrint((current: any) =>
+      current ? prints.find((p) => p.id === current.id) ?? null : null,
+    );
+    setSelectedSpool((current: any) =>
+      current ? spools.find((s) => s.id === current.id) ?? null : null,
+    );
+    setSelectedFilament((current: any) =>
+      current ? filaments.find((f) => f.id === current.id) ?? null : null,
+    );
+    setSelectedPrinter((current: Printer | null) =>
+      current
+        ? printers.find((p) => p.serial === current.serial) ?? current
+        : null,
+    );
+  }, [prints, spools, filaments, printers]);
+
   const filamentChartData = filaments
     .filter((f) => f.total_remaining_g > 0)
     .map((f) => {
       const totalSpoolG = spools
         .filter((s) => s.filament_id === f.id && !s.remaining_unknown)
         .reduce((sum, s) => sum + s.total_weight_g, 0);
-      const pct = totalSpoolG > 0 ? (f.total_remaining_g / totalSpoolG) * 100 : 0;
+      const pct =
+        totalSpoolG > 0
+          ? Math.min(100, Math.max(0, (f.total_remaining_g / totalSpoolG) * 100))
+          : 0;
       return {
         name: f.color_name,
         remaining: Math.round(f.total_remaining_g),

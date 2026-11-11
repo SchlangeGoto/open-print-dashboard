@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "@/lib/toast";
 import {
@@ -92,23 +92,27 @@ export default function SpoolsPage() {
       : false,
   );
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const [sp, fil, devices] = await Promise.all([
         api.getSpools(),
         api.getFilaments(),
         api.getPrinters(),
       ]);
+      if (seq !== loadSeq.current) return;
       setSpools(sp);
       setFilaments(fil);
       setPrinters(devices);
+      if (seq !== loadSeq.current) return;
       setLoadError(null);
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Could not reach the server",
       );
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 
@@ -292,7 +296,7 @@ export default function SpoolsPage() {
                     ) : null}
                   </div>
 
-                  <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                  <div className="card-actions absolute right-3 top-3 z-10 flex gap-1 transition-opacity">
                     <Button
                       variant="secondary"
                       size="icon-sm"

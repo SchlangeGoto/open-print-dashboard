@@ -51,6 +51,9 @@ def parse_task_datetime(value: Any) -> datetime | None:
         return value if value.tzinfo else value.replace(tzinfo=UTC)
     if isinstance(value, (int, float)):
         seconds = value / 1000 if value > 1_000_000_000_000 else value
+        if seconds <= 0:
+            # Bambu sometimes reports 0 for "no timestamp"; that is not 1970.
+            return None
         try:
             return datetime.fromtimestamp(seconds, tz=UTC)
         except (OSError, OverflowError, ValueError):
@@ -714,8 +717,8 @@ class BambuClient:
                 mapping = task_mapping if task_mapping else persisted
                 weight = (task or {}).get("weight") or job.weight
 
+                total = 0.0
                 if mapping:
-                    total = 0.0
                     for slot in mapping:
                         try:
                             total += float(slot.get("weight") or 0)
@@ -726,7 +729,34 @@ class BambuClient:
                 elif not weight:
                     return
 
+                if (task or {}).get("status") == 4:
+                    # A still-running task may report partial per-slot
+                    # weights. Only deduct when the reported total matches the
+                    # job weight; otherwise wait for the final payload.
+                    try:
+                        job_weight = float(weight or 0)
+                    except (TypeError, ValueError):
+                        job_weight = 0.0
+                    if not mapping or job_weight <= 0 or total + 0.5 < job_weight:
+                        logger.info(
+                            "Task %s is still running with a partial mapping; "
+                            "leaving the deduction for a later pass",
+                            task_id,
+                        )
+                        return
+
                 resolved = self._load_deduction_spools(session, job)
+                recorded = self._recorded_slot_keys(job)
+                if recorded - set(resolved):
+                    # A roll recorded at finish was deleted. Charging the
+                    # tray's current occupant would debit a different
+                    # filament, so leave the whole deduction unclaimed.
+                    logger.warning(
+                        "The rolls recorded for task %s are gone; leaving "
+                        "the deduction unclaimed",
+                        task_id,
+                    )
+                    return
                 if mapping:
                     weighted = self._weighted_slot_keys(mapping)
                     if not resolved and len(mapping) == 1 and job.spool_id:
@@ -735,6 +765,11 @@ class BambuClient:
                         if key and spool:
                             resolved[key] = spool
                     missing = weighted - set(resolved)
+                    if missing:
+                        # Retry only slots that were never recorded. A slot
+                        # with a persisted spool must never be re-resolved
+                        # from whatever is loaded now.
+                        missing -= recorded
                     if missing:
                         # Retry only the unresolved slots. The known slots
                         # stay pinned to the spools recorded earlier.
@@ -1243,8 +1278,11 @@ class BambuClient:
                             col(Spool.id) != active_spool.id,
                         )
                     ).all():
+                        # Keep the roll associated with the printer: it is
+                        # still loaded, just not the active tray. The partial
+                        # unique index only constrains active rows.
                         other.active = False
-                        other.printer_id = None
+                        session.add(other)
                     # Flush the unload before the new active row is written;
                     # the partial unique index checks each row as it lands.
                     session.flush()
@@ -1658,8 +1696,10 @@ class BambuClient:
                 job.start_time = (
                     parse_task_datetime(task.get("startTime")) or job.start_time
                 )
-                job.finished_at = parse_task_datetime(task.get("endTime")) or (
-                    datetime.now(UTC) if timed_out else job.finished_at
+                job.finished_at = (
+                    parse_task_datetime(task.get("endTime"))
+                    or job.finished_at
+                    or datetime.now(UTC)
                 )
                 if task.get("status") is not None:
                     job.status = task.get("status")
@@ -2004,6 +2044,25 @@ class BambuClient:
             used_spool_ids.add(spool.id)
             resolved[resolved_key] = spool
         return resolved
+
+    def _recorded_slot_keys(self, job: PrintJob) -> set[tuple[int, int]]:
+        """Return the slot keys persisted at finish, even if the spools are gone."""
+        if not job.deduction_spools:
+            return set()
+        try:
+            raw = json.loads(job.deduction_spools)
+        except json.JSONDecodeError:
+            return set()
+        if not isinstance(raw, dict):
+            return set()
+        keys: set[tuple[int, int]] = set()
+        for key in raw:
+            try:
+                ams_id, slot_id = (int(part) for part in str(key).split(":"))
+            except (TypeError, ValueError):
+                continue
+            keys.add((ams_id, slot_id))
+        return keys
 
     def _load_deduction_spools(
         self, session: Session, job: PrintJob

@@ -44,8 +44,11 @@ def _unload_other_spools(
         select(Spool).where(Spool.printer_id == printer_id, col(Spool.id) != keep_id)
     ).all()
     for spool in others:
+        # The spool is still loaded in this printer; only the "currently
+        # feeding" flag moves. Clearing printer_id here made a second
+        # untagged roll impossible to resolve for a later AMS slot.
         spool.active = False
-        spool.printer_id = None
+        session.add(spool)
     # Flush the unload before the caller activates the new spool; the partial
     # unique index checks each row as it is written.
     session.flush()
@@ -487,9 +490,15 @@ def update_spool(
             status_code=422,
             detail="Load the spool into a printer before activating it",
         )
+    if spool.remaining_unknown and spool.remaining_g > spool.total_weight_g:
+        # An AMS-created spool keeps a nominal placeholder. Follow a reduced
+        # capacity instead of rejecting a field the user never set.
+        spool.remaining_g = spool.total_weight_g
     if (
-        "remaining_g" in update_dict or "total_weight_g" in update_dict
-    ) and spool.remaining_g > spool.total_weight_g:
+        not spool.remaining_unknown
+        and ("remaining_g" in update_dict or "total_weight_g" in update_dict)
+        and spool.remaining_g > spool.total_weight_g
+    ):
         raise HTTPException(
             status_code=422,
             detail="remaining_g cannot exceed total_weight_g",

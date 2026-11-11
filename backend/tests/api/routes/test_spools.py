@@ -112,7 +112,8 @@ def test_only_one_active_spool_per_printer(
     ).json()["data"]
     by_id = {spool["id"]: spool for spool in spools}
     assert by_id[first["id"]]["active"] is False
-    assert by_id[first["id"]]["printer_id"] is None
+    # The first roll is still loaded in the printer; only "active" moved.
+    assert by_id[first["id"]]["printer_id"] == str(printer.id)
     assert by_id[second["id"]]["active"] is True
     assert by_id[second["id"]]["printer_id"] == str(printer.id)
 
@@ -507,6 +508,47 @@ def test_updating_other_fields_keeps_an_unknown_weight(
     assert updated is not None
     assert updated.remaining_unknown is False
     assert updated.remaining_g == 640
+
+
+def test_reducing_total_weight_of_an_unknown_spool_clamps_the_placeholder(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Unknown Capacity",
+        color_hex="#FEDCBA",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        remaining_unknown=True,
+        source="ams",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    r = client.put(
+        f"{settings.API_V1_STR}/spools/{spool.id}",
+        headers=superuser_token_headers,
+        json={"total_weight_g": 500},
+    )
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    updated = db.get(Spool, spool.id)
+    assert updated is not None
+    assert updated.remaining_unknown is True
+    assert updated.total_weight_g == 500
+    assert updated.remaining_g == 500
 
 
 def test_print_job_deduction_is_claimed_once(db: Session) -> None:
@@ -2935,7 +2977,7 @@ def test_persisted_unmapped_deduction_writes_filament_usage(db: Session) -> None
     client.serial = printer.serial
     client._deduct_persisted_job(
         "task-pending",
-        {"id": "task-pending", "status": 4, "weight": 100, "amsDetailMapping": []},
+        {"id": "task-pending", "status": 2, "weight": 100, "amsDetailMapping": []},
     )
 
     db.expire_all()
@@ -3125,7 +3167,7 @@ def test_partial_mapping_is_retried_instead_of_claimed(
     # The cloud task has caught up with no mapping; the stored mapping
     # and the newly resolvable tray must still be used.
     client._deduct_persisted_job(
-        "task-partial", {"id": "task-partial", "status": 4, "amsDetailMapping": []}
+        "task-partial", {"id": "task-partial", "status": 2, "amsDetailMapping": []}
     )
 
     db.expire_all()
@@ -3663,3 +3705,290 @@ def test_reconcile_needs_two_offline_passes_to_close_a_running_job(
     stored = db.get(PrintJob, job.id)
     assert stored is not None
     assert stored.status == 2
+
+
+def test_persisted_deleted_roll_is_not_replaced_by_the_live_tray(
+    db: Session,
+) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament_a = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Deleted roll",
+        color_hex="#111111",
+    )
+    filament_b = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Replacement roll",
+        color_hex="#222222",
+    )
+    db.add(filament_a)
+    db.add(filament_b)
+    db.commit()
+    db.refresh(filament_a)
+    db.refresh(filament_b)
+
+    roll_a = Spool(
+        filament_id=filament_a.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    roll_b = Spool(
+        filament_id=filament_b.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="NEW-ROLL",
+    )
+    db.add(roll_a)
+    db.add(roll_b)
+    db.commit()
+    db.refresh(roll_a)
+    db.refresh(roll_b)
+
+    mapping = [{"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100}]
+    job = PrintJob(
+        title="Deleted roll",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-deleted-roll",
+        spool_id=roll_a.id,
+        filament_id=filament_a.id,
+        ams_detail_mapping=json.dumps(mapping),
+        deduction_spools=json.dumps({"0:0": str(roll_a.id)}),
+        finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # The roll recorded at finish is deleted; a different roll now sits in
+    # the tray.
+    db.delete(roll_a)
+    db.commit()
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {"ams": [{"id": 0, "tray": [{"id": 0, "tag_uid": "NEW-ROLL"}]}]}
+    }
+    client._deduct_persisted_job(
+        "task-deleted-roll",
+        {
+            "id": "task-deleted-roll",
+            "status": 2,
+            "weight": 100,
+            "amsDetailMapping": mapping,
+        },
+    )
+
+    db.expire_all()
+    assert db.get(Spool, roll_b.id).remaining_g == 1000  # type: ignore[union-attr]
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+
+
+def test_persisted_deduction_waits_for_a_running_task(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Still running",
+        color_hex="#333333",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="STILL-RUNNING",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+    mapping = [{"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 40}]
+    job = PrintJob(
+        title="Still running",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-still-running",
+        spool_id=spool.id,
+        filament_id=filament.id,
+        ams_detail_mapping=json.dumps(mapping),
+        deduction_spools=json.dumps({"0:0": str(spool.id)}),
+        finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._deduct_persisted_job(
+        "task-still-running",
+        {
+            "id": "task-still-running",
+            "status": 4,
+            "weight": 100,
+            "amsDetailMapping": mapping,
+        },
+    )
+
+    db.expire_all()
+    assert db.get(Spool, spool.id).remaining_g == 1000  # type: ignore[union-attr]
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+
+
+def test_finish_without_an_end_time_still_gets_finished_at(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="No end time",
+        color_hex="#444444",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+    job = PrintJob(
+        title="No end time",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-no-end",
+        spool_id=spool.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-no-end",
+        "title": "No end time",
+        "status": 2,
+        "weight": 10,
+        "endTime": 0,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("task-no-end", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2
+    assert stored.finished_at is not None
+    assert stored.finished_at.year >= 2025
+
+
+def test_activating_another_spool_keeps_the_first_loaded(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Two loaded",
+        color_hex="#555555",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    first = Spool(filament_id=filament.id, total_weight_g=1000, remaining_g=1000)
+    second = Spool(filament_id=filament.id, total_weight_g=1000, remaining_g=1000)
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    for spool in (first, second):
+        r = client.put(
+            f"{settings.API_V1_STR}/spools/{spool.id}/activate",
+            headers=superuser_token_headers,
+            json={"printer_id": str(printer.id)},
+        )
+        assert r.status_code == 200, r.text
+
+    db.expire_all()
+    first_stored = db.get(Spool, first.id)
+    second_stored = db.get(Spool, second.id)
+    assert first_stored is not None
+    assert second_stored is not None
+    assert first_stored.printer_id == printer.id
+    assert first_stored.active is False
+    assert second_stored.printer_id == printer.id
+    assert second_stored.active is True
+
+
+def test_average_price_ignores_zero_priced_spools(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    from app import crud
+
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Zero price",
+        color_hex="#666666",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    db.add(
+        Spool(
+            filament_id=filament.id,
+            total_weight_g=1000,
+            remaining_g=1000,
+            price_per_kg=20.0,
+        )
+    )
+    db.add(
+        Spool(
+            filament_id=filament.id,
+            total_weight_g=1000,
+            remaining_g=1000,
+            price_per_kg=0.0,
+        )
+    )
+    db.commit()
+
+    stats = crud.get_filament_stats(session=db, filament_id=filament.id)
+    assert stats.avg_price_per_kg == 20.0
+
+    r = client.get(f"{settings.API_V1_STR}/filaments/", headers=superuser_token_headers)
+    assert r.status_code == 200, r.text
+    row = next(item for item in r.json()["data"] if item["id"] == str(filament.id))
+    assert row["avg_price_per_kg"] == 20.0

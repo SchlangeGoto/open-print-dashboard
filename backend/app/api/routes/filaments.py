@@ -62,7 +62,7 @@ def read_filaments(session: SessionDep) -> Any:
     ).all()
     prices_by_filament: dict[uuid.UUID, list[float]] = {}
     for filament_id, price in price_rows:
-        if price is not None:
+        if price and price > 0:
             prices_by_filament.setdefault(filament_id, []).append(price)
 
     data: list[FilamentPublicWithStats] = []

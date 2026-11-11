@@ -296,7 +296,7 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
         .order_by(col(Spool.created_at).desc())
         .limit(5)
     ).all()
-    prices = [price for price in recent_prices if price is not None]
+    prices = [price for price in recent_prices if price and price > 0]
     avg_price = sum(prices) / len(prices) if prices else None
 
     return FilamentStats(

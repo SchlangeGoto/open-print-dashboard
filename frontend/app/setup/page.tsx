@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -56,6 +56,7 @@ export default function SetupPage() {
   const [statusReady, setStatusReady] = useState(false);
   const [statusError, setStatusError] = useState(false);
   const [statusAttempt, setStatusAttempt] = useState(0);
+  const statusSeq = useRef(0);
   const { login, demoAvailable, enterDemo } = useAuth();
   const [step, setStep] = useState<SetupStep>("account");
   const [error, setError] = useState("");
@@ -79,10 +80,12 @@ export default function SetupPage() {
 
   useEffect(() => {
     if (forceSetup === null) return;
+    const seq = ++statusSeq.current;
     setStatusError(false);
     api
       .getSetupStatus()
       .then(async (status) => {
+        if (seq !== statusSeq.current) return;
         if (isDemoActive()) {
           router.push("/dashboard");
           return;
@@ -98,6 +101,7 @@ export default function SetupPage() {
         }
         try {
           const progress = await api.getSetupProgress();
+          if (seq !== statusSeq.current) return;
           setStep(
             !progress.bambu_logged_in
               ? "bambu"
@@ -113,6 +117,7 @@ export default function SetupPage() {
         }
       })
       .catch(() => {
+        if (seq !== statusSeq.current) return;
         setStatusReady(false);
         setStatusError(true);
       });

@@ -10,24 +10,35 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "screenshots");
 
 const expected = [];
-for (const name of [
+const dashboardCaptures = [
   "overview",
   "printers",
   "print-jobs",
   "filaments",
   "spools",
   "analytics",
-]) {
-  expected.push([`${name}-1600.jpg`, 1600], [`${name}-2400.jpg`, 2400]);
-}
-for (const name of ["app-spools", "app-spool", "app-scan", "app-scan-crop"]) {
+];
+for (const name of dashboardCaptures) {
   expected.push(
+    [`${name}.jpg`, 3200],
+    [`${name}-1600.jpg`, 1600],
+    [`${name}-2400.jpg`, 2400],
+  );
+}
+const phoneCaptures = ["app-spools", "app-spool", "app-scan", "app-scan-crop"];
+for (const name of phoneCaptures) {
+  expected.push(
+    [`${name}.jpg`, 1170],
     [`${name}-390.jpg`, 390],
     [`${name}-585.jpg`, 585],
     [`${name}-780.jpg`, 780],
   );
 }
-expected.push(["printer-detail-620.jpg", 620], ["printer-detail-930.jpg", 930]);
+expected.push(
+  ["printer-detail.jpg", 1240],
+  ["printer-detail-620.jpg", 620],
+  ["printer-detail-930.jpg", 930],
+);
 
 function jpegWidth(file) {
   const buffer = readFileSync(file);

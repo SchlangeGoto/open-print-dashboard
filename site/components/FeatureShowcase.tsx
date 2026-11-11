@@ -67,6 +67,10 @@ const features = [
 export function FeatureShowcase() {
   const [active, setActive] = useState(0);
   const [phase, setPhase] = useState<"tour" | "done">("tour");
+  const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
+  // Include the new active slide in the same render as the outgoing one so
+  // a tab jump cannot unmount the old image before the new one paints.
+  const mounted = visited.has(active) ? visited : new Set(visited).add(active);
   const sectionRef = useRef<HTMLDivElement>(null);
   const previousHeight = useRef<number | null>(null);
   const scrollBefore = useRef(0);
@@ -97,6 +101,11 @@ export function FeatureShowcase() {
     );
     setActive(next);
   }, [phase, scrollYProgress]);
+
+  useEffect(() => {
+    if (visited.has(active)) return;
+    setVisited((current) => new Set(current).add(active));
+  }, [active, visited]);
 
   useEffect(() => {
     if (phase !== "tour") return;
@@ -218,10 +227,10 @@ export function FeatureShowcase() {
             }`}
           >
             {features.slice(0, 5).map((item, index) => {
-              // opacity-0 still downloads the image. Keep the active slide
-              // and its neighbours (for the cross-fade) and leave the rest
-              // unmounted until they are about to be shown.
-              if (Math.abs(index - active) > 1) {
+              // opacity-0 still downloads the image. Mount a slide when it
+              // is first shown and keep it for later fades; the rest stay
+              // unmounted until the user reaches them.
+              if (!mounted.has(index)) {
                 return null;
               }
               return (
@@ -246,7 +255,7 @@ export function FeatureShowcase() {
               }`}
               aria-hidden={active !== 5}
             >
-              {active >= 4 ? (
+              {mounted.has(5) ? (
                 <>
                   <img
                     src="/screenshots/app-scan-crop.jpg"

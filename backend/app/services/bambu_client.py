@@ -740,6 +740,20 @@ class BambuClient:
                             task_id,
                         )
                         return
+                    usage = self._build_filament_usage(
+                        session,
+                        {"amsDetailMapping": mapping, "weight": weight},
+                        resolved,
+                        job.filament_id,
+                        weight,
+                    )
+                    if usage:
+                        job.filament_usage = json.dumps(usage)
+                        primary = max(usage, key=lambda key: usage[key]["weight"] or 0)
+                        job.filament_id = uuid.UUID(primary)
+                        total_cost = sum(item["cost"] or 0 for item in usage.values())
+                        if total_cost:
+                            job.estimated_cost = round(total_cost, 2)
                     if self._claim_filament_deduction(session, job.id):
                         self._deduct_filament_from_spools(
                             session,
@@ -1308,6 +1322,49 @@ class BambuClient:
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
 
+    def _build_filament_usage(
+        self,
+        session: Session,
+        task: dict,
+        resolved_by_slot: dict[tuple[int, int], Spool],
+        fallback_filament_id: uuid.UUID | None,
+        fallback_weight: float | None,
+    ) -> dict[str, dict[str, float | None]]:
+        """Attribute the job's grams and cost to every filament it used."""
+        mapping = task.get("amsDetailMapping") or []
+        weights: dict[uuid.UUID, float] = {}
+        if mapping:
+            for index, slot in enumerate(mapping):
+                used_g = slot.get("weight") or 0
+                if not used_g:
+                    continue
+                key = self._mapping_slot_key(slot)
+                resolved_key = key if key is not None else (-1 - index, 0)
+                spool = resolved_by_slot.get(resolved_key)
+                if spool and spool.filament_id:
+                    weights[spool.filament_id] = weights.get(
+                        spool.filament_id, 0.0
+                    ) + float(used_g)
+        elif fallback_filament_id and fallback_weight:
+            weights[fallback_filament_id] = float(fallback_weight)
+
+        usage: dict[str, dict[str, float | None]] = {}
+        for filament_id, grams in weights.items():
+            recent = session.exec(
+                select(Spool.price_per_kg)
+                .where(Spool.filament_id == filament_id)
+                .where(col(Spool.price_per_kg).is_not(None))
+                .order_by(desc(Spool.created_at))
+                .limit(5)
+            ).all()
+            prices = [price for price in recent if price and price > 0]
+            avg_price = sum(prices) / len(prices) if prices else None
+            usage[str(filament_id)] = {
+                "weight": round(grams, 1),
+                "cost": (round((grams / 1000) * avg_price, 2) if avg_price else None),
+            }
+        return usage
+
     def _save_print_job(
         self,
         task_id: str | None = None,
@@ -1574,6 +1631,32 @@ class BambuClient:
                             "leaving the deduction unclaimed",
                             cloud_task_id,
                         )
+
+                usage: dict[str, dict[str, float | None]] = {}
+                if mapping:
+                    if self._weighted_slot_keys(mapping or []) <= set(resolved_spools):
+                        usage = self._build_filament_usage(
+                            session,
+                            task,
+                            resolved_spools,
+                            job.filament_id,
+                            task.get("weight") or job.weight,
+                        )
+                else:
+                    usage = self._build_filament_usage(
+                        session,
+                        task,
+                        {},
+                        job.filament_id,
+                        task.get("weight") or job.weight,
+                    )
+                if usage:
+                    job.filament_usage = json.dumps(usage)
+                    primary = max(usage, key=lambda key: usage[key]["weight"] or 0)
+                    job.filament_id = uuid.UUID(primary)
+                    total_cost = sum(item["cost"] or 0 for item in usage.values())
+                    if total_cost:
+                        job.estimated_cost = round(total_cost, 2)
 
                 if not can_deduct:
                     logger.warning(

@@ -1,6 +1,9 @@
+import json
 import uuid
 from typing import Any
 
+from sqlalchemy import or_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
 from app.core.security import (
@@ -126,14 +129,15 @@ def get_setting_value(*, session: Session, key: str) -> str | None:
 
 
 def set_setting(*, session: Session, key: str, value: str) -> AppSetting:
-    setting = session.get(AppSetting, key)
-    if setting:
-        setting.value = value
-    else:
-        setting = AppSetting(key=key, value=value)
-        session.add(setting)
+    session.execute(
+        pg_insert(AppSetting)
+        .values(key=key, value=value)
+        .on_conflict_do_update(index_elements=["key"], set_={"value": value})
+    )
     session.commit()
-    session.refresh(setting)
+    setting = session.get(AppSetting, key)
+    if setting is None:
+        raise RuntimeError(f"Setting {key} was not persisted")
     return setting
 
 
@@ -254,29 +258,37 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
     spool_count = session.exec(
         select(func.count()).select_from(Spool).where(Spool.filament_id == filament_id)
     ).one()
-    # Aggregate from the denormalised filament_id, not through spool: a
-    # deleted spool must not erase its print history from the filament.
-    print_count = session.exec(
-        select(func.count())
-        .select_from(PrintJob)
-        .where(PrintJob.filament_id == filament_id)
-    ).one()
-    total_used_g = (
-        session.exec(
-            select(func.sum(PrintJob.weight))
-            .where(PrintJob.filament_id == filament_id)
-            .where(col(PrintJob.weight).is_not(None))
-        ).first()
-        or 0
-    )
-    total_cost = (
-        session.exec(
-            select(func.sum(PrintJob.estimated_cost))
-            .where(PrintJob.filament_id == filament_id)
-            .where(col(PrintJob.estimated_cost).is_not(None))
-        ).first()
-        or 0
-    )
+    # Multi-colour jobs persist per-filament usage; legacy jobs fall back to
+    # the denormalised filament_id. A deleted spool must not erase history.
+    jobs = session.exec(
+        select(PrintJob).where(
+            or_(
+                col(PrintJob.filament_id) == filament_id,
+                col(PrintJob.filament_usage).is_not(None),
+            )
+        )
+    ).all()
+    print_count = 0
+    total_used_g = 0.0
+    total_cost = 0.0
+    usage_key = str(filament_id)
+    for job in jobs:
+        usage = None
+        if job.filament_usage:
+            try:
+                parsed = json.loads(job.filament_usage)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                usage = parsed.get(usage_key)
+        if isinstance(usage, dict):
+            print_count += 1
+            total_used_g += float(usage.get("weight") or 0)
+            total_cost += float(usage.get("cost") or 0)
+        elif not job.filament_usage and job.filament_id == filament_id:
+            print_count += 1
+            total_used_g += job.weight or 0
+            total_cost += job.estimated_cost or 0
     recent_prices = session.exec(
         select(Spool.price_per_kg)
         .where(Spool.filament_id == filament_id)

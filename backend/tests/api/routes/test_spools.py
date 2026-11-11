@@ -3327,3 +3327,114 @@ def test_put_active_unloads_the_other_spool(
     db.expire_all()
     assert db.get(Spool, second.id).active is True  # type: ignore[union-attr]
     assert db.get(Spool, first.id).active is False  # type: ignore[union-attr]
+
+
+def test_multi_material_print_attributes_each_filament(
+    db: Session, monkeypatch
+) -> None:
+    from app import crud
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    pla = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Usage PLA",
+        color_hex="#0c0d0e",
+        bambu_info_idx="GFL99",
+    )
+    petg = Filament(
+        brand="Test",
+        material="PETG",
+        color_name="Usage PETG",
+        color_hex="#0d0e0f",
+        bambu_info_idx="GFP99",
+    )
+    db.add(pla)
+    db.add(petg)
+    db.commit()
+    db.refresh(pla)
+    db.refresh(petg)
+    roll_a = Spool(
+        filament_id=pla.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="USAGE-A",
+        price_per_kg=20,
+    )
+    roll_b = Spool(
+        filament_id=petg.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="USAGE-B",
+        price_per_kg=40,
+    )
+    db.add(roll_a)
+    db.add(roll_b)
+    db.commit()
+    db.refresh(roll_a)
+    db.refresh(roll_b)
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 60},
+        {"ams": 0, "slot": 1, "filamentId": "GFP99", "weight": 40},
+    ]
+    job = PrintJob(
+        title="Two colours",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-two-colours",
+        spool_id=roll_a.id,
+        filament_id=pla.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-two-colours",
+        "title": "Two colours",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "USAGE-A"},
+                        {"id": 1, "tag_uid": "USAGE-B"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._save_print_job("task-two-colours", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    usage = json.loads(stored.filament_usage or "{}")
+    assert usage[str(pla.id)]["weight"] == 60
+    assert usage[str(petg.id)]["weight"] == 40
+    assert usage[str(pla.id)]["cost"] == 1.2
+    assert usage[str(petg.id)]["cost"] == 1.6
+    assert stored.estimated_cost == 2.8
+
+    pla_stats = crud.get_filament_stats(session=db, filament_id=pla.id)
+    petg_stats = crud.get_filament_stats(session=db, filament_id=petg.id)
+    assert pla_stats.print_count == 1
+    assert pla_stats.total_used_g == 60
+    assert pla_stats.total_cost == 1.2
+    assert petg_stats.print_count == 1
+    assert petg_stats.total_used_g == 40
+    assert petg_stats.total_cost == 1.6

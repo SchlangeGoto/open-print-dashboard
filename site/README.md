@@ -138,3 +138,16 @@ horizontal snap strip on mobile. The phone captures use the same demo data as th
 web screenshots.
 
 The screenshots are demo data. Keep the `Demo data` captions.
+
+## Screenshots
+
+The site serves pre-generated `-<width>.jpg` variants from
+`public/screenshots` through `srcset`. After replacing a master, regenerate
+them (requires ImageMagick):
+
+```bash
+npm run images:variants
+```
+
+`npm run images:check` verifies every expected variant exists at the width
+its descriptor promises. CI runs the check.

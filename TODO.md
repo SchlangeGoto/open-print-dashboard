@@ -382,3 +382,9 @@ re-opened.
 | Release latest compares against the guard-time main tip | `fbcff49` | Human #20 |
 | Feature neighbours preloaded; variant check derived from masters | `ee606f5` | Human #20 |
 | Setup force param reactive; demo filament-spools rejects asynchronously | `3c09384` | Human #20 |
+| Nested AMS payload, stuck-at-4 retry, lost-start placeholder, stale open close, RUNNING budget reset, 6 h cap | `9392314` | Human #20 |
+| Lookup-only scan stays side-effect free; preset id match filters by series | `a7290e1` | Human #20 |
+| Composite filament index moved to a new append-only migration | `9eb78ab` | Human #20 |
+| Release guard writes its tip output once | `2369d33` | Human #20 |
+| Feature slides preload on intent; shared image manifest catches deleted masters | `552781f` | Human #20 |
+| Setup query-param comment corrected | `f91f368` | Human #20 |

@@ -127,6 +127,20 @@ export default function PrintersPage() {
   }, [prints, spools, filaments]);
 
   useEffect(() => {
+    if (!settingsOpen) return;
+    if (
+      settingsPrinter &&
+      printers.some((p) => p.serial === settingsPrinter.serial)
+    ) {
+      return;
+    }
+    // Do not keep the modal armed for a printer that is gone; a printer with
+    // the same serial reappearing must not reopen it by itself.
+    setSettingsOpen(false);
+    setSettingsPrinter(null);
+  }, [printers, settingsOpen, settingsPrinter]);
+
+  useEffect(() => {
     if (printers.length > 0) {
       setCloudStatus(null);
       return;

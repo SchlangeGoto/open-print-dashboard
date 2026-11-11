@@ -144,6 +144,20 @@ export default function DashboardPage() {
     );
   }, [prints, spools, filaments, printers]);
 
+  useEffect(() => {
+    if (!settingsOpen) return;
+    if (
+      settingsPrinter &&
+      printers.some((p) => p.serial === settingsPrinter.serial)
+    ) {
+      return;
+    }
+    // Do not keep the modal armed for a printer that is gone; a printer with
+    // the same serial reappearing must not reopen it by itself.
+    setSettingsOpen(false);
+    setSettingsPrinter(null);
+  }, [printers, settingsOpen, settingsPrinter]);
+
   const filamentChartData = filaments
     .filter((f) => f.total_remaining_g > 0)
     .map((f) => {

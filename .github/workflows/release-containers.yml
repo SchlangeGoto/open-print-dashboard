@@ -34,7 +34,10 @@ jobs:
             exit 0
           fi
           git fetch --no-tags origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          if [[ "$GITHUB_SHA" != "$(git rev-parse origin/main)" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} must point at the current tip of main, not an older commit."
+            exit 1
+          fi
 
   publish:
     needs: guard
@@ -143,12 +146,15 @@ jobs:
             echo "Not a semver release tag; latest unchanged."
             exit 0
           fi
+          # Only tags merged into main can represent a release. A rejected
+          # branch tag must not block the next real release forever.
+          git fetch --no-tags origin main
           git fetch --tags --force
-          newest=$(git tag --list 'v*' --sort=-v:refname \
+          newest=$(git tag --merged origin/main --list 'v*' --sort=-v:refname \
             | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
           if [ "${GITHUB_REF_NAME}" != "${newest}" ]; then
-            echo "${newest} is newer than ${GITHUB_REF_NAME}; latest unchanged."
-            exit 0
+            echo "::error::${GITHUB_REF_NAME} is not the newest semver tag on main (${newest}); latest was not moved."
+            exit 1
           fi
           echo "eligible=true" >> "$GITHUB_OUTPUT"
 

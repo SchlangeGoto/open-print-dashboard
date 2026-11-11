@@ -157,11 +157,13 @@ export function DashboardStage({
             : null}
           <div className="stage-front frame">
             <picture>
-              <source
-                media="(max-width: 768px)"
-                srcSet={`${imageVariant(src, mobileWidth)} ${mobileWidth}w`}
-                sizes="100vw"
-              />
+              {mobileWidth ? (
+                <source
+                  media="(max-width: 768px)"
+                  srcSet={`${imageVariant(src, mobileWidth)} ${mobileWidth}w`}
+                  sizes="100vw"
+                />
+              ) : null}
               <img
                 src={src}
                 srcSet={imageSrcSet(src)}

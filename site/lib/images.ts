@@ -14,9 +14,9 @@ function entryFor(src: string): ImageEntry | undefined {
   return entries.get(src.split("/").pop() ?? src);
 }
 
-/** Width of the first generated variant, used by the hero mobile source. */
-export function imageMobileVariantWidth(src: string): number {
-  return entryFor(src)?.variants[0] ?? 1600;
+/** Width of the first generated variant, or undefined when unlisted. */
+export function imageMobileVariantWidth(src: string): number | undefined {
+  return entryFor(src)?.variants[0];
 }
 
 export function imageVariant(src: string, width: number): string {

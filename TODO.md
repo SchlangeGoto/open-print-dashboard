@@ -375,3 +375,10 @@ re-opened.
 | Release ancestry guard restored; skipped latest warns instead of failing | `c6b07bc` | Human #20 |
 | Visited feature slides stay mounted; native-width masters checked | `d434adf` | Human #20 |
 | Setup first paint, unique progress labels, demo filament-spools 404 | `27aab49` | Human #20 |
+| Lost start rows recovered from observed starts; deleted records not recreated | `93814b2` | Human #20 |
+| Deferred finishes persist and retry with bounded attempts; pending deductions retried 24 h; AMS synced before claim | `93814b2` | Human #20 |
+| PrintJob finish-retry columns; composite `(filament_id, created_at)` index | `522b761` | Human #20 |
+| `bambu_info_idx` preset match prefers the scanned weight; create=false commits the lookup | `fb53bf9` | Human #20 |
+| Release latest compares against the guard-time main tip | `fbcff49` | Human #20 |
+| Feature neighbours preloaded; variant check derived from masters | `ee606f5` | Human #20 |
+| Setup force param reactive; demo filament-spools rejects asynchronously | `3c09384` | Human #20 |

@@ -54,6 +54,7 @@ export default function PrintersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestSeq = useRef(0);
   const inFlight = useRef(false);
+  const refreshedPrintId = useRef<string | null>(null);
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
   const [selectedPrint, setSelectedPrint] = useState<any | null>(null);
   const [selectedSpool, setSelectedSpool] = useState<any | null>(null);
@@ -67,15 +68,17 @@ export default function PrintersPage() {
     inFlight.current = true;
     const seq = ++requestSeq.current;
     try {
-      const [devices, active, spoolList, filamentList] = await Promise.all([
+      const activeRequest = api.getActivePrints().catch(() => null);
+      const [devices, spoolList, filamentList, active] = await Promise.all([
         api.getPrinters(),
-        api.getActivePrints(),
         api.getSpools(),
         api.getFilaments(),
+        activeRequest,
       ]);
       if (seq !== requestSeq.current) return;
       setPrinters(devices);
-      setActivePrints(active);
+      // An active-print failure must not freeze the rest of the page.
+      if (active !== null) setActivePrints(active);
       setSpools(spoolList);
       setFilaments(filamentList);
 
@@ -116,16 +119,39 @@ export default function PrintersPage() {
   }, [load]);
 
   useEffect(() => {
-    setSelectedPrint((current: any) =>
-      current ? activePrints.find((p) => p.id === current.id) ?? null : null,
-    );
     setSelectedSpool((current: any) =>
       current ? spools.find((s) => s.id === current.id) ?? null : null,
     );
     setSelectedFilament((current: any) =>
       current ? filaments.find((f) => f.id === current.id) ?? null : null,
     );
-  }, [activePrints, spools, filaments]);
+  }, [spools, filaments]);
+
+  useEffect(() => {
+    const current = selectedPrint;
+    if (!current) {
+      refreshedPrintId.current = null;
+      return;
+    }
+    if (activePrints.some((p) => p.id === current.id)) {
+      refreshedPrintId.current = null;
+      return;
+    }
+    if (refreshedPrintId.current === current.id) return;
+    refreshedPrintId.current = current.id;
+    let cancelled = false;
+    api
+      .getPrint(current.id)
+      .then((print) => {
+        if (!cancelled) setSelectedPrint(print);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedPrint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePrints, selectedPrint]);
 
   useEffect(() => {
     if (!settingsOpen) return;

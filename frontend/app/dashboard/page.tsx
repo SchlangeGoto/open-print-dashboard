@@ -53,6 +53,7 @@ export default function DashboardPage() {
 
   const requestSeq = useRef(0);
   const inFlight = useRef(false);
+  const refreshedPrintId = useRef<string | null>(null);
 
   const load = useCallback(async (force = false) => {
     // Skip a poll while the previous one is still running; a manual refresh
@@ -61,15 +62,18 @@ export default function DashboardPage() {
     inFlight.current = true;
     const seq = ++requestSeq.current;
     try {
-      const [devs, active, fil, sp] = await Promise.all([
+      const activeRequest = api.getActivePrints().catch(() => null);
+      const [devs, fil, sp, active] = await Promise.all([
         api.getPrinters(),
-        api.getActivePrints(),
         api.getFilaments(),
         api.getSpools(),
+        activeRequest,
       ]);
       if (seq !== requestSeq.current) return;
       setPrinters(devs);
-      setActivePrints(active);
+      // An active-print failure must not freeze printer, spool and filament
+      // data; keep the previous list until the next poll.
+      if (active !== null) setActivePrints(active);
       setFilaments(fil);
       setSpools(sp);
 
@@ -128,10 +132,8 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    // Keep the open modals on the latest rows; a deleted row closes them.
-    setSelectedPrint((current: any) =>
-      current ? activePrints.find((p) => p.id === current.id) ?? null : null,
-    );
+    // Keep the open detail modals on the latest rows; a deleted row closes
+    // them. The print modal is refreshed separately below.
     setSelectedSpool((current: any) =>
       current ? spools.find((s) => s.id === current.id) ?? null : null,
     );
@@ -141,7 +143,33 @@ export default function DashboardPage() {
     setSelectedPrinter((current: Printer | null) =>
       current ? printers.find((p) => p.serial === current.serial) ?? null : null,
     );
-  }, [activePrints, spools, filaments, printers]);
+  }, [spools, filaments, printers]);
+
+  useEffect(() => {
+    const current = selectedPrint;
+    if (!current) {
+      refreshedPrintId.current = null;
+      return;
+    }
+    if (activePrints.some((p) => p.id === current.id)) {
+      refreshedPrintId.current = null;
+      return;
+    }
+    if (refreshedPrintId.current === current.id) return;
+    refreshedPrintId.current = current.id;
+    let cancelled = false;
+    api
+      .getPrint(current.id)
+      .then((print) => {
+        if (!cancelled) setSelectedPrint(print);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedPrint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePrints, selectedPrint]);
 
   useEffect(() => {
     if (!settingsOpen) return;

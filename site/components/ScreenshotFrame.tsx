@@ -23,6 +23,9 @@ type ScreenshotFrameProps = {
   caption?: string;
   tone?: "dark" | "light";
   responsive?: boolean;
+  variantWidths?: number[];
+  nativeWidth?: number;
+  sizes?: string;
 };
 
 const spring = {
@@ -41,6 +44,9 @@ export function ScreenshotFrame({
   caption,
   tone = "dark",
   responsive = false,
+  variantWidths = [1600, 2400],
+  nativeWidth = 3200,
+  sizes = "(max-width: 768px) 100vw, 1100px",
 }: ScreenshotFrameProps) {
   const reduce = useReducedMotion();
   const [canTilt, setCanTilt] = useState(false);
@@ -88,13 +94,13 @@ export function ScreenshotFrame({
           {responsive ? (
             <img
               src={src}
-              srcSet={imageSrcSet(src)}
+              srcSet={imageSrcSet(src, variantWidths, nativeWidth)}
               alt={alt}
               width={width}
               height={height}
               loading={priority ? "eager" : "lazy"}
               className="h-auto w-full"
-              sizes="(max-width: 768px) 100vw, 1100px"
+              sizes={sizes}
             />
           ) : (
             <Image

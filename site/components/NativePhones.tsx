@@ -1,4 +1,6 @@
-import Image from "next/image";
+/* eslint-disable @next/next/no-img-element -- static export serves pre-generated srcset variants */
+
+import { imageSrcSet } from "@/lib/images";
 
 const screens = [
   {
@@ -31,12 +33,14 @@ export function NativePhones() {
           <figure key={screen.src} className={screen.className} role="listitem">
             <div className="phone">
               <div className="phone-screen">
-                <Image
+                <img
                   src={screen.src}
+                  srcSet={imageSrcSet(screen.src, [390, 585, 780], 1170)}
                   alt={screen.alt}
                   width={1170}
                   height={2532}
-                  sizes="(max-width: 767px) 72vw, 280px"
+                  loading="lazy"
+                  sizes="(max-width: 767px) 72vw, 420px"
                   className="block h-auto w-full"
                 />
               </div>

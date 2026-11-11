@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- static export serves pre-generated srcset variants */
 "use client";
 
-import Image from "next/image";
 import {
   BarChart3,
   History,
@@ -222,7 +221,7 @@ export function FeatureShowcase() {
               <img
                 key={item.image}
                 src={item.image}
-                srcSet={imageSrcSet(item.image)}
+                srcSet={imageSrcSet(item.image, [1600, 2400], 3200)}
                 alt={index === active ? item.alt : ""}
                 loading="lazy"
                 sizes="(max-width: 1360px) 100vw, 1360px"
@@ -239,38 +238,41 @@ export function FeatureShowcase() {
               }`}
               aria-hidden={active !== 5}
             >
-              <Image
+              <img
                 src="/screenshots/app-scan-crop.jpg"
+                srcSet={imageSrcSet("/screenshots/app-scan-crop.jpg", [390, 585, 780], 1170)}
                 alt={
                   active === 5
                     ? "Open Print mobile scanner framing a Bambu filament box barcode"
                     : ""
                 }
-                fill
+                loading="lazy"
                 sizes="(max-width: 1360px) 100vw, 1360px"
-                className="object-cover lg:hidden"
+                className="absolute inset-0 h-full w-full object-cover lg:hidden"
               />
               <div className="absolute inset-0 hidden lg:block">
-                <Image
+                <img
                   src="/screenshots/app-scan-crop.jpg"
+                  srcSet={imageSrcSet("/screenshots/app-scan-crop.jpg", [390, 585, 780], 1170)}
                   alt=""
-                  fill
+                  loading="lazy"
                   sizes="(max-width: 1360px) 100vw, 1360px"
-                  className="scale-105 object-cover opacity-40 blur-sm"
+                  className="absolute inset-0 h-full w-full scale-105 object-cover opacity-40 blur-sm"
                 />
                 <div className="absolute inset-0 bg-[var(--color-paper)] opacity-55" />
                 <div className="relative flex h-full items-center justify-center p-6">
                   <div className="relative aspect-[1170/2532] h-full overflow-hidden rounded-[1.75rem] border border-[var(--color-rule-strong)] bg-[var(--color-paper)] shadow-[0_30px_70px_-20px_var(--color-paper-deep)]">
-                    <Image
+                    <img
                       src="/screenshots/app-scan.jpg"
+                      srcSet={imageSrcSet("/screenshots/app-scan.jpg", [390, 585, 780], 1170)}
                       alt={
                         active === 5
                           ? "Open Print mobile scanner framing a Bambu filament box barcode"
                           : ""
                       }
-                      fill
+                      loading="lazy"
                       sizes="(max-width: 1360px) 40vw, 540px"
-                      className="object-cover"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
                   </div>
                 </div>

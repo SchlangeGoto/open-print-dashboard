@@ -257,7 +257,7 @@ class Spool(SpoolBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     filament_id: uuid.UUID | None = Field(
-        default=None, foreign_key="filament.id", ondelete="CASCADE"
+        default=None, foreign_key="filament.id", ondelete="CASCADE", index=True
     )
     printer_id: uuid.UUID | None = Field(
         default=None, foreign_key="printer.id", ondelete="SET NULL", index=True

@@ -160,3 +160,31 @@ def test_list_uses_the_five_most_recent_prices(
     # does not contribute to remaining stock.
     assert row["avg_price_per_kg"] == 40.0
     assert row["total_remaining_g"] == 600.0
+
+
+def test_list_runs_one_filament_and_two_spool_queries(
+    client: TestClient,
+    db,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    from sqlalchemy import event
+
+    engine = db.get_bind()
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        lowered = statement.lower()
+        if "from filament" in lowered or "from spool" in lowered:
+            statements.append(lowered)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        r = client.get(
+            f"{settings.API_V1_STR}/filaments/", headers=superuser_token_headers
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert r.status_code == 200
+    assert sum("from filament" in statement for statement in statements) == 1
+    assert sum("from spool" in statement for statement in statements) == 2

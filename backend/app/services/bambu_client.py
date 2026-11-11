@@ -8,13 +8,19 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import paho.mqtt.client as mqtt
-from sqlalchemy import func, or_, update
+from sqlalchemy import delete, func, or_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, desc, select
 
 from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
 from app.core.db import engine
-from app.models import Filament, Printer, PrintJob, Spool
+from app.models import (
+    Filament,
+    Printer,
+    PrintJob,
+    PrintJobFilamentUsage,
+    Spool,
+)
 from app.services.bambu_catalog import BAMBU_COLOR_NAMES, catalog_series_for
 
 logger = logging.getLogger("uvicorn.error")
@@ -719,7 +725,7 @@ class BambuClient:
                             session.expire_all()
                             live = self._resolve_mapping_spools(
                                 session,
-                                task or {"amsDetailMapping": mapping},
+                                {"amsDetailMapping": mapping},
                             )
                             for key in missing:
                                 if key in live:
@@ -733,10 +739,15 @@ class BambuClient:
                                         )
                                     }
                                 )
-                    if not weighted <= set(resolved):
+                    if not weighted <= set(resolved) or any(
+                        resolved[key].remaining_unknown
+                        for key in weighted
+                        if key in resolved
+                    ):
                         logger.warning(
-                            "Unresolved AMS slot(s) for task %s; leaving "
-                            "the delayed deduction unclaimed",
+                            "AMS slot(s) for task %s are unresolved or have "
+                            "unknown weight; leaving the delayed deduction "
+                            "unclaimed",
                             task_id,
                         )
                         return
@@ -754,6 +765,7 @@ class BambuClient:
                         total_cost = sum(item["cost"] or 0 for item in usage.values())
                         if total_cost:
                             job.estimated_cost = round(total_cost, 2)
+                        self._persist_filament_usage(session, job, usage)
                     if self._claim_filament_deduction(session, job.id):
                         self._deduct_filament_from_spools(
                             session,
@@ -1322,6 +1334,33 @@ class BambuClient:
         except Exception as e:
             logger.error(f"Failed to save print job: {e}")
 
+    def _persist_filament_usage(
+        self,
+        session: Session,
+        job: PrintJob,
+        usage: dict[str, dict[str, float | None]],
+    ) -> None:
+        if not usage:
+            return
+        session.execute(
+            delete(PrintJobFilamentUsage).where(
+                PrintJobFilamentUsage.print_job_id == job.id
+            )
+        )
+        for raw_id, item in usage.items():
+            try:
+                filament_id = uuid.UUID(raw_id)
+            except (TypeError, ValueError):
+                continue
+            session.add(
+                PrintJobFilamentUsage(
+                    print_job_id=job.id,
+                    filament_id=filament_id,
+                    weight_g=float(item.get("weight") or 0),
+                    cost=item.get("cost"),
+                )
+            )
+
     def _build_filament_usage(
         self,
         session: Session,
@@ -1614,14 +1653,6 @@ class BambuClient:
                                         )
                                     }
                                 )
-                            weighted = self._weighted_slot_keys(mapping or [])
-                            if not weighted <= set(resolved_spools):
-                                can_deduct = False
-                                logger.warning(
-                                    "Unresolved AMS slot(s) for task %s; "
-                                    "leaving the deduction for a retry",
-                                    cloud_task_id,
-                                )
                     elif has_persisted and not resolved_spools:
                         # The rolls recorded at finish were deleted; do not
                         # fall back to whatever is loaded now.
@@ -1629,6 +1660,21 @@ class BambuClient:
                         logger.warning(
                             "The spools recorded for task %s are gone; "
                             "leaving the deduction unclaimed",
+                            cloud_task_id,
+                        )
+
+                    weighted = self._weighted_slot_keys(mapping or [])
+                    unresolved = not weighted <= set(resolved_spools)
+                    unknown = any(
+                        resolved_spools[key].remaining_unknown
+                        for key in weighted
+                        if key in resolved_spools
+                    )
+                    if unresolved or unknown:
+                        can_deduct = False
+                        logger.warning(
+                            "AMS slot(s) for task %s are unresolved or have "
+                            "unknown weight; leaving the deduction for a retry",
                             cloud_task_id,
                         )
 
@@ -1657,6 +1703,7 @@ class BambuClient:
                     total_cost = sum(item["cost"] or 0 for item in usage.values())
                     if total_cost:
                         job.estimated_cost = round(total_cost, 2)
+                    self._persist_filament_usage(session, job, usage)
 
                 if not can_deduct:
                     logger.warning(
@@ -1924,8 +1971,7 @@ class BambuClient:
             if spool is None:
                 spool = self._active_spool(session)
             if spool and task.get("weight") and not spool.remaining_unknown:
-                spool.remaining_g = max(0, spool.remaining_g - task["weight"])
-                spool.last_used_at = datetime.now(UTC)
+                self._subtract_spool_weight(session, spool, task["weight"])
                 logger.info(f"Deducted {task['weight']}g from spool {spool.id}")
             return
 

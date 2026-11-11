@@ -9,7 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import Filament, Printer, PrintJob, Spool
+from app.models import (
+    Filament,
+    Printer,
+    PrintJob,
+    PrintJobFilamentUsage,
+    Spool,
+)
 
 
 def _create_printer(db: Session) -> Printer:
@@ -388,6 +394,16 @@ def test_filament_stats_survive_deleting_the_spool(db: Session) -> None:
         spool_id=spool.id,
     )
     db.add(job)
+    db.commit()
+    db.refresh(job)
+    db.add(
+        PrintJobFilamentUsage(
+            print_job_id=job.id,
+            filament_id=filament.id,
+            weight_g=120,
+            cost=3.5,
+        )
+    )
     db.commit()
 
     before = crud.get_filament_stats(session=db, filament_id=filament.id)
@@ -2983,7 +2999,11 @@ def test_partial_mapping_is_retried_instead_of_claimed(
             ]
         }
     }
-    client._deduct_persisted_job("task-partial", task)
+    # The cloud task has caught up with no mapping; the stored mapping
+    # and the newly resolvable tray must still be used.
+    client._deduct_persisted_job(
+        "task-partial", {"id": "task-partial", "status": 4, "amsDetailMapping": []}
+    )
 
     db.expire_all()
     assert db.get(Spool, roll_a.id).remaining_g == 940  # type: ignore[union-attr]

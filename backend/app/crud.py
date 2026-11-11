@@ -1,8 +1,6 @@
-import json
 import uuid
 from typing import Any
 
-from sqlalchemy import or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
@@ -19,7 +17,7 @@ from app.models import (
     Printer,
     PrinterCreate,
     PrinterUpdate,
-    PrintJob,
+    PrintJobFilamentUsage,
     RefreshToken,
     Spool,
     User,
@@ -128,12 +126,16 @@ def get_setting_value(*, session: Session, key: str) -> str | None:
     return setting.value if setting else None
 
 
-def set_setting(*, session: Session, key: str, value: str) -> AppSetting:
+def _upsert_setting(*, session: Session, key: str, value: str) -> None:
     session.execute(
         pg_insert(AppSetting)
         .values(key=key, value=value)
         .on_conflict_do_update(index_elements=["key"], set_={"value": value})
     )
+
+
+def set_setting(*, session: Session, key: str, value: str) -> AppSetting:
+    _upsert_setting(session=session, key=key, value=value)
     session.commit()
     setting = session.get(AppSetting, key)
     if setting is None:
@@ -226,10 +228,14 @@ def get_cloud_credentials(*, session: Session) -> dict[str, str | None]:
 
 
 def save_cloud_credentials(*, session: Session, email: str, password: str) -> None:
-    set_setting(session=session, key="bambu_cloud_email", value=encrypt_secret(email))
-    set_setting(
+    # One transaction: never store an email without its password.
+    _upsert_setting(
+        session=session, key="bambu_cloud_email", value=encrypt_secret(email)
+    )
+    _upsert_setting(
         session=session, key="bambu_cloud_password", value=encrypt_secret(password)
     )
+    session.commit()
 
 
 def clear_cloud_credentials(*, session: Session) -> None:
@@ -258,37 +264,29 @@ def get_filament_stats(*, session: Session, filament_id: uuid.UUID) -> FilamentS
     spool_count = session.exec(
         select(func.count()).select_from(Spool).where(Spool.filament_id == filament_id)
     ).one()
-    # Multi-colour jobs persist per-filament usage; legacy jobs fall back to
-    # the denormalised filament_id. A deleted spool must not erase history.
-    jobs = session.exec(
-        select(PrintJob).where(
-            or_(
-                col(PrintJob.filament_id) == filament_id,
-                col(PrintJob.filament_usage).is_not(None),
+    # Per-filament usage rows are indexed by filament, so stats no longer
+    # scan and parse every print job.
+    print_count = session.exec(
+        select(func.count())
+        .select_from(PrintJobFilamentUsage)
+        .where(PrintJobFilamentUsage.filament_id == filament_id)
+    ).one()
+    total_used_g = (
+        session.exec(
+            select(func.sum(PrintJobFilamentUsage.weight_g)).where(
+                PrintJobFilamentUsage.filament_id == filament_id
             )
-        )
-    ).all()
-    print_count = 0
-    total_used_g = 0.0
-    total_cost = 0.0
-    usage_key = str(filament_id)
-    for job in jobs:
-        usage = None
-        if job.filament_usage:
-            try:
-                parsed = json.loads(job.filament_usage)
-            except json.JSONDecodeError:
-                parsed = None
-            if isinstance(parsed, dict):
-                usage = parsed.get(usage_key)
-        if isinstance(usage, dict):
-            print_count += 1
-            total_used_g += float(usage.get("weight") or 0)
-            total_cost += float(usage.get("cost") or 0)
-        elif not job.filament_usage and job.filament_id == filament_id:
-            print_count += 1
-            total_used_g += job.weight or 0
-            total_cost += job.estimated_cost or 0
+        ).first()
+        or 0
+    )
+    total_cost = (
+        session.exec(
+            select(func.sum(PrintJobFilamentUsage.cost)).where(
+                PrintJobFilamentUsage.filament_id == filament_id
+            )
+        ).first()
+        or 0
+    )
     recent_prices = session.exec(
         select(Spool.price_per_kg)
         .where(Spool.filament_id == filament_id)

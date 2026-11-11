@@ -420,6 +420,27 @@ class PrintJobsPublic(SQLModel):
     count: int
 
 
+class PrintJobFilamentUsage(SQLModel, table=True):
+    __tablename__ = "printjob_filament_usage"
+    __table_args__ = (
+        UniqueConstraint(
+            "print_job_id",
+            "filament_id",
+            name="uq_printjob_filament_usage",
+        ),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    print_job_id: uuid.UUID = Field(
+        foreign_key="printjob.id", ondelete="CASCADE", index=True
+    )
+    filament_id: uuid.UUID | None = Field(
+        default=None, foreign_key="filament.id", ondelete="SET NULL", index=True
+    )
+    weight_g: float = 0
+    cost: float | None = None
+
+
 # ────────────────────────────────────────────────────────────
 # Application settings (key/value store)
 # ────────────────────────────────────────────────────────────

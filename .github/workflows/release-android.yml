@@ -40,7 +40,7 @@ jobs:
   build:
     needs: guard
     permissions:
-      contents: write
+      contents: read
     runs-on: ubuntu-latest
     # Free-tier EAS builds sit in a low-priority queue and can wait 90+ minutes.
     timeout-minutes: 180
@@ -69,6 +69,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check the app version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(node -p "require('./app.json').expo.version")
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match expo.version ${version}"
+            exit 1
+          fi
 
       - name: Build signed APK
         run: eas build --platform android --profile preview --non-interactive --wait --json > eas-build.json
@@ -106,12 +116,26 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the APK artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          gh run download "$GITHUB_RUN_ID" -n android-apk -D artifacts
+          ls -lh artifacts
+
       - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF_NAME: ${{ github.ref_name }}
-          APK_NAME: ${{ steps.apk.outputs.name }}
         run: |
           gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes
-          gh release upload "$REF_NAME" "artifacts/$APK_NAME" --clobber
+          gh release upload "$REF_NAME" artifacts/*.apk --clobber

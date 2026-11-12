@@ -44,6 +44,8 @@ jobs:
 
   publish:
     needs: guard
+    # A manual run may publish from main, but never from a feature branch.
+    if: github.ref_type == 'tag' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

@@ -40,6 +40,10 @@ services:
       - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
       - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD:-}
       - FRONTEND_HOST=${FRONTEND_HOST:-http://localhost:3000}
+      - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}
+      - API_V1_STR=${API_V1_STR:-/api/v1}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-opd}:${POSTGRES_PASSWORD:-changethis}@db:5432/${POSTGRES_DB:-openprintdashboard}
       - BAMBU_CLOUD_MQTT_HOST=${BAMBU_CLOUD_MQTT_HOST:-us.mqtt.bambulab.com}
       - BAMBU_CLOUD_MQTT_PORT=${BAMBU_CLOUD_MQTT_PORT:-8883}
@@ -48,7 +52,11 @@ services:
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
       - SMTP_TLS=false
+      - SMTP_SSL=${SMTP_SSL:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-info@example.com}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-}
     ports:
       - "8000:8000"
     # Allow the container to reach a printer on the host network.

@@ -56,3 +56,17 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Build and check the nginx image
+        run: |
+          docker build -t opd-site-test .
+          docker run -d --name opd-site-test -p 8080:8080 opd-site-test
+          trap 'docker rm -f opd-site-test' EXIT
+          docker exec opd-site-test nginx -t
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/install/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/install/ > /dev/null
+          missing=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/definitely-missing)
+          [ "$missing" = "404" ] || { echo "missing path returned $missing" >&2; exit 1; }

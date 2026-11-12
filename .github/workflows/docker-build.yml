@@ -43,6 +43,9 @@ jobs:
             build_args: |
               NEXT_PUBLIC_API_URL=
               NEXT_PUBLIC_DEMO_MODE=false
+          - name: frontend-dev
+            context: frontend
+            file: frontend/Dockerfile
           - name: demo
             context: frontend
             file: frontend/Dockerfile.prod

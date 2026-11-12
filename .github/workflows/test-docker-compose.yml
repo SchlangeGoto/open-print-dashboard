@@ -5,7 +5,9 @@ on:
     paths:
       - "backend/Dockerfile"
       - "backend/docker-entrypoint.sh"
+      - "frontend/Dockerfile"
       - "frontend/Dockerfile.prod"
+      - "site/**"
       - "compose.yml"
       - "compose.prod.yml"
       - "compose.public.yml"
@@ -48,6 +50,9 @@ jobs:
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-password/' .env
           sed -i 's/^EMAILS_FROM_EMAIL=.*/EMAILS_FROM_EMAIL=/' .env
           sed -i 's/^SMTP_HOST=.*/SMTP_HOST=/' .env
+
+      - name: Validate the development compose
+        run: docker compose -f compose.yml config > /dev/null
 
       - name: Validate public compose
         run: docker compose -f compose.public.yml config > /dev/null

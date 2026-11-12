@@ -191,11 +191,12 @@ DEMO_DOMAIN=demo.openprintdash.app
 ```
 
 The deploy workflow exports `IMAGE_PREFIX` and `IMAGE_TAG` for the pull and
-rewrites the `IMAGE_TAG=` line in the server `.env`. A later plain
-`docker compose ... up -d` therefore stays on the deployed release instead of
-falling back to `latest`, which is what makes a manual rollback stick. Do not
-edit that line by hand. The dashboard clone needs its normal `.env` from
-`.env.example`; deployment fails if it is missing.
+rewrites both lines in the server `.env` (creating the file for the site stack
+if it does not exist yet). A later plain `docker compose ... up -d` therefore
+uses the same images instead of falling back to `latest` or to the default
+prefix, which is what makes a manual rollback stick. Do not edit those lines by
+hand. The dashboard clone needs its normal `.env` from `.env.example`;
+deployment fails if it is missing.
 
 ### Secrets
 

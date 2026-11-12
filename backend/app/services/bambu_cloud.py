@@ -118,7 +118,7 @@ class BambuCloudClient:
 
     def _headers(self) -> dict:
         self._load_token()
-        logger.debug(f"Token loaded: {self.token[:10] if self.token else 'None'}")
+        logger.debug("Token loaded: %s", bool(self.token))
         if not self.token:
             raise NotLoggedInError()
         return {"Authorization": f"Bearer {self.token}"}
@@ -237,10 +237,13 @@ class BambuCloudClient:
         self.token = None
         self.user_id = None
 
-    def download_cover_image(self, url: str) -> bytes | None:
+    def download_cover_image(self, url: str) -> tuple[bytes, str] | None:
         """
         Download a print thumbnail image from the cover URL in a task.
         The cover URL is unauthenticated — no token needed.
+
+        Returns ``(content, media_type)`` so the proxy can keep the real
+        image type instead of always claiming JPEG.
         """
         if not is_allowed_cover_url(url):
             logger.warning("Refused to fetch a cover image from %s", url)
@@ -274,7 +277,12 @@ class BambuCloudClient:
                 if not content:
                     logger.warning("Cover URL returned an empty body: %s", url)
                     return None
-                return bytes(content)
+                media_type = (
+                    content_type
+                    if content_type.startswith("image/")
+                    else "image/jpeg"
+                )
+                return bytes(content), media_type
         except requests.RequestException as e:
             logger.error(f"Failed to download cover image: {e}")
             return None

@@ -9,7 +9,6 @@ create-filament confirmation flow instead of guessing.
 import json
 import logging
 import re
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -93,8 +92,15 @@ _SKU_RE = re.compile(
 )
 
 
-@lru_cache(maxsize=1)
+# Cache only successful loads: a transient read/parse failure must not
+# disable barcode lookup for the lifetime of the process.
+_CATALOG_CACHE: dict[str, dict[str, Any]] | None = None
+
+
 def _catalog() -> dict[str, dict[str, Any]]:
+    global _CATALOG_CACHE
+    if _CATALOG_CACHE is not None:
+        return _CATALOG_CACHE
     try:
         payload = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -107,6 +113,7 @@ def _catalog() -> dict[str, dict[str, Any]]:
     if not isinstance(barcodes, dict):
         logger.warning("Barcode catalog has no barcodes object; ignoring it")
         return {}
+    _CATALOG_CACHE = barcodes
     return barcodes
 
 
@@ -121,10 +128,25 @@ def _product_key(brand: Any, material: Any, color_hex: Any) -> tuple[str, str, s
     )
 
 
-@lru_cache(maxsize=1)
+_SERIES_CACHE: dict[tuple[str, str, str], frozenset[str]] | None = None
+
+
+def reset_catalog_cache() -> None:
+    """Clear the catalog caches (tests patch the catalog path)."""
+    global _CATALOG_CACHE, _SERIES_CACHE
+    _CATALOG_CACHE = None
+    _SERIES_CACHE = None
+
+
 def _series_by_product() -> dict[tuple[str, str, str], frozenset[str]]:
+    global _SERIES_CACHE
+    if _SERIES_CACHE is not None:
+        return _SERIES_CACHE
     groups: dict[tuple[str, str, str], set[str]] = {}
     entries = list(_catalog().values()) + list(BAMBU_BARCODES.values())
+    if _CATALOG_CACHE is None:
+        # The catalog could not be read; do not cache a partial map.
+        return {}
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -137,7 +159,8 @@ def _series_by_product() -> dict[tuple[str, str, str], frozenset[str]]:
             entry.get("color_hex") or "",
         )
         groups.setdefault(key, set()).add(str(series))
-    return {key: frozenset(values) for key, values in groups.items()}
+    _SERIES_CACHE = {key: frozenset(values) for key, values in groups.items()}
+    return _SERIES_CACHE
 
 
 def catalog_series_for(brand: Any, material: Any, color_hex: Any) -> frozenset[str]:

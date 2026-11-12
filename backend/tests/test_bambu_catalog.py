@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.core.barcodes import ean13_check_digit, is_valid_ean13, normalize_barcode
-from app.services.bambu_catalog import _catalog
+from app.services.bambu_catalog import _catalog, reset_catalog_cache
 
 
 def test_normalize_barcode_strips_gtin_wrappers() -> None:
@@ -22,19 +22,19 @@ def test_catalog_ignores_a_non_object_root(tmp_path: Path, monkeypatch) -> None:
     path = tmp_path / "catalog.json"
     path.write_text("[]")
     monkeypatch.setattr("app.services.bambu_catalog._CATALOG_PATH", path)
-    _catalog.cache_clear()
+    reset_catalog_cache()
     try:
         assert _catalog() == {}
     finally:
-        _catalog.cache_clear()
+        reset_catalog_cache()
 
 
 def test_catalog_ignores_a_non_object_barcodes_map(tmp_path: Path, monkeypatch) -> None:
     path = tmp_path / "catalog.json"
     path.write_text('{"barcodes": []}')
     monkeypatch.setattr("app.services.bambu_catalog._CATALOG_PATH", path)
-    _catalog.cache_clear()
+    reset_catalog_cache()
     try:
         assert _catalog() == {}
     finally:
-        _catalog.cache_clear()
+        reset_catalog_cache()

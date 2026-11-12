@@ -537,6 +537,15 @@ class BambuClient:
                 ).first()
                 if not job:
                     return
+                if job.filament_deducted_at is None and job.deduction_spools:
+                    # A deferred deduction is still pending; reopening the
+                    # row would drop it out of the retry query and discard
+                    # the recorded spools.
+                    logger.info(
+                        "Keeping the deferred deduction for task %s; not reopening",
+                        task_id,
+                    )
+                    return
                 job.status = 4
                 job.finished_at = None
                 job.finish_requested_at = None
@@ -821,8 +830,9 @@ class BambuClient:
                         total_cost = sum(item["cost"] or 0 for item in usage.values())
                         if total_cost:
                             job.estimated_cost = round(total_cost, 2)
-                        self._persist_filament_usage(session, job, usage)
                     if self._claim_filament_deduction(session, job.id):
+                        if usage:
+                            self._persist_filament_usage(session, job, usage)
                         self._deduct_filament_from_spools(
                             session,
                             {"weight": weight, "amsDetailMapping": mapping},
@@ -1384,6 +1394,14 @@ class BambuClient:
                     update(PrintJob)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == cloud_task_id)
+                    # Never wipe an unclaimed deferred deduction; the retry
+                    # still owns that map.
+                    .where(
+                        or_(
+                            PrintJob.filament_deducted_at.is_not(None),
+                            PrintJob.deduction_spools.is_(None),
+                        )
+                    )
                     .values(
                         status=4,
                         finished_at=None,
@@ -1690,6 +1708,7 @@ class BambuClient:
                     job.weight = task.get("weight")
                 if task.get("costTime") is not None:
                     job.duration_seconds = task.get("costTime")
+                first_finish = job.finished_at is None
                 job.start_time = (
                     parse_task_datetime(task.get("startTime")) or job.start_time
                 )
@@ -1708,11 +1727,14 @@ class BambuClient:
                 job.finish_state = None
 
                 # Keep the spool and filament written at start; AMS slots
-                # already charged their own spools. Only fill blanks.
-                if job.spool_id is None and active_spool:
-                    job.spool_id = active_spool.id
-                if job.filament_id is None and active_spool:
-                    job.filament_id = active_spool.filament_id
+                # already charged their own spools. Only fill blanks on the
+                # first finish: a deferred retry must never attach the roll
+                # that happens to be loaded hours later.
+                if first_finish and not timed_out:
+                    if job.spool_id is None and active_spool:
+                        job.spool_id = active_spool.id
+                    if job.filament_id is None and active_spool:
+                        job.filament_id = active_spool.filament_id
 
                 if task.get("weight") and job.filament_id:
                     recent_spools = session.exec(
@@ -1742,6 +1764,16 @@ class BambuClient:
 
                 resolved_spools: dict[tuple[int, int], Spool] = {}
                 can_deduct = not timed_out
+                if not mapping and job.spool_id is None:
+                    # Nothing was recorded at start, so there is no roll to
+                    # charge. Leave the job unclaimed instead of marking a
+                    # deduction that never happened.
+                    can_deduct = False
+                    logger.warning(
+                        "Unmapped finish for task %s has no recorded start "
+                        "spool; leaving the deduction unclaimed",
+                        cloud_task_id,
+                    )
                 if mapping:
                     has_persisted = bool(job.deduction_spools)
                     resolved_spools = self._load_deduction_spools(session, job)
@@ -1832,7 +1864,6 @@ class BambuClient:
                     total_cost = sum(item["cost"] or 0 for item in usage.values())
                     if total_cost:
                         job.estimated_cost = round(total_cost, 2)
-                    self._persist_filament_usage(session, job, usage)
 
                 if not can_deduct:
                     logger.warning(
@@ -1840,6 +1871,9 @@ class BambuClient:
                         cloud_task_id,
                     )
                 elif self._claim_filament_deduction(session, job.id):
+                    # Only claim attribution when stock actually moves.
+                    if usage:
+                        self._persist_filament_usage(session, job, usage)
                     self._deduct_filament_from_spools(
                         session,
                         task,
@@ -2117,11 +2151,14 @@ class BambuClient:
             spool = (
                 session.get(Spool, preferred_spool_id) if preferred_spool_id else None
             )
-            if spool is None:
-                spool = self._active_spool(session)
             if spool and task.get("weight") and not spool.remaining_unknown:
                 self._subtract_spool_weight(session, spool, task["weight"])
                 logger.info(f"Deducted {task['weight']}g from spool {spool.id}")
+            elif not preferred_spool_id:
+                logger.warning(
+                    "Unmapped finish has no recorded start spool; skipped %sg",
+                    task.get("weight") or 0,
+                )
             return
 
         if resolved_by_slot is None:

@@ -150,7 +150,8 @@ def get_cover(cover_url: str) -> Any:
     image = printer_service.cloud_client.download_cover_image(cover_url)
     if image is None:
         raise HTTPException(status_code=404, detail="Cover image not found")
-    return Response(content=image, media_type="image/jpeg")
+    content, media_type = image
+    return Response(content=content, media_type=media_type)
 
 
 @router.get("/cloud/account", response_model=CloudStatus)

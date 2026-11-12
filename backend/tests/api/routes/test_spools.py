@@ -1943,6 +1943,8 @@ def test_reconcile_retries_a_finished_undeducted_job(db: Session, monkeypatch) -
         device_id=printer.serial,
         bambu_task_id="task-pending",
         finished_at=datetime.now(UTC),
+        spool_id=spool.id,
+        filament_id=filament.id,
     )
     db.add(job)
     db.commit()
@@ -4010,3 +4012,172 @@ def test_stuck_running_task_without_a_mapping_uses_the_start_spool(
     stored = db.get(PrintJob, job.id)
     assert stored is not None
     assert stored.filament_deducted_at is not None
+
+
+def test_deferred_unmapped_finish_does_not_charge_a_later_spool(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Late spool",
+        color_hex="#778899",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    # The print started with no recorded spool; a roll loaded afterwards
+    # must not be charged by the retry.
+    job = PrintJob(
+        title="Late spool",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-late-spool",
+        finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-late-spool",
+        "title": "Late spool",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+    stored_spool = db.get(Spool, spool.id)
+    assert stored_spool is not None
+    assert stored_spool.remaining_g == 1000
+
+
+def test_running_edge_keeps_a_deferred_deduction(db: Session) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    recorded = '{"0:0": "00000000-0000-0000-0000-000000000000"}'
+    job = PrintJob(
+        title="Deferred",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-deferred-map",
+        finished_at=datetime.now(UTC),
+        deduction_spools=recorded,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._clear_finish_request("task-deferred-map")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2
+    assert stored.finished_at is not None
+    assert stored.deduction_spools == recorded
+
+
+def test_timeout_does_not_persist_usage_when_unclaimed(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Timeout usage",
+        color_hex="#99AABB",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=False,
+        tag_uid="TIMEOUT-USAGE",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    job = PrintJob(
+        title="Timeout usage",
+        status=4,
+        device_id=printer.serial,
+        bambu_task_id="task-timeout-usage",
+        spool_id=spool.id,
+        filament_id=filament.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-timeout-usage",
+        "title": "Timeout usage",
+        "status": 4,
+        "weight": 40,
+        "endTime": None,
+        "amsDetailMapping": [
+            {
+                "ams": 0,
+                "slot": 0,
+                "filamentId": "GFUSAGE",
+                "filamentType": "PLA",
+                "weight": 40,
+            }
+        ],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+    monkeypatch.setattr("app.services.bambu_client.time.sleep", lambda _: None)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "tray_now": 0,
+        "ams": {"ams": [{"id": 0, "tray": [{"id": 0, "tag_uid": "TIMEOUT-USAGE"}]}]},
+    }
+    client._save_print_job("task-timeout-usage", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 2
+    assert stored.filament_deducted_at is None
+    assert db.exec(select(PrintJobFilamentUsage)).all() == []
+    stored_spool = db.get(Spool, spool.id)
+    assert stored_spool is not None
+    assert stored_spool.remaining_g == 1000

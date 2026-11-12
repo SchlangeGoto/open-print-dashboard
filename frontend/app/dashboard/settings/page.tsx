@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
@@ -50,23 +50,34 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [bambuBusy, setBambuBusy] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
-  useEffect(() => {
-    api
-      .getSettings()
-      .catch(() => [])
-      .then((data) => {
-        const map: Record<string, string> = {};
-        data.forEach((setting) => {
-          map[setting.key] = setting.value;
-        });
-        setSettings(map);
-      })
-      .finally(() => setLoading(false));
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await api.getSettings();
+      const map: Record<string, string> = {};
+      data.forEach((setting) => {
+        map[setting.key] = setting.value;
+      });
+      setSettings(map);
+    } catch (error) {
+      // An empty map means "no settings", not "the account is disconnected".
+      setLoadError(
+        error instanceof Error ? error.message : "Could not load settings",
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   if (loading) {
     return (
@@ -79,6 +90,27 @@ export default function SettingsPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-80 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          <p>Could not load settings: {loadError}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => void loadSettings()}
+          >
+            Try again
+          </Button>
         </div>
       </div>
     );

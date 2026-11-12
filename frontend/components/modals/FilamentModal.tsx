@@ -45,6 +45,12 @@ export default function FilamentModal({
     { label: "Profile ID", value: filament?.bambu_info_idx ?? "—" },
   ];
 
+  // The page polls; resolve the open spool from the live list instead of
+  // keeping the click-time snapshot.
+  const currentSpool = selectedSpool
+    ? spools.find((spool) => spool.id === selectedSpool.id) ?? null
+    : null;
+
   return (
     <>
       <Dialog
@@ -126,9 +132,9 @@ export default function FilamentModal({
         </DialogContent>
       </Dialog>
 
-      {selectedSpool ? (
+      {currentSpool ? (
         <SpoolModal
-          spool={selectedSpool}
+          spool={currentSpool}
           filament={filament}
           onClose={() => setSelectedSpool(null)}
         />

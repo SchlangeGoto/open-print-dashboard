@@ -55,6 +55,9 @@ export default function PrintersPage() {
   const requestSeq = useRef(0);
   const inFlight = useRef(false);
   const refreshedPrintId = useRef<string | null>(null);
+  // Firmware is static; fetch it once per serial and only refresh it on a
+  // manual refresh.
+  const firmwareRef = useRef<Record<string, any>>({});
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null);
   const [selectedPrint, setSelectedPrint] = useState<any | null>(null);
   const [selectedSpool, setSelectedSpool] = useState<any | null>(null);
@@ -65,6 +68,7 @@ export default function PrintersPage() {
 
   const load = useCallback(async (force = false) => {
     if (inFlight.current && !force) return;
+    if (force) firmwareRef.current = {};
     inFlight.current = true;
     const seq = ++requestSeq.current;
     try {
@@ -82,21 +86,29 @@ export default function PrintersPage() {
       setSpools(spoolList);
       setFilaments(filamentList);
 
+      const missingFirmware = devices.filter(
+        (printer) =>
+          printer.configured &&
+          (force || !(printer.serial in firmwareRef.current)),
+      );
       const entries = await Promise.all(
-        devices
-          .filter((printer) => printer.configured)
-          .map(async (printer) => {
-            try {
-              const info = await api.getFirmware(printer.serial);
-              return info ? ([printer.serial, info] as const) : null;
-            } catch {
-              // Firmware is optional and must not fail the whole refresh.
-              return null;
-            }
-          }),
+        missingFirmware.map(async (printer) => {
+          try {
+            const info = await api.getFirmware(printer.serial);
+            return info ? ([printer.serial, info] as const) : null;
+          } catch {
+            // Firmware is optional and must not fail the whole refresh.
+            return null;
+          }
+        }),
       );
       if (seq !== requestSeq.current) return;
-      setFirmware(Object.fromEntries(entries.filter((entry) => entry !== null)));
+      const nextFirmware = { ...firmwareRef.current };
+      for (const entry of entries) {
+        if (entry) nextFirmware[entry[0]] = entry[1];
+      }
+      firmwareRef.current = nextFirmware;
+      setFirmware(nextFirmware);
       setLoadError(null);
     } catch (error) {
       if (seq === requestSeq.current) {
@@ -114,8 +126,15 @@ export default function PrintersPage() {
 
   useEffect(() => {
     void load();
-    const interval = setInterval(() => void load(), 10000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const interval = setInterval(tick, 10000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load]);
 
   useEffect(() => {

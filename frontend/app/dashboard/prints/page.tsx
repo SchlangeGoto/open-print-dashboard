@@ -119,6 +119,15 @@ export default function PrintsPage() {
 
   useEffect(() => {
     void load();
+    const tick = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const interval = setInterval(tick, 10000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load]);
 
   useEffect(() => {

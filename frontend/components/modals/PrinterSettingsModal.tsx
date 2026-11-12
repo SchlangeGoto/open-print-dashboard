@@ -165,7 +165,7 @@ export default function PrinterSettingsModal({
                   Cancel
                 </Button>
                 <LoadingButton type="submit" loading={saving}>
-                  <Save /> {isEdit ? "Save" : "Add LAN printer"}
+                  <Save /> {isEdit ? "Save" : "Add printer"}
                 </LoadingButton>
               </div>
             </DialogFooter>

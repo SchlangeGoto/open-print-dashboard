@@ -42,9 +42,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <AccentSelector />
           </div>
         </header>
-        <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
           <div className="mx-auto w-full max-w-7xl">{children}</div>
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

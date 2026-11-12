@@ -54,11 +54,15 @@ export default function DashboardPage() {
   const requestSeq = useRef(0);
   const inFlight = useRef(false);
   const refreshedPrintId = useRef<string | null>(null);
+  // Firmware is static; fetch it once per serial and only refresh it when
+  // the user explicitly refreshes the page.
+  const firmwareRef = useRef<Record<string, any>>({});
 
   const load = useCallback(async (force = false) => {
     // Skip a poll while the previous one is still running; a manual refresh
     // may overtake it, and the sequence guard discards the older result.
     if (inFlight.current && !force) return;
+    if (force) firmwareRef.current = {};
     inFlight.current = true;
     const seq = ++requestSeq.current;
     try {
@@ -77,21 +81,29 @@ export default function DashboardPage() {
       setFilaments(fil);
       setSpools(sp);
 
+      const missingFirmware = devs.filter(
+        (printer) =>
+          printer.configured &&
+          (force || !(printer.serial in firmwareRef.current)),
+      );
       const fwEntries = await Promise.all(
-        devs
-          .filter((printer) => printer.configured)
-          .map(async (printer) => {
-            try {
-              const fw = await api.getFirmware(printer.serial);
-              return fw ? ([printer.serial, fw] as const) : null;
-            } catch {
-              // Firmware is optional and must not fail the whole refresh.
-              return null;
-            }
-          }),
+        missingFirmware.map(async (printer) => {
+          try {
+            const fw = await api.getFirmware(printer.serial);
+            return fw ? ([printer.serial, fw] as const) : null;
+          } catch {
+            // Firmware is optional and must not fail the whole refresh.
+            return null;
+          }
+        }),
       );
       if (seq !== requestSeq.current) return;
-      setFirmware(Object.fromEntries(fwEntries.filter((entry) => entry !== null)));
+      const nextFirmware = { ...firmwareRef.current };
+      for (const entry of fwEntries) {
+        if (entry) nextFirmware[entry[0]] = entry[1];
+      }
+      firmwareRef.current = nextFirmware;
+      setFirmware(nextFirmware);
       setLoadError(null);
     } catch (error) {
       if (seq === requestSeq.current) {
@@ -109,8 +121,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void load();
-    const interval = setInterval(() => void load(), 10000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const interval = setInterval(tick, 10000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load]);
 
   const statusByDev = Object.fromEntries(

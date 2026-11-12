@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     description,
     images: [
       {
-        url: "/screenshots/printers.jpg",
+        url: "/screenshots/printers-1600.jpg",
         width: 1600,
         height: 1000,
         alt: "OpenPrintDash printer overview",
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
-    images: ["/screenshots/printers.jpg"],
+    images: ["/screenshots/printers-1600.jpg"],
   },
   icons: {
     icon: [

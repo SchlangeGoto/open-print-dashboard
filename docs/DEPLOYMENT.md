@@ -144,7 +144,9 @@ docker compose -f compose.prod.yml up -d --build
 Prebuilt images:
 
 ```bash
-export IMAGE_TAG=0.3.0
+# Set IMAGE_TAG=0.3.0 in .env, then pull and restart. Do not export it in the
+# shell: Compose reads shell variables before .env, so a leftover export would
+# override the pin on later runs.
 docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d
 ```

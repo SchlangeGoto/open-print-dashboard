@@ -230,9 +230,7 @@ jobs:
           set_env IMAGE_TAG "$IMAGE_TAG"
 
           docker compose -f compose.public.yml pull
-          docker compose -f compose.public.yml up -d
-          # Same reason as the dashboard: reload the checked-out Caddyfile.
-          docker compose -f compose.public.yml up -d --force-recreate --no-deps caddy
+          docker compose -f compose.public.yml up -d --remove-orphans
           docker compose -f compose.public.yml ps
 
           if [ -n "$HEALTH_URL" ]; then

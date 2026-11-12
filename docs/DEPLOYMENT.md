@@ -300,7 +300,14 @@ export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 export IMAGE_TAG=0.2.0
 
 docker compose -f compose.public.yml pull
-docker compose -f compose.public.yml up -d
+docker compose -f compose.public.yml up -d --remove-orphans
+```
+
+If this host previously ran the bundled Caddy from an older release, remove the
+old container once so it cannot keep ports 80/443:
+
+```bash
+docker compose -f compose.public.yml down --remove-orphans
 ```
 
 Point both DNS records at the server and open ports 80/443 for the host proxy.
@@ -309,8 +316,10 @@ Route `openprintdash.app` to `127.0.0.1:8080` and `demo.openprintdash.app` to
 with the dashboard stack or anything else on the host.
 
 If your proxy runs in a container, `127.0.0.1` inside it is the proxy container,
-not the host. Use host networking, the Docker bridge gateway, or a shared
-network.
+not the host. Either run that proxy with host networking (then `127.0.0.1` is
+the host), or attach it to the `openprint-public` network and use `site:8080`
+and `demo:3000` as upstreams. The Docker bridge-gateway address does not work
+with loopback-only port mappings.
 
 The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
 `https://demo.openprintdash.app`). If the demo hostname differs, rebuild the

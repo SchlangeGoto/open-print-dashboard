@@ -37,7 +37,7 @@ export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 export IMAGE_TAG=0.2.0
 
 docker compose -f compose.public.yml pull
-docker compose -f compose.public.yml up -d
+docker compose -f compose.public.yml up -d --remove-orphans
 ```
 
 Route `openprintdash.app` to `127.0.0.1:8080` and `demo.openprintdash.app` to

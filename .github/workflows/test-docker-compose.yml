@@ -11,10 +11,8 @@ on:
       - "compose.yml"
       - "compose.prod.yml"
       - "compose.public.yml"
-      - "compose.public.local.yml"
       - "compose.ghcr.yml"
       - "deploy/Caddyfile"
-      - "deploy/Caddyfile.public"
       - "backend/scripts/start.sh"
       - "backend/scripts/prestart.sh"
       - "pyproject.toml"
@@ -57,9 +55,6 @@ jobs:
       - name: Validate public compose
         run: docker compose -f compose.public.yml config > /dev/null
 
-      - name: Validate public compose with the local override
-        run: docker compose -f compose.public.yml -f compose.public.local.yml config > /dev/null
-
       - name: Validate GHCR compose
         env:
           POSTGRES_PASSWORD: ci-password
@@ -76,16 +71,6 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Validate public Caddyfile
-        env:
-          SITE_DOMAIN: openprintdash.app
-          DEMO_DOMAIN: demo.openprintdash.app
-        run: |
-          docker run --rm \
-            -e SITE_DOMAIN -e DEMO_DOMAIN \
-            -v "$PWD/deploy:/etc/caddy:ro" \
-            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile.public
 
       - name: Validate dashboard Caddyfile
         env:

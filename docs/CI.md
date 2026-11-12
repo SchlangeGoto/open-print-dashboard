@@ -177,7 +177,8 @@ GHCR publishing.
   of the tag workflow because EAS cannot sign an installable iOS build without
   a paid Apple Developer account. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
 - **Site and demo**: both are self-hosted from GHCR images through
-  `compose.public.yml` and Caddy. There is no Vercel or Cloudflare dependency.
+  `compose.public.yml`, publishing on loopback behind the host proxy. There is
+  no Vercel or Cloudflare dependency.
 
 ## Hardening backlog
 
@@ -227,6 +228,7 @@ stricter security requirements:
 - **Release Android fails**: set `EXPO_TOKEN`, run `eas init` in `mobile/`, and
   generate the Android keystore with `eas credentials -p android`. The first
   build cannot be non-interactive until that one-time setup is done.
-- **Site/demo is not reachable**: point `SITE_DOMAIN`/`DEMO_DOMAIN` at the
-  server, open ports 80/443, and run `docker compose -f compose.public.yml ps`
-  and `logs caddy`.
+- **Site/demo is not reachable**: check `docker compose -f compose.public.yml ps`,
+  then the host proxy. The containers publish on `127.0.0.1:8080` and
+  `127.0.0.1:3000`, not on 80/443. A 502 means the proxy points at a port
+  nothing listens on.

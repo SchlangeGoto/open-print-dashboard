@@ -7,7 +7,8 @@
 | `compose.yml` | Local development. Mounts source, runs `fastapi dev` and `next dev`, exposes PostgreSQL and Mailpit |
 | `compose.prod.yml` | Production built from source. `fastapi run`, standalone `node server.js`, no source mounts, no database port, no Mailpit |
 | `compose.ghcr.yml` | Production using published GHCR images. Caddy serves the frontend and proxies `/api` to the backend |
-| `compose.public.yml` | Public marketing site and demo, served from GHCR images through Caddy |
+| `compose.external-proxy.yml` | Overlay for `compose.ghcr.yml` that removes the bundled Caddy and publishes the frontend and backend on loopback |
+| `compose.public.yml` | Marketing site and demo, from GHCR, on loopback behind the proxy already running on the host |
 
 Do not use `compose.yml` for a public deployment: it runs development servers
 and exposes the database.
@@ -102,6 +103,42 @@ TLS certificates automatically.
 Set `FRONTEND_HOST` only if you change the public hostname; `compose.ghcr.yml`
 derives it from `DOMAIN`.
 
+### Reverse proxy already on the host
+
+`compose.ghcr.yml` bundles Caddy so that one command produces a working TLS
+deployment on a machine with nothing else on ports 80/443. If a proxy is already
+running there (home lab, shared host, Traefik in front of several services), use
+the overlay instead:
+
+```bash
+docker compose -f compose.ghcr.yml -f compose.external-proxy.yml up -d --remove-orphans
+```
+
+The overlay removes the bundled Caddy (`!reset`) and publishes the frontend on
+`127.0.0.1:3000` and the backend on `127.0.0.1:8000`. `--remove-orphans` is
+required when switching an existing install: without it the old `caddy`
+container keeps running and holds 80/443. Your proxy must send `/api/*` to the
+backend and everything else to the frontend, because the frontend image calls
+`/api/v1` on its own origin:
+
+```caddyfile
+dashboard.example.com {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+`DOMAIN` no longer configures a proxy in this mode, but it still feeds the
+default `FRONTEND_HOST`; keep it set, or set `FRONTEND_HOST` directly, so CORS
+and password-reset links are correct. `BACKEND_PORT` and `FRONTEND_PORT` change
+the two loopback ports. The `!reset` tag needs Compose v2.24 or newer.
+
+Automatic deployment does not pass this overlay. With a host proxy, leave
+`DEPLOY_DASHBOARD` unset and update with the command above; the dashboard job
+would otherwise restart the bundled Caddy and collide with your proxy.
+
 ## Configuration
 
 | Variable | Notes |
@@ -109,7 +146,11 @@ derives it from `DOMAIN`.
 | `SECRET_KEY` | Recommended (`openssl rand -hex 32`). If empty, a key is generated into the `backend_data` volume on first start |
 | `POSTGRES_PASSWORD` | Required for anything public; change the default |
 | `DOMAIN` | Public dashboard hostname for `compose.ghcr.yml` |
-| `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |
+| `IMAGE_PREFIX` | GHCR image prefix, shared by every stack |
+| `IMAGE_TAG` | Release tag for `compose.ghcr.yml` (dashboard) |
+| `SITE_IMAGE_TAG`, `DEMO_IMAGE_TAG` | Release tags for the public site and demo |
+| `SITE_PORT`, `DEMO_PORT` | Loopback ports for the public site and demo. Default 8080 and 3000 |
+| `BACKEND_PORT`, `FRONTEND_PORT` | Loopback ports for the dashboard when `compose.external-proxy.yml` removes its Caddy. Default 8000 and 3000 |
 | `NEXT_PUBLIC_API_URL` | Source-build only. **Build-time** value; rebuild after changing it |
 | `FRONTEND_HOST` | Backend CORS allowlist. Set it to the public frontend URL; `.env.example` defaults to localhost |
 | `SMTP_*`, `EMAILS_FROM_EMAIL` | Optional. If you are not using SMTP, set `EMAILS_FROM_EMAIL=` and `SMTP_HOST=` empty to skip email |
@@ -162,8 +203,9 @@ version images and the `latest` promotion. It SSHes to the server, checks out
 the tag, pulls the matching images, restarts the stack, and calls an optional
 health URL.
 
-Both targets are disabled until their `DEPLOY_*` variable is `true`. This keeps
-tag releases working before a server is configured.
+The dashboard, site and demo targets are all disabled until their `DEPLOY_*`
+variable is `true`. This keeps tag releases working before a server is
+configured.
 
 Automatic deployment shares the `latest` promotion gate: only the newest plain
 `vX.Y.Z` tag, created at the then-current `main` tip, deploys. Re-running an
@@ -183,22 +225,16 @@ dispatch below.
 ### Persistent settings on the server
 
 The SSH session starts a fresh shell, so anything you only `export`ed in an
-interactive login is gone. Keep the site’s domains in the untracked `.env` next
-to the clone so Compose reads them on every deploy:
+interactive login is gone. The deploy workflow exports `IMAGE_PREFIX` and
+`IMAGE_TAG` for the pull and rewrites both lines in the server `.env` (creating
+the file for the site and demo stacks if it does not exist yet). A later plain
+`docker compose ... up -d` therefore uses the same images instead of falling
+back to `latest` or to the default prefix, which is what makes a manual
+rollback stick. Do not edit those lines by hand.
 
-```bash
-# /opt/openprint-public/.env
-SITE_DOMAIN=openprintdash.app
-DEMO_DOMAIN=demo.openprintdash.app
-```
-
-The deploy workflow exports `IMAGE_PREFIX` and `IMAGE_TAG` for the pull and
-rewrites both lines in the server `.env` (creating the file for the site stack
-if it does not exist yet). A later plain `docker compose ... up -d` therefore
-uses the same images instead of falling back to `latest` or to the default
-prefix, which is what makes a manual rollback stick. Do not edit those lines by
-hand. The dashboard clone needs its normal `.env` from `.env.example`;
-deployment fails if it is missing.
+The site and demo stacks need nothing else in `.env`; their hostnames live in
+the reverse proxy on the host. The dashboard clone needs its normal `.env` from
+`.env.example`; deployment fails if it is missing.
 
 ### Secrets
 
@@ -217,12 +253,14 @@ deployment fails if it is missing.
 | `DASHBOARD_PATH` | `/opt/open-print-dashboard` | Clone on the server |
 | `DASHBOARD_URL` | `https://dashboard.example.com` | Link on the deployment |
 | `DASHBOARD_HEALTH_URL` | `https://dashboard.example.com/api/v1/utils/health-check/` | Checked after restart |
-| `DEPLOY_SITE` | `true` | Enable `compose.public.yml` deployment |
-| `SITE_HOST` | `openprintdash.app` | SSH host |
+| `DEPLOY_SITE` | `true` | Enable `compose.public.yml` deployment (site and demo) |
+| `SITE_HOST` | `openprintdash.app` | SSH host for the site and demo |
 | `SITE_USER` | `deploy` | SSH user |
 | `SITE_PATH` | `/opt/openprint-public` | Clone on the server |
 | `SITE_URL` | `https://openprintdash.app` | Link on the deployment |
 | `SITE_HEALTH_URL` | `https://openprintdash.app/` | Checked after restart |
+| `DEMO_URL` | `https://demo.openprintdash.app` | Link on the deployment |
+| `DEMO_HEALTH_URL` | `https://demo.openprintdash.app/` | Checked after restart |
 
 ### One-time setup
 
@@ -259,17 +297,24 @@ gh variable set SITE_USER -R SchlangeGoto/open-print-dashboard --body deploy
 gh variable set SITE_PATH -R SchlangeGoto/open-print-dashboard --body /opt/openprint-public
 gh variable set SITE_URL -R SchlangeGoto/open-print-dashboard --body https://openprintdash.app
 gh variable set SITE_HEALTH_URL -R SchlangeGoto/open-print-dashboard --body https://openprintdash.app/
+gh variable set DEMO_URL -R SchlangeGoto/open-print-dashboard --body https://demo.openprintdash.app
+gh variable set DEMO_HEALTH_URL -R SchlangeGoto/open-print-dashboard --body https://demo.openprintdash.app/
 ```
+
+The demo runs on the same host and clone as the site, so it reuses `SITE_HOST`,
+`SITE_USER` and `SITE_PATH`; leave the `DEMO_*` health variables unset if you do
+not want the demo checked.
 
 ### Manual deploy and rollback
 
 ```bash
-gh workflow run deploy.yml -f tag=v0.1.0
+gh workflow run deploy.yml -f tag=v0.2.0
 ```
 
 Use the same command with an older tag to roll back. Back up the database first:
 several migrations have lossy downgrades, and redeploying an older image does not
-undo a migration.
+undo a migration. For the site and demo, pick a tag that contains the site/demo
+split; earlier tags bundle their own Caddy and bind 80/443.
 
 
 ## Backup
@@ -291,41 +336,226 @@ run.
 
 ## Public site and demo
 
-`site/` is a static Next.js export. `frontend/` can run as a standalone demo
-with `NEXT_PUBLIC_DEMO_MODE=true`. `Release Containers` publishes both as
-images, and `compose.public.yml` serves them with Caddy:
+`site/` is a static Next.js export. `frontend/` runs as a standalone demo with
+`NEXT_PUBLIC_DEMO_MODE=true`, on seeded data, with edits kept in the browser and
+no backend. `Release Containers` publishes both as images.
 
-```bash
-export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
-export IMAGE_TAG=0.2.0
-export SITE_DOMAIN=openprintdash.app
-export DEMO_DOMAIN=demo.openprintdash.app
+They run as two services in one Compose project on the same host and Docker
+daemon. Neither bundles a reverse proxy: both publish on loopback, and the proxy
+already running on the host terminates TLS and forwards each hostname to its
+port.
 
-docker compose -f compose.public.yml pull
-docker compose -f compose.public.yml up -d
-```
+| Compose file | Service | Container port | Host binding |
+| --- | --- | --- | --- |
+| `compose.public.yml` | `site` | 8080 | `127.0.0.1:${SITE_PORT:-8080}` |
+| `compose.public.yml` | `demo` | 3000 | `127.0.0.1:${DEMO_PORT:-3000}` |
 
-Point both DNS records at the server and open ports 80/443. Caddy obtains
-certificates automatically.
+They keep separate image tags (`SITE_IMAGE_TAG`, `DEMO_IMAGE_TAG`) so either can
+be released without moving the other, even though they share one project.
 
-`compose.ghcr.yml` and `compose.public.yml` both bind ports 80/443. Run them on
-separate hosts, or terminate TLS in one external Caddy and route by hostname.
-The Compose project names are isolated (`openprintdashboard` and
-`openprint-public`), but port bindings still conflict on a single host.
+Because nothing binds 80/443, this stack does not fight the host proxy. The
+containers are stateless: no volumes, no database, nothing to back up.
+
+`DEMO_PORT` defaults to 3000, the same port the dashboard frontend uses. That
+only matters if the dashboard runs on the same host with
+`compose.external-proxy.yml`; set `DEMO_PORT` there.
 
 The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
-`https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, rebuild the site
-image with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
+`https://demo.openprintdash.app`). A different demo hostname needs the image
+rebuilt with `--build-arg NEXT_PUBLIC_DEMO_URL=...`; the release workflow does
+not pass that argument.
 
-For local testing, the base stack publishes only Caddy's 80/443. To skip Caddy
-and run just the site and demo, add the local override:
+### Coming from the combined stack
+
+Releases before this change ran the site, the demo and a bundled Caddy in one
+project. Stop it while the clone is still on the old tag, otherwise its Caddy
+keeps ports 80/443:
 
 ```bash
-docker compose -f compose.public.yml -f compose.public.local.yml up -d site demo
+cd /opt/openprint-public
+docker compose -f compose.public.yml down --remove-orphans
+git fetch --tags origin
+git checkout <new-tag>
+
+# Must print nothing:
+docker ps --filter label=com.docker.compose.project=openprint-public
 ```
 
-Then open `http://localhost:8080` and `http://localhost:8081`. The override
-binds only `127.0.0.1:8080` and `127.0.0.1:8081`; never use it on a public host.
+Without `-f compose.public.yml`, Compose picks up `compose.yml` (the development
+stack) instead and fails on its missing database settings. The old `.env` keeps
+working; `SITE_DOMAIN`, `DEMO_DOMAIN` and the old `IMAGE_TAG` are ignored by the
+public stack from now on and can be deleted.
+
+### What the host needs
+
+- Docker Engine with the Compose plugin, `git`, `curl`
+- A reverse proxy already listening on 80/443 (Caddy, nginx, Nginx Proxy
+  Manager, Traefik, ...)
+- DNS records for the site host (apex and `www`) and the demo host, both
+  pointing at this machine
+- Ports 80 and 443 open in the firewall; the container ports stay on loopback
+
+### 1. Get the repository onto the host
+
+The deploy workflow checks out a tag inside this clone, so it must be a real git
+clone, not a copied directory.
+
+```bash
+sudo mkdir -p /opt/openprint-public && sudo chown "$USER" /opt/openprint-public
+git clone https://github.com/SchlangeGoto/open-print-dashboard.git /opt/openprint-public
+cd /opt/openprint-public
+git checkout v0.2.0   # the newest release, and not older than this change
+```
+
+The path must match `SITE_PATH` if you enable automatic deployment.
+
+### 2. Pin the release
+
+Create `.env` next to the clone:
+
+```dotenv
+IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
+SITE_IMAGE_TAG=0.2.0
+DEMO_IMAGE_TAG=0.2.0
+```
+
+`SITE_IMAGE_TAG` and `DEMO_IMAGE_TAG` are the release without the leading `v`.
+Compose reads this file on every `up`, which is what keeps later manual restarts
+on the same releases. Set `SITE_PORT` or `DEMO_PORT` only if the default port is
+already taken on the host. The domains are not in this file: the host proxy owns
+them.
+
+### 3. Start the containers
+
+```bash
+docker compose -f compose.public.yml pull
+docker compose -f compose.public.yml up -d
+docker compose -f compose.public.yml ps
+curl -fsS http://127.0.0.1:8080/ >/dev/null && echo "site responds"
+curl -fsS http://127.0.0.1:3000/ >/dev/null && echo "demo responds"
+```
+
+If this fails before the pull, the packages are private: open each package under
+the repository's **Packages** tab and set its visibility to **Public**, or run
+`docker login ghcr.io` with a token that has `read:packages`.
+
+### 4. Point the host proxy at them
+
+Copy both blocks from [`deploy/Caddyfile.public`](../deploy/Caddyfile.public)
+into your proxy config and reload it. That file is an example, not something
+Compose mounts. An nginx equivalent is in the same file.
+
+```caddyfile
+openprintdash.app {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+}
+
+www.openprintdash.app {
+	redir https://openprintdash.app{uri} permanent
+}
+
+demo.openprintdash.app {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+Both hostnames point at the same machine. Verify end to end before touching the
+deploy variables:
+
+```bash
+curl -fsSI https://openprintdash.app/ | head -1
+curl -fsSI https://demo.openprintdash.app/ | head -1
+```
+
+If the proxy runs as a container itself, `127.0.0.1` inside it is the proxy
+container, not the host. Either run that proxy with host networking, point it at
+the Docker bridge gateway (`host.docker.internal` with an `extra_hosts` entry, or
+`172.17.0.1`), or attach the containers to a shared external network.
+
+### Everyday commands
+
+```bash
+docker compose -f compose.public.yml ps
+docker compose -f compose.public.yml logs -f site
+docker compose -f compose.public.yml logs -f demo
+docker compose -f compose.public.yml restart site demo
+docker compose -f compose.public.yml images      # digests actually running
+docker compose -f compose.public.yml down        # stop and remove, images stay
+```
+
+`down` followed by `up -d` is safe because there is no state. Images are cached,
+so a restart does not need the network.
+
+### Updating to a new release
+
+1. Merge to `main` and tag the `main` tip: `git tag v0.3.0 && git push origin v0.3.0`.
+2. Wait for `Release Containers` to publish `0.3.0`.
+3. On the host, set both `SITE_IMAGE_TAG=0.3.0` and `DEMO_IMAGE_TAG=0.3.0` in `.env`.
+4. `docker compose -f compose.public.yml pull`
+5. `docker compose -f compose.public.yml up -d`
+
+Changing a tag is what triggers the recreate; `up -d` without a change is a
+no-op. Do not export the tags in the shell: Compose reads shell variables before
+`.env`, so a leftover export overrides the pin on later runs.
+
+### Rolling back
+
+Set both tags to the previous release, `pull`, `up -d`. Images are immutable, so
+that is the entire rollback: no migration to reverse and no state to restore.
+
+Releases before this change bundle a Caddy that binds 80/443. Rolling back that
+far collides with the host proxy. Check before downgrading past it:
+
+```bash
+git show <tag>:compose.public.yml
+```
+
+### Automatic deploy on a tag
+
+The `Deploy` workflow can do steps 3-5 above over SSH. It is described under
+[Automatic deployment on tags](#automatic-deployment-on-tags-optional).
+
+What happens on a tag push:
+
+1. `Release Containers` builds multi-arch images and pushes `X.Y.Z`, `X.Y`.
+2. Only a plain `vX.Y.Z` tag that is an ancestor of `main` **and** the current
+   `main` tip at release time moves `latest`.
+3. Only that same release calls `Deploy`, so a rerun of an old tag cannot
+   silently downgrade production.
+4. The site job checks out the tag on the host, pulls both images, restarts the
+   stack and calls `SITE_HEALTH_URL` and `DEMO_HEALTH_URL`.
+
+A tag created from an older commit on `main` still builds images, but does not
+move `latest` or deploy. Create the tag from the current `main` tip when you
+want it to go out.
+
+Rollback is a manual dispatch, which bypasses the `latest` gate:
+
+```bash
+gh workflow run deploy.yml -f tag=v0.2.0
+```
+
+### Troubleshooting
+
+- **Proxy returns 502**: the container is not running, or `SITE_PORT` /
+  `DEMO_PORT` does not match the port in the proxy config. Check
+  `docker compose ... ps` and `logs`.
+- **Certificate error**: DNS does not resolve to the machine yet, or port 80 is
+  closed, which blocks the ACME challenge.
+- **`pull access denied`**: package is private; make it public or log in.
+- **Update ran but the old page is served**: the tag did not change, or the
+  running digest is stale. Compare `docker compose ... images` with the release,
+  then `up -d --force-recreate`.
+- **Deploy workflow skipped**: `DEPLOY_SITE` is not `true`, the tag is not a
+  plain `vX.Y.Z`, or it was not created at the `main` tip.
+- **Health check fails after a successful start**: the URL points at the host
+  proxy rather than the loopback port, or DNS/TLS is not ready yet.
+
+For local testing, the stack needs no override file: it already publishes on
+loopback, so `docker compose -f compose.public.yml up -d` serves the site at
+`http://127.0.0.1:8080` and the demo at `http://127.0.0.1:3000`.
 
 There is no Vercel or Cloudflare dependency. The site and demo are self-hosted.
 

@@ -1,13 +1,33 @@
-{$SITE_DOMAIN:openprintdash.app} {
+# Example for the reverse proxy that is already running on the host.
+#
+# Compose does not mount or read this file. compose.public.yml publishes the
+# site on 127.0.0.1:8080 and the demo on 127.0.0.1:3000, both on the same
+# machine. Copy both blocks into your proxy manager once, point the two DNS
+# records at the host, and let the proxy terminate TLS.
+#
+# For nginx the equivalent site block is:
+#
+#   location / {
+#       proxy_pass http://127.0.0.1:8080;
+#       proxy_set_header Host $host;
+#       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#       proxy_set_header X-Forwarded-Proto $scheme;
+#   }
+
+# --- Marketing site (compose.public.yml, service `site`) --------------------
+
+openprintdash.app {
 	encode zstd gzip
-	reverse_proxy site:8080
+	reverse_proxy 127.0.0.1:8080
 }
 
-www.{$SITE_DOMAIN:openprintdash.app} {
-	redir https://{$SITE_DOMAIN:openprintdash.app}{uri} permanent
+www.openprintdash.app {
+	redir https://openprintdash.app{uri} permanent
 }
 
-{$DEMO_DOMAIN:demo.openprintdash.app} {
+# --- Demo (compose.public.yml, service `demo`) ------------------------------
+
+demo.openprintdash.app {
 	encode zstd gzip
-	reverse_proxy demo:3000
+	reverse_proxy 127.0.0.1:3000
 }

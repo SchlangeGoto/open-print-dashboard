@@ -27,24 +27,27 @@ python3 -m http.server 3200 --directory out
 ## Deploy
 
 The site is self-hosted. It ships as a container image (`site/Dockerfile`) and
-is served by Caddy through `compose.public.yml`. `Release Containers` publishes
-`ghcr.io/schlangegoto/open-print-dashboard/site` on `v*` tags.
+runs without a bundled reverse proxy: the container publishes on
+`127.0.0.1:8080`, and the proxy already running on the host terminates TLS and
+forwards to it.
 
 ```bash
 export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
-export IMAGE_TAG=0.2.0
-export SITE_DOMAIN=openprintdash.app
-export DEMO_DOMAIN=demo.openprintdash.app
+export SITE_IMAGE_TAG=0.2.0
 
 docker compose -f compose.public.yml pull
 docker compose -f compose.public.yml up -d
 ```
 
-Point both domains at the server and open ports 80/443. Caddy handles TLS.
-There is no Vercel or Cloudflare dependency.
+Copy both blocks from `../deploy/Caddyfile.public` into the host's proxy config.
+The demo runs as the `demo` service in the same stack, on `127.0.0.1:3000`.
+
+The full walkthrough — first install, updates, rollback, and automatic deploy on
+a tag — is in
+[`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md#public-site-and-demo).
 
 The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
-`https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, build the image
+`https://demo.openprintdash.app`). If the demo hostname differs, build the image
 with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
 
 For a local check:
@@ -61,8 +64,9 @@ layer.
 
 The demo is the app frontend built with `NEXT_PUBLIC_DEMO_MODE=true`, no backend
 required. `Release Containers` publishes it as
-`ghcr.io/schlangegoto/open-print-dashboard/demo`; `compose.public.yml` serves
-it at `DEMO_DOMAIN`.
+`ghcr.io/schlangegoto/open-print-dashboard/demo`; `compose.public.yml` runs it as
+the `demo` service on the same host at `127.0.0.1:3000`, behind the host's
+proxy.
 
 The demo runs on seeded data and stores edits in the browser only.
 

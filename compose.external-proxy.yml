@@ -1,0 +1,31 @@
+# Overlay for compose.ghcr.yml when the host already runs a reverse proxy.
+#
+#   docker compose -f compose.ghcr.yml -f compose.external-proxy.yml up -d --remove-orphans
+#
+# It removes the bundled Caddy and publishes the frontend and backend on
+# loopback. --remove-orphans is required when switching an existing install,
+# otherwise the old caddy container keeps 80/443. The host proxy sends /api/* to
+# the backend and everything else to the frontend. The frontend image calls
+# /api/v1 on its own origin, so both routes must share one hostname:
+#
+#   dashboard.example.com {
+#       handle /api/* {
+#           reverse_proxy 127.0.0.1:8000
+#       }
+#       reverse_proxy 127.0.0.1:3000
+#   }
+#
+# See "Reverse proxy already on the host" in docs/DEPLOYMENT.md.
+
+services:
+  # !reset drops the service inherited from compose.ghcr.yml. Requires a
+  # Compose release that understands the tag (v2.24 or newer).
+  caddy: !reset null
+
+  backend:
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"

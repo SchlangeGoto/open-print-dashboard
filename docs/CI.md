@@ -21,13 +21,13 @@ This repository uses GitHub Actions for three kinds of work:
 | Zizmor | `.github/workflows/zizmor.yml` | Every PR, push to `main`, manual | Security analysis of workflows (template injection, permissions, unpinned actions) |
 | OpenSSF Scorecard | `.github/workflows/scorecard.yml` | Push to `main`, weekly, branch-rule changes | Supply-chain posture; publishes SARIF |
 | Docker Build | `.github/workflows/docker-build.yml` | PRs touching Docker/Compose/dependency files, manual | Builds backend, frontend, demo and site images (no push) |
-| Test Docker Compose | `.github/workflows/test-docker-compose.yml` | Docker/Compose/dependency changes, manual | Validates the public/GHCR compose stacks, then builds and starts `compose.prod.yml` |
+| Test Docker Compose | `.github/workflows/test-docker-compose.yml` | Docker/Compose/dependency changes, manual | Validates the public, GHCR and external-proxy compose stacks plus both Caddyfiles, then builds and starts `compose.prod.yml` |
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
 | Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
 | Release Android | `.github/workflows/release-android.yml` | Tags `v*`, manual | Requires the tag on `main`, builds an EAS signed APK and attaches it to the GitHub Release |
-| Deploy | `.github/workflows/deploy.yml` | Called by `Release Containers` for a plain `vX.Y.Z` tag, manual | SSH-deploys the dashboard and/or site from GHCR; disabled until the `DEPLOY_*` variables and secrets are configured |
+| Deploy | `.github/workflows/deploy.yml` | Called by `Release Containers` for a plain `vX.Y.Z` tag, manual | SSH-deploys the dashboard, site and demo from GHCR; disabled until the `DEPLOY_*` variables and secrets are configured |
 | Dependabot | `.github/dependabot.yml` | Weekly | npm, uv, GitHub Actions and Docker updates; npm updates are grouped |
 
 The test and build workflows cancel superseded runs on the same ref, have a
@@ -98,9 +98,8 @@ npm run build
 - Branch deletion blocked
 - No admin bypass
 
-Required status checks are intentionally not enabled yet: `main` still uses the
-old `api/` + `web/` layout and has no workflows. After the migration PR lands on
-`main`, add only checks that run on **every** PR to `main`:
+Required status checks are intentionally not enabled yet. When they are, add
+only checks that run on **every** PR to `main`:
 
 - `test-backend`
 - `test-frontend`
@@ -152,9 +151,13 @@ on it.
 | --- | --- | --- |
 | `EXPO_TOKEN` | Secret | EAS Build for `Release Android` |
 | `IMAGE_PREFIX` | Variable | GHCR prefix, `ghcr.io/schlangegoto/open-print-dashboard` |
+| `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` | Secret | SSH access for `Deploy` |
+| `DEPLOY_DASHBOARD`, `DEPLOY_SITE` | Variable | Enable a deploy target. Unset or `false` skips it |
+| `DASHBOARD_*`, `SITE_*`, `DEMO_URL`, `DEMO_HEALTH_URL` | Variable | Host, user, path, URL and health URL per target |
 
-There are no review secrets. CodeRabbit is a GitHub App, and the local OpenCode
-review uses your local credentials. `GITHUB_TOKEN` is used automatically for
+The full list, with examples, is in [`DEPLOYMENT.md`](DEPLOYMENT.md). There are
+no review secrets. CodeRabbit is a GitHub App, and the local OpenCode review
+uses your local credentials. `GITHUB_TOKEN` is used automatically for
 GHCR publishing.
 
 ## Builds and deployment
@@ -166,9 +169,9 @@ GHCR publishing.
   starts the self-contained `node server.js`. The release image is built with an empty
   `NEXT_PUBLIC_API_URL`, so the browser calls `/api/v1` on the same origin and
   Caddy proxies it to the backend.
-- **Container images**: `Release Containers` publishes backend, frontend, site,
+- **Container images**: `Release Containers` publishes backend, frontend, site
   and demo images to GHCR on `v*` tags. The dashboard stack uses
-  `compose.ghcr.yml`; the public site and demo use `compose.public.yml`.
+  `compose.ghcr.yml`; the public site and demo share `compose.public.yml`.
 - **Mobile debug APK**: `Build Mobile APK` is manual and produces a debug APK
   for testing, not a store artifact.
 - **Mobile release**: `Release Android` runs EAS Build on tags and produces a
@@ -176,8 +179,10 @@ GHCR publishing.
   Release. Android is sideloaded; there is no Play Store step. iOS is not part
   of the tag workflow because EAS cannot sign an installable iOS build without
   a paid Apple Developer account. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
-- **Site and demo**: both are self-hosted from GHCR images through
-  `compose.public.yml` and Caddy. There is no Vercel or Cloudflare dependency.
+- **Site and demo**: both are self-hosted from GHCR images. They run as two
+  services in one stack (`compose.public.yml`) on the same host, publishing on
+  loopback behind the reverse proxy already running there. There is no Vercel or
+  Cloudflare dependency.
 
 ## Hardening backlog
 
@@ -227,6 +232,7 @@ stricter security requirements:
 - **Release Android fails**: set `EXPO_TOKEN`, run `eas init` in `mobile/`, and
   generate the Android keystore with `eas credentials -p android`. The first
   build cannot be non-interactive until that one-time setup is done.
-- **Site/demo is not reachable**: point `SITE_DOMAIN`/`DEMO_DOMAIN` at the
-  server, open ports 80/443, and run `docker compose -f compose.public.yml ps`
-  and `logs caddy`.
+- **Site/demo is not reachable**: check `docker compose -f compose.public.yml ps`,
+  then the host proxy. The containers publish on `127.0.0.1:8080` and
+  `127.0.0.1:3000`, not on 80/443. A 502 means the proxy points at a port
+  nothing listens on.

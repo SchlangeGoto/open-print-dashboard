@@ -3,6 +3,10 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-yaml
+        # compose.external-proxy.yml uses Compose's !reset tag, which PyYAML
+        # cannot construct. Test Docker Compose validates it with
+        # `docker compose config` and asserts the caddy service is gone.
+        exclude: ^compose\.external-proxy\.yml$
       - id: check-json
       - id: check-toml
       - id: end-of-file-fixer

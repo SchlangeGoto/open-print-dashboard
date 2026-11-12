@@ -119,10 +119,12 @@ export default function PrintsPage() {
 
   useEffect(() => {
     void load();
+    // History changes only when a print ends; 30 s is enough and avoids
+    // paging through the whole list every 10 s.
     const tick = () => {
       if (document.visibilityState === "visible") void load();
     };
-    const interval = setInterval(tick, 10000);
+    const interval = setInterval(tick, 30000);
     document.addEventListener("visibilitychange", tick);
     return () => {
       clearInterval(interval);

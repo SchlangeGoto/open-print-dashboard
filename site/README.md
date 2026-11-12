@@ -28,10 +28,10 @@ python3 -m http.server 3200 --directory out
 
 The site is self-hosted. It ships as a container image (`site/Dockerfile`) and
 is served by Caddy through `compose.public.yml`. `Release Containers` publishes
-`ghcr.io/schlangengoto/open-print-dashboard/site` on `v*` tags.
+`ghcr.io/schlangegoto/open-print-dashboard/site` on `v*` tags.
 
 ```bash
-export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 export IMAGE_TAG=0.2.0
 export SITE_DOMAIN=openprintdash.app
 export DEMO_DOMAIN=demo.openprintdash.app
@@ -61,7 +61,7 @@ layer.
 
 The demo is the app frontend built with `NEXT_PUBLIC_DEMO_MODE=true`, no backend
 required. `Release Containers` publishes it as
-`ghcr.io/schlangengoto/open-print-dashboard/demo`; `compose.public.yml` serves
+`ghcr.io/schlangegoto/open-print-dashboard/demo`; `compose.public.yml` serves
 it at `DEMO_DOMAIN`.
 
 The demo runs on seeded data and stores edits in the browser only.

@@ -150,7 +150,7 @@ on it.
 | Name | Kind | Purpose |
 | --- | --- | --- |
 | `EXPO_TOKEN` | Secret | EAS Build for `Release Android` |
-| `IMAGE_PREFIX` | Variable | GHCR prefix, `ghcr.io/schlangengoto/open-print-dashboard` |
+| `IMAGE_PREFIX` | Variable | GHCR prefix, `ghcr.io/schlangegoto/open-print-dashboard` |
 
 There are no review secrets. CodeRabbit is a GitHub App, and the local OpenCode
 review uses your local credentials. `GITHUB_TOKEN` is used automatically for

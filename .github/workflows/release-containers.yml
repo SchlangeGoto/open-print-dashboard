@@ -99,7 +99,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangengoto/open-print-dashboard' }}/${{ matrix.name }}
+          images: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}/${{ matrix.name }}
+          # Never let metadata-action add `latest`; the gated `latest` job below
+          # is the only thing allowed to move it.
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -135,7 +139,7 @@ jobs:
       contents: read
       packages: write
     env:
-      IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangengoto/open-print-dashboard' }}
+      IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

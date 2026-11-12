@@ -289,11 +289,11 @@ images, and `compose.public.yml` runs them as two services on one host:
 
 | Service | Container port | Host binding |
 | --- | --- | --- |
-| `site` | 8080 | `127.0.0.1:${SITE_PORT:-8080}` |
-| `demo` | 3000 | `127.0.0.1:${DEMO_PORT:-3000}` |
+| `site` | 8080 | `${SITE_BIND:-127.0.0.1}:${SITE_PORT:-8080}` |
+| `demo` | 3000 | `${DEMO_BIND:-127.0.0.1}:${DEMO_PORT:-3000}` |
 
 No reverse proxy is bundled. The proxy already running on the host terminates
-TLS and forwards each hostname to its loopback port.
+TLS and forwards each hostname to its port.
 
 ```bash
 export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
@@ -311,9 +311,20 @@ docker compose -f compose.public.yml down --remove-orphans
 ```
 
 Point both DNS records at the server and open ports 80/443 for the host proxy.
-Route `openprintdash.app` to `127.0.0.1:8080` and `demo.openprintdash.app` to
-`127.0.0.1:3000`. The container ports stay on loopback, so they do not conflict
-with the dashboard stack or anything else on the host.
+The containers bind to loopback by default, so with a proxy on this host route
+`openprintdash.app` to `127.0.0.1:8080` and `demo.openprintdash.app` to
+`127.0.0.1:3000`.
+
+If the proxy runs on another machine, set both bind addresses to this server's
+LAN IP before starting:
+
+```dotenv
+SITE_BIND=192.168.0.21
+DEMO_BIND=192.168.0.21
+```
+
+Then point the proxy at `192.168.0.21:8080` and `192.168.0.21:3000`, and allow
+those ports from the proxy host in the firewall.
 
 If your proxy runs in a container, `127.0.0.1` inside it is the proxy container,
 not the host. Either run that proxy with host networking (then `127.0.0.1` is

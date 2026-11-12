@@ -45,11 +45,15 @@ reverse proxy in front for TLS.
 
 - `ghcr.io/schlangegoto/open-print-dashboard/backend`
 - `ghcr.io/schlangegoto/open-print-dashboard/frontend`
-- `ghcr.io/schlangegoto/open-print-dashboard/site`
 - `ghcr.io/schlangegoto/open-print-dashboard/demo`
 
-After the first `Release Containers` run, open each package under the
-repository's **Packages** tab and set its visibility to **Public**, or run
+`Release Site` publishes the site image on `site-v*` tags, as a separate
+release line:
+
+- `ghcr.io/schlangegoto/open-print-dashboard/site`
+
+After the first release run, open each package under the repository's
+**Packages** tab and set its visibility to **Public**, or run
 `docker login ghcr.io` on the server with a token that can read packages.
 Otherwise `docker compose pull` cannot fetch the images.
 
@@ -72,8 +76,8 @@ IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 IMAGE_TAG=0.2.0
 ```
 
-The `:latest` tag moves only when all three release gates pass: the tag is a
-plain `vX.Y.Z` semver tag (no pre-release suffix), it is the newest semver tag
+The app `:latest` tags move only when all three release gates pass: the tag is
+a plain `vX.Y.Z` semver tag (no pre-release suffix), it is the newest semver tag
 merged into `main`, and it was the `main` tip when the guard ran. Pin
 `IMAGE_TAG` in production so a skipped promotion cannot leave the server on an
 older build.
@@ -197,21 +201,28 @@ Migrations run automatically in `backend/scripts/start.sh`.
 
 ## Automatic deployment on tags (optional)
 
-`Deploy` (`.github/workflows/deploy.yml`) is a reusable workflow that
-`Release Containers` calls as its final job for a plain `vX.Y.Z` tag, after the
-version images and the `latest` promotion. It SSHes to the server, checks out
-the tag, pulls the matching images, restarts the stack, and calls an optional
-health URL.
+`Deploy` (`.github/workflows/deploy.yml`) is a reusable workflow called by the
+release workflows as their final job, after the images and the `latest`
+promotion. It SSHes to the server, checks out the tag, pulls the matching
+images, restarts the stack, and calls an optional health URL.
+
+Two tag lines exist:
+
+- `vX.Y.Z` — `Release Containers` builds the app images and calls `Deploy` for
+  the dashboard and the demo.
+- `site-vX.Y.Z` — `Release Site` builds the site image and calls `Deploy` for
+  the site only.
 
 The dashboard, site and demo targets are all disabled until their `DEPLOY_*`
 variable is `true`. This keeps tag releases working before a server is
 configured.
 
-Automatic deployment shares the `latest` promotion gate: only the newest plain
-`vX.Y.Z` tag, created at the then-current `main` tip, deploys. Re-running an
-older `Release Containers` run rebuilds its images but does not deploy them, so
-a stale rerun cannot silently downgrade production. Rolling back is the manual
-dispatch below.
+Automatic deployment of app tags shares the `latest` promotion gate: only the
+newest plain `vX.Y.Z` tag, created at the then-current `main` tip, deploys.
+Re-running an older `Release Containers` run rebuilds its images but does not
+deploy them, so a stale rerun cannot silently downgrade production. Site tags
+deploy whenever the tag is on `main`; they never touch the dashboard or demo.
+Rolling back is the manual dispatch below.
 
 ### Server prerequisites
 
@@ -311,10 +322,12 @@ not want the demo checked.
 gh workflow run deploy.yml -f tag=v0.2.0
 ```
 
-Use the same command with an older tag to roll back. Back up the database first:
-several migrations have lossy downgrades, and redeploying an older image does not
-undo a migration. For the site and demo, pick a tag that contains the site/demo
-split; earlier tags bundle their own Caddy and bind 80/443.
+Use the same command with an older tag to roll back. App tags (`vX.Y.Z`) deploy
+the dashboard and demo; site tags (`site-vX.Y.Z`) deploy the site. Back up the
+database first: several migrations have lossy downgrades, and redeploying an
+older image does not undo a migration. For the site and demo, pick a tag that
+contains the site/demo split; earlier tags bundle their own Caddy and bind
+80/443.
 
 
 ## Backup
@@ -338,7 +351,8 @@ run.
 
 `site/` is a static Next.js export. `frontend/` runs as a standalone demo with
 `NEXT_PUBLIC_DEMO_MODE=true`, on seeded data, with edits kept in the browser and
-no backend. `Release Containers` publishes both as images.
+no backend. `Release Containers` publishes the demo image on app tags and
+`Release Site` publishes the site image on `site-v*` tags.
 
 They run as two services in one Compose project on the same host and Docker
 daemon. Neither bundles a reverse proxy: both publish on loopback, and the proxy
@@ -404,10 +418,12 @@ clone, not a copied directory.
 sudo mkdir -p /opt/openprint-public && sudo chown "$USER" /opt/openprint-public
 git clone https://github.com/SchlangeGoto/open-print-dashboard.git /opt/openprint-public
 cd /opt/openprint-public
-git checkout v0.2.0   # the newest release, and not older than this change
+git checkout site-v1.0.0   # the site release being deployed
 ```
 
-The path must match `SITE_PATH` if you enable automatic deployment.
+This one clone runs both services. The demo image follows app releases, so pin
+it to an app version even though the checkout is on a site tag. The path must
+match `SITE_PATH` if you enable automatic deployment.
 
 ### 2. Pin the release
 
@@ -415,15 +431,16 @@ Create `.env` next to the clone:
 
 ```dotenv
 IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
-SITE_IMAGE_TAG=0.2.0
+SITE_IMAGE_TAG=1.0.0
 DEMO_IMAGE_TAG=0.2.0
 ```
 
-`SITE_IMAGE_TAG` and `DEMO_IMAGE_TAG` are the release without the leading `v`.
-Compose reads this file on every `up`, which is what keeps later manual restarts
-on the same releases. Set `SITE_PORT` or `DEMO_PORT` only if the default port is
-already taken on the host. The domains are not in this file: the host proxy owns
-them.
+`SITE_IMAGE_TAG` and `DEMO_IMAGE_TAG` are release versions without the leading
+`v`: for `site-v1.0.0` that is `1.0.0`, and for an app tag `v0.2.0` it is
+`0.2.0`. Compose reads this file on every `up`, which is what keeps later manual
+restarts on the same releases. Set `SITE_PORT` or `DEMO_PORT` only if the
+default port is already taken on the host. The domains are not in this file: the
+host proxy owns them.
 
 ### 3. Start the containers
 
@@ -490,11 +507,17 @@ so a restart does not need the network.
 
 ### Updating to a new release
 
-1. Merge to `main` and tag the `main` tip: `git tag v0.3.0 && git push origin v0.3.0`.
-2. Wait for `Release Containers` to publish `0.3.0`.
-3. On the host, set both `SITE_IMAGE_TAG=0.3.0` and `DEMO_IMAGE_TAG=0.3.0` in `.env`.
-4. `docker compose -f compose.public.yml pull`
-5. `docker compose -f compose.public.yml up -d`
+Site copy changes use the site release line:
+
+1. Merge to `main` and tag the `main` tip: `git tag site-v1.1.0 && git push origin site-v1.1.0`.
+2. Wait for `Release Site` to publish `1.1.0`.
+3. On the host, set `SITE_IMAGE_TAG=1.1.0` in `.env`.
+4. `docker compose -f compose.public.yml pull site`
+5. `docker compose -f compose.public.yml up -d site`
+
+The demo follows app releases. After an app tag `v0.3.0`, set
+`DEMO_IMAGE_TAG=0.3.0` and run the same two commands for `demo`. App tags no
+longer rebuild or redeploy the site, and site tags never touch the demo.
 
 Changing a tag is what triggers the recreate; `up -d` without a change is a
 no-op. Do not export the tags in the shell: Compose reads shell variables before
@@ -502,8 +525,9 @@ no-op. Do not export the tags in the shell: Compose reads shell variables before
 
 ### Rolling back
 
-Set both tags to the previous release, `pull`, `up -d`. Images are immutable, so
-that is the entire rollback: no migration to reverse and no state to restore.
+Set the tag for the service you are rolling back (`SITE_IMAGE_TAG` or
+`DEMO_IMAGE_TAG`), then `pull` and `up -d` that service. Images are immutable,
+so that is the entire rollback: no migration to reverse and no state to restore.
 
 Releases before this change bundle a Caddy that binds 80/443. Rolling back that
 far collides with the host proxy. Check before downgrading past it:
@@ -514,27 +538,34 @@ git show <tag>:compose.public.yml
 
 ### Automatic deploy on a tag
 
-The `Deploy` workflow can do steps 3-5 above over SSH. It is described under
+The `Deploy` workflow can do steps 3-5 above over SSH. `Release Site` runs it
+for the site on `site-v*` tags; `Release Containers` runs it for the demo on app
+tags. Both are described under
 [Automatic deployment on tags](#automatic-deployment-on-tags-optional).
 
-What happens on a tag push:
+What happens on a site tag push:
 
-1. `Release Containers` builds multi-arch images and pushes `X.Y.Z`, `X.Y`.
-2. Only a plain `vX.Y.Z` tag that is an ancestor of `main` **and** the current
-   `main` tip at release time moves `latest`.
-3. Only that same release calls `Deploy`, so a rerun of an old tag cannot
-   silently downgrade production.
-4. The site job checks out the tag on the host, pulls both images, restarts the
-   stack and calls `SITE_HEALTH_URL` and `DEMO_HEALTH_URL`.
+1. `Release Site` builds the multi-arch site image and pushes the version tag
+   plus a short sha tag, then moves `site:latest`.
+2. The tag must be an ancestor of `main`; a tag from an unmerged branch fails
+   the guard.
+3. `Release Site` calls `Deploy` with the same tag, which checks out the tag on
+   the server, pulls the site image, restarts the site container and calls
+   `SITE_HEALTH_URL`.
+4. The dashboard and demo jobs do not run for `site-v*` tags.
 
-A tag created from an older commit on `main` still builds images, but does not
-move `latest` or deploy. Create the tag from the current `main` tip when you
-want it to go out.
+`Release Site` moves `site:latest` only when the tag is the newest `site-v*` tag
+merged into `main`. Re-running an older site release still builds and deploys
+that explicit tag; it just does not move `latest` backwards.
 
-Rollback is a manual dispatch, which bypasses the `latest` gate:
+App tags (`vX.Y.Z`) never run the site job, so an app release cannot change the
+marketing site. Likewise, a site tag never rebuilds or restarts the dashboard or
+the demo.
+
+Rollback is a manual dispatch with an older site tag:
 
 ```bash
-gh workflow run deploy.yml -f tag=v0.2.0
+gh workflow run deploy.yml -f tag=site-v1.0.0
 ```
 
 ### Troubleshooting
@@ -548,8 +579,9 @@ gh workflow run deploy.yml -f tag=v0.2.0
 - **Update ran but the old page is served**: the tag did not change, or the
   running digest is stale. Compare `docker compose ... images` with the release,
   then `up -d --force-recreate`.
-- **Deploy workflow skipped**: `DEPLOY_SITE` is not `true`, the tag is not a
-  plain `vX.Y.Z`, or it was not created at the `main` tip.
+- **Deploy workflow skipped**: `DEPLOY_SITE` is not `true`, the tag does not
+  match the job (`vX.Y.Z` for the demo, `site-vX.Y.Z` for the site), or an app
+  tag was not created at the `main` tip.
 - **Health check fails after a successful start**: the URL points at the host
   proxy rather than the loopback port, or DNS/TLS is not ready yet.
 

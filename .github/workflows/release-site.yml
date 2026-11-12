@@ -1,0 +1,137 @@
+name: Release Site
+
+# The marketing site has its own release line. A `site-vX.Y.Z` tag builds and
+# publishes only the site image, then deploys it. App releases (`vX.Y.Z`) no
+# longer rebuild the site, so copy changes do not wait for an app release and
+# app releases do not redeploy the site.
+#
+#   git tag site-v1.0.0 && git push origin site-v1.0.0
+#
+# Manual run:
+#   gh workflow run release-site.yml -f tag=site-v1.0.0
+on:
+  push:
+    tags:
+      - "site-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Site release tag to build (for example site-v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Tag runs and manual runs share this group so the `latest` promotion cannot
+  # interleave out of order.
+  group: release-site
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a site release tag on main
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^site-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not a site release tag (site-vX.Y.Z)."
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$TAG is not on main."
+            exit 1
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/site
+          # `latest` is moved by the promotion step below, not by this action.
+          flavor: |
+            latest=false
+          tags: |
+            type=match,pattern=site-v(.*),group=1,value=${{ env.RELEASE_TAG }}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: site
+          file: site/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=site
+          cache-to: type=gha,mode=max,scope=site
+          provenance: true
+          sbom: true
+
+      - name: Move the site latest tag
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          # A rerun of an older release must not move `latest` backwards. The
+          # explicit tag is still built and deployed; only the promotion is
+          # skipped.
+          git fetch --no-tags origin main
+          git fetch --tags --force
+          newest=$(git tag --merged origin/main --list 'site-v*' --sort=-v:refname \
+            | grep -E '^site-v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ "$TAG" != "$newest" ]; then
+            echo "::warning::$TAG is not the newest site tag on main ($newest); site:latest was not moved."
+            exit 0
+          fi
+          version="${TAG#site-v}"
+          docker buildx imagetools create \
+            -t "${IMAGE_PREFIX}/site:latest" \
+            "${IMAGE_PREFIX}/site:${version}"
+
+  deploy:
+    needs: publish
+    permissions:
+      contents: read
+    # Same self-repository syntax as Release Containers; see the comment there.
+    uses: ./.github/workflows/deploy.yml # zizmor: ignore[self-repository]
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}

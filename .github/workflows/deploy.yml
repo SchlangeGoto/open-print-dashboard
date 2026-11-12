@@ -1,18 +1,21 @@
 name: Deploy
 
-# Deploys a released tag to the server(s) after Release Containers has pushed
-# the matching GHCR images. Release Containers calls this workflow directly as
-# a final job, so no `workflow_run` trigger is involved. Everything is opt-in:
-# a target only runs when its DEPLOY_* variable is set to "true" and its
-# secrets are configured.
+# Deploys a released tag to the server(s) after the matching GHCR images
+# exist. Release Containers calls this workflow for app tags (dashboard and
+# demo); Release Site calls it for site tags. Everything is opt-in: a target
+# only runs when its DEPLOY_* variable is set to "true" and its secrets are
+# configured.
+#
+# App tags deploy the dashboard and the demo. Site tags deploy the site only.
 #
 # Manual deploy or rollback:
 #   gh workflow run deploy.yml -f tag=v0.1.0
+#   gh workflow run deploy.yml -f tag=site-v1.0.0
 on:
   workflow_call:
     inputs:
       tag:
-        description: "Release tag to deploy (for example v0.1.0)"
+        description: "Release tag to deploy (vX.Y.Z or site-vX.Y.Z)"
         required: true
         type: string
     # Declared optional: callers without a server configured can still release
@@ -25,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to deploy (for example v0.1.0)"
+        description: "Release tag to deploy (vX.Y.Z or site-vX.Y.Z)"
         required: true
         type: string
 
@@ -38,18 +41,35 @@ jobs:
     timeout-minutes: 5
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      component: ${{ steps.tag.outputs.component }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
     steps:
       - name: Resolve the release tag
         id: tag
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           tag="$INPUT_TAG"
+          component=""
+          image_tag=""
 
-          # Only plain semver tags are production releases.
-          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Not a plain semver tag ('$tag'); nothing to deploy."
+          # App releases carry a plain semver tag; site releases are prefixed
+          # so the two pipelines never deploy each other's images.
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            component="app"
+            image_tag="${tag#v}"
+          elif [[ "$tag" =~ ^site-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            component="site"
+            image_tag="${tag#site-v}"
+          else
+            echo "::warning::Not a deployable release tag ('$tag'); nothing to deploy."
+            # A manual dispatch with a typo should fail instead of reporting a
+            # green run that deployed nothing.
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              exit 1
+            fi
             exit 0
           fi
 
@@ -59,11 +79,15 @@ jobs:
             exit 1
           fi
 
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${tag}"
+            echo "component=${component}"
+            echo "image_tag=${image_tag}"
+          } >> "$GITHUB_OUTPUT"
 
   dashboard:
     needs: resolve
-    if: needs.resolve.outputs.tag != '' && vars.DEPLOY_DASHBOARD == 'true'
+    if: needs.resolve.outputs.component == 'app' && vars.DEPLOY_DASHBOARD == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -85,6 +109,7 @@ jobs:
           DEPLOY_PATH: ${{ vars.DASHBOARD_PATH }}
           HEALTH_URL: ${{ vars.DASHBOARD_HEALTH_URL }}
           IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
           TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
@@ -103,7 +128,7 @@ jobs:
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
             "$SSH_USER@$SSH_HOST" \
-            "TAG=$(printf %q "$TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
+            "TAG=$(printf %q "$TAG") IMAGE_TAG=$(printf %q "$IMAGE_TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
 
@@ -114,7 +139,7 @@ jobs:
           git fetch --tags origin
           git checkout --detach "$TAG"
 
-          export IMAGE_PREFIX IMAGE_TAG="${TAG#v}"
+          export IMAGE_PREFIX IMAGE_TAG
 
           if [ ! -f .env ]; then
             echo "::error::Missing .env in $DEPLOY_PATH; create it from .env.example before deploying."
@@ -159,20 +184,24 @@ jobs:
           fi
           REMOTE
 
+
   site:
     needs: resolve
-    if: needs.resolve.outputs.tag != '' && vars.DEPLOY_SITE == 'true'
+    if: needs.resolve.outputs.component == 'site' && vars.DEPLOY_SITE == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
-      group: deploy-site
+      # The site and demo share one clone and one .env. A site tag and an app
+      # tag can be pushed at the same time, so both jobs serialize on one group
+      # instead of checking out different tags into the same worktree.
+      group: deploy-public
       cancel-in-progress: false
       queue: max
     environment:
       name: production-site
       url: ${{ vars.SITE_URL }}
     steps:
-      - name: Pull the release and restart the site and demo
+      - name: Pull the site release and restart the site
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -180,8 +209,8 @@ jobs:
           SSH_USER: ${{ vars.SITE_USER }}
           DEPLOY_PATH: ${{ vars.SITE_PATH }}
           HEALTH_URL: ${{ vars.SITE_HEALTH_URL }}
-          DEMO_HEALTH_URL: ${{ vars.DEMO_HEALTH_URL }}
           IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
+          SITE_IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
           TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
@@ -200,21 +229,18 @@ jobs:
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
             "$SSH_USER@$SSH_HOST" \
-            "TAG=$(printf %q "$TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") DEMO_HEALTH_URL=$(printf %q "$DEMO_HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
+            "TAG=$(printf %q "$TAG") SITE_IMAGE_TAG=$(printf %q "$SITE_IMAGE_TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
 
           git fetch --tags origin
           git checkout --detach "$TAG"
 
-          # The site and demo share one project but keep separate pins, so a
-          # later manual restart cannot move either of them to `latest`.
-          SITE_IMAGE_TAG="${TAG#v}"
-          DEMO_IMAGE_TAG="${TAG#v}"
-          export IMAGE_PREFIX SITE_IMAGE_TAG DEMO_IMAGE_TAG
+          export IMAGE_PREFIX SITE_IMAGE_TAG
 
-          # The host reverse proxy owns the domains, so this file only needs the
-          # pins. It is optional for Compose, so create it if missing.
+          # Keep the pin in the untracked .env so a later plain `up -d` cannot
+          # jump back to `latest` or to the default prefix. The host proxy owns
+          # the domains, so this file only needs the pins. Create it if missing.
           [ -f .env ] || touch .env
 
           set_env() {
@@ -231,26 +257,108 @@ jobs:
 
           set_env IMAGE_PREFIX "$IMAGE_PREFIX"
           set_env SITE_IMAGE_TAG "$SITE_IMAGE_TAG"
-          set_env DEMO_IMAGE_TAG "$DEMO_IMAGE_TAG"
 
-          docker compose -f compose.public.yml pull
-          docker compose -f compose.public.yml up -d
+          # Only the site container. The demo stays on its own pin until an app
+          # release deploys it.
+          docker compose -f compose.public.yml pull site
+          docker compose -f compose.public.yml up -d site
           docker compose -f compose.public.yml ps
 
-          for url in "$HEALTH_URL" "$DEMO_HEALTH_URL"; do
-            [ -n "$url" ] || continue
-            healthy=0
+          if [ -n "$HEALTH_URL" ]; then
             for _ in $(seq 1 30); do
-              if curl -fsS --connect-timeout 5 --max-time 15 "$url" >/dev/null; then
-                healthy=1
-                break
+              if curl -fsS --connect-timeout 5 --max-time 15 "$HEALTH_URL" >/dev/null; then
+                echo "Health check passed."
+                exit 0
               fi
               sleep 2
             done
-            if [ "$healthy" -ne 1 ]; then
-              echo "::error::Health check failed: $url"
+            echo "::error::Health check failed: $HEALTH_URL"
+            exit 1
+          fi
+          REMOTE
+
+  demo:
+    needs: resolve
+    if: needs.resolve.outputs.component == 'app' && vars.DEPLOY_SITE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      # Same host and clone as the site job; see the comment there.
+      group: deploy-public
+      cancel-in-progress: false
+      queue: max
+    environment:
+      name: production-demo
+      url: ${{ vars.DEMO_URL }}
+    steps:
+      - name: Pull the app release and restart the demo
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.SITE_HOST }}
+          SSH_USER: ${{ vars.SITE_USER }}
+          DEPLOY_PATH: ${{ vars.SITE_PATH }}
+          HEALTH_URL: ${{ vars.DEMO_HEALTH_URL }}
+          IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
+          DEMO_IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for name in SSH_KEY KNOWN_HOSTS SSH_HOST SSH_USER DEPLOY_PATH; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing $name; see docs/DEPLOYMENT.md"
               exit 1
             fi
-            echo "Health check passed: $url"
           done
+
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "TAG=$(printf %q "$TAG") DEMO_IMAGE_TAG=$(printf %q "$DEMO_IMAGE_TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          git fetch --tags origin
+          git checkout --detach "$TAG"
+
+          export IMAGE_PREFIX DEMO_IMAGE_TAG
+
+          [ -f .env ] || touch .env
+
+          set_env() {
+            local key="$1" value="$2"
+            if grep -q "^${key}=" .env; then
+              sed -i "s|^${key}=.*|${key}=${value}|" .env
+            else
+              if [ -n "$(tail -c 1 .env)" ]; then
+                echo >> .env
+              fi
+              printf '%s=%s\n' "$key" "$value" >> .env
+            fi
+          }
+
+          set_env IMAGE_PREFIX "$IMAGE_PREFIX"
+          set_env DEMO_IMAGE_TAG "$DEMO_IMAGE_TAG"
+
+          # Only the demo container. The site keeps its own pin.
+          docker compose -f compose.public.yml pull demo
+          docker compose -f compose.public.yml up -d demo
+          docker compose -f compose.public.yml ps
+
+          if [ -n "$HEALTH_URL" ]; then
+            for _ in $(seq 1 30); do
+              if curl -fsS --connect-timeout 5 --max-time 15 "$HEALTH_URL" >/dev/null; then
+                echo "Health check passed."
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "::error::Health check failed: $HEALTH_URL"
+            exit 1
+          fi
           REMOTE

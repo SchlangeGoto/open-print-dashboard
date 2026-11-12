@@ -25,9 +25,10 @@ This repository uses GitHub Actions for three kinds of work:
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
-| Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
+| Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend and demo images to GHCR |
 | Release Android | `.github/workflows/release-android.yml` | Tags `v*`, manual | Requires the tag on `main`, builds an EAS signed APK and attaches it to the GitHub Release |
-| Deploy | `.github/workflows/deploy.yml` | Called by `Release Containers` for a plain `vX.Y.Z` tag, manual | SSH-deploys the dashboard, site and demo from GHCR; disabled until the `DEPLOY_*` variables and secrets are configured |
+| Release Site | `.github/workflows/release-site.yml` | Tags `site-v*`, manual | Requires the tag on `main`, builds and pushes the multi-arch site image, then deploys it |
+| Deploy | `.github/workflows/deploy.yml` | Called by `Release Containers` and `Release Site`, manual | SSH-deploys the dashboard and demo for `vX.Y.Z`, the site for `site-vX.Y.Z`; disabled until the `DEPLOY_*` variables and secrets are configured |
 | Dependabot | `.github/dependabot.yml` | Weekly | npm, uv, GitHub Actions and Docker updates; npm updates are grouped |
 
 The test and build workflows cancel superseded runs on the same ref, have a
@@ -169,9 +170,12 @@ GHCR publishing.
   starts the self-contained `node server.js`. The release image is built with an empty
   `NEXT_PUBLIC_API_URL`, so the browser calls `/api/v1` on the same origin and
   Caddy proxies it to the backend.
-- **Container images**: `Release Containers` publishes backend, frontend, site
-  and demo images to GHCR on `v*` tags. The dashboard stack uses
-  `compose.ghcr.yml`; the public site and demo share `compose.public.yml`.
+- **Container images**: `Release Containers` publishes backend, frontend and
+  demo images to GHCR on `v*` tags. The dashboard stack uses
+  `compose.ghcr.yml`; the demo and site share `compose.public.yml`.
+- **Site image**: `Release Site` publishes the site image on `site-v*` tags and
+  moves `site:latest`. It is a separate release line, so site copy changes do
+  not wait for an app release and app releases do not redeploy the site.
 - **Mobile debug APK**: `Build Mobile APK` is manual and produces a debug APK
   for testing, not a store artifact.
 - **Mobile release**: `Release Android` runs EAS Build on tags and produces a
@@ -236,3 +240,8 @@ stricter security requirements:
   then the host proxy. The containers publish on `127.0.0.1:8080` and
   `127.0.0.1:3000`, not on 80/443. A 502 means the proxy points at a port
   nothing listens on.
+- **Release Site does not run**: the tag must start with `site-v` and be a
+  plain `site-vX.Y.Z`. `vX.Y.Z` tags never trigger it, and it requires
+  `DEPLOY_SITE` plus the `SITE_*` variables to deploy.
+- **Site release built but did not deploy**: check that `DEPLOY_SITE` is
+  `true`, that `SITE_HEALTH_URL` resolves, and that the tag is on `main`.

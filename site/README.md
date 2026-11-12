@@ -33,7 +33,7 @@ forwards to it.
 
 ```bash
 export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
-export SITE_IMAGE_TAG=0.2.0
+export SITE_IMAGE_TAG=1.0.0
 
 docker compose -f compose.public.yml pull
 docker compose -f compose.public.yml up -d
@@ -41,6 +41,19 @@ docker compose -f compose.public.yml up -d
 
 Copy both blocks from `../deploy/Caddyfile.public` into the host's proxy config.
 The demo runs as the `demo` service in the same stack, on `127.0.0.1:3000`.
+
+### Release
+
+The site has its own release line, so app tags do not rebuild it:
+
+```bash
+git tag site-v1.0.0 && git push origin site-v1.0.0
+```
+
+`Release Site` builds `site-vX.Y.Z` into image tag `X.Y.Z`, moves
+`site:latest`, and deploys it when `DEPLOY_SITE` is configured. Check out that
+tag on the host and pin `SITE_IMAGE_TAG=X.Y.Z`. App tags (`vX.Y.Z`) continue to
+build the backend, frontend and demo only.
 
 The full walkthrough — first install, updates, rollback, and automatic deploy on
 a tag — is in

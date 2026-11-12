@@ -9,8 +9,8 @@ name: openprint-public
 # separate image tags so either can be released without the other.
 #
 #   export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
-#   export SITE_IMAGE_TAG=0.1.0
-#   export DEMO_IMAGE_TAG=0.1.0
+#   export SITE_IMAGE_TAG=1.0.0
+#   export DEMO_IMAGE_TAG=0.2.0
 #   docker compose -f compose.public.yml up -d
 #
 # See "Public site and demo" in docs/DEPLOYMENT.md.

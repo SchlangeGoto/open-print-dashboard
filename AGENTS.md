@@ -68,8 +68,11 @@ Site, from `site/`:
 
 Releases:
 
-- `git tag vX.Y.Z && git push origin vX.Y.Z` — publishes GHCR images and a
-  signed Android APK through `Release Containers` and `Release Android`.
+- `git tag vX.Y.Z && git push origin vX.Y.Z` — publishes the app images and a
+  signed Android APK through `Release Containers` and `Release Android`. It does
+  not rebuild or deploy the marketing site.
+- `git tag site-vX.Y.Z && git push origin site-vX.Y.Z` — publishes the site
+  image and deploys it through `Release Site`.
 - Android releases are APKs, not AABs; there is no Play Store step. iOS is not
   automated because ad hoc signing needs a paid Apple Developer account.
 - EAS setup and signing are documented in `docs/DEPLOYMENT.md`.

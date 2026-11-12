@@ -149,6 +149,9 @@ docker compose -f compose.prod.yml up -d --build
 Prebuilt images:
 
 ```bash
+# Replace 0.1.0 with the release you are updating to. Keep the variable set
+# for the pull and up commands, and never switch to an older tag after the
+# database has been migrated without restoring a backup first.
 export IMAGE_TAG=0.1.0
 docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d

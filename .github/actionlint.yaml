@@ -1,0 +1,7 @@
+# actionlint 1.7.12 predates GitHub's `concurrency.queue` option, which
+# deploy.yml needs so a queued manual rollback is not displaced by a later
+# automatic deploy. Drop this once actionlint understands `queue`.
+paths:
+  .github/workflows/deploy.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

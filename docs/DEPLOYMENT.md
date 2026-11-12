@@ -163,6 +163,12 @@ health URL.
 Both targets are disabled until their `DEPLOY_*` variable is `true`. This keeps
 tag releases working before a server is configured.
 
+Automatic deployment shares the `latest` promotion gate: only the newest plain
+`vX.Y.Z` tag, created at the then-current `main` tip, deploys. Re-running an
+older `Release Containers` run rebuilds its images but does not deploy them, so
+a stale rerun cannot silently downgrade production. Rolling back is the manual
+dispatch below.
+
 ### Server prerequisites
 
 - The repository is cloned on the server at the configured path.
@@ -171,6 +177,22 @@ tag releases working before a server is configured.
   `git` and `curl`.
 - The clone has no tracked local changes; untracked files such as `.env` are
   fine.
+
+### Persistent settings on the server
+
+The SSH session starts a fresh shell, so anything you only `export`ed in an
+interactive login is gone. Keep the site’s domains in the untracked `.env` next
+to the clone so Compose reads them on every deploy:
+
+```bash
+# /opt/openprint-public/.env
+SITE_DOMAIN=openprintdash.app
+DEMO_DOMAIN=demo.openprintdash.app
+```
+
+The deploy workflow sets `IMAGE_PREFIX` and `IMAGE_TAG` itself; do not pin
+`IMAGE_TAG` in `.env` or it will fight the tag being deployed. The dashboard
+clone likewise needs its normal `.env` from `.env.example`.
 
 ### Secrets
 
@@ -199,12 +221,24 @@ tag releases working before a server is configured.
 ### One-time setup
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
+# Create the key outside the repository clone so it can never be staged.
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/openprint-deploy -N ""
 
-# Add deploy_key.pub to ~/.ssh/authorized_keys on each server, then:
-gh secret set DEPLOY_SSH_KEY -R SchlangeGoto/open-print-dashboard < deploy_key
-ssh-keyscan -H dashboard.example.com openprintdash.app > known_hosts
-gh secret set DEPLOY_KNOWN_HOSTS -R SchlangeGoto/open-print-dashboard < known_hosts
+# Verify the fingerprints, add ~/.ssh/openprint-deploy.pub to
+# ~/.ssh/authorized_keys on each server, then:
+gh secret set DEPLOY_SSH_KEY -R SchlangeGoto/open-print-dashboard < ~/.ssh/openprint-deploy
+ssh-keyscan -H dashboard.example.com openprintdash.app > ~/.ssh/openprint-known-hosts
+
+# ssh-keyscan trusts whatever the network returns. Compare every fingerprint
+# with the server's own key read over a trusted channel (for example console
+# access) before storing the secret:
+#   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # on the server
+ssh-keygen -lf ~/.ssh/openprint-known-hosts
+gh secret set DEPLOY_KNOWN_HOSTS -R SchlangeGoto/open-print-dashboard < ~/.ssh/openprint-known-hosts
+
+# The private key and host list are only needed for the two `gh secret set`
+# commands above.
+rm -f ~/.ssh/openprint-deploy ~/.ssh/openprint-known-hosts
 
 gh variable set DEPLOY_DASHBOARD -R SchlangeGoto/open-print-dashboard --body true
 gh variable set DASHBOARD_HOST -R SchlangeGoto/open-print-dashboard --body dashboard.example.com

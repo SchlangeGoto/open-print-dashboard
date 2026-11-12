@@ -132,6 +132,11 @@ jobs:
     needs: [guard, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Deploy reuses this decision: only the release that is allowed to move
+    # `latest` may deploy automatically. Re-running an older release therefore
+    # cannot silently downgrade production; that stays a manual dispatch.
+    outputs:
+      eligible: ${{ steps.release_tag.outputs.eligible }}
     concurrency:
       group: release-containers-latest
       cancel-in-progress: false
@@ -196,10 +201,11 @@ jobs:
           done
 
   deploy:
-    # Only a plain semver tag deploys. Runs after the version images and the
-    # latest promotion so the server can pull the exact released version.
+    # Only the release that was allowed to move `latest` deploys
+    # automatically. Manual dispatch still deploys any tag, which is the
+    # rollback path.
     needs: [guard, publish, latest]
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    if: needs.latest.outputs.eligible == 'true'
     permissions:
       contents: read
     # `$/` is the recommended self-repository syntax, but released actionlint

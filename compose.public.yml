@@ -1,7 +1,7 @@
 # Public marketing site and demo, served from published GHCR images.
 name: openprint-public
 #
-#   export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+#   export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 #   export IMAGE_TAG=0.2.0
 #   export SITE_DOMAIN=openprintdash.app
 #   export DEMO_DOMAIN=demo.openprintdash.app
@@ -13,11 +13,11 @@ name: openprint-public
 
 services:
   site:
-    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/site:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/site:${IMAGE_TAG:-latest}
     restart: unless-stopped
 
   demo:
-    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/demo:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/demo:${IMAGE_TAG:-latest}
     restart: unless-stopped
 
   caddy:

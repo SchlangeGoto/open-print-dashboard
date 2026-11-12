@@ -5,7 +5,7 @@ name: openprintdashboard
 # /api/v1 on the same origin and Caddy proxies it to the backend. No separate
 # public API URL is needed.
 #
-#   export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+#   export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 #   export IMAGE_TAG=0.2.0
 #   export DOMAIN=dashboard.example.com
 #   docker compose -f compose.ghcr.yml up -d
@@ -32,7 +32,7 @@ services:
       start_period: 10s
 
   backend:
-    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/backend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       db:
@@ -66,7 +66,7 @@ services:
       - backend_data:/app/data
 
   frontend:
-    image: ${IMAGE_PREFIX:-ghcr.io/schlangengoto/open-print-dashboard}/frontend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - backend

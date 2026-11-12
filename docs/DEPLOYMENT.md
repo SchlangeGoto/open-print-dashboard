@@ -42,10 +42,10 @@ reverse proxy in front for TLS.
 
 `Release Containers` publishes multi-arch images to GHCR on every `v*` tag:
 
-- `ghcr.io/schlangengoto/open-print-dashboard/backend`
-- `ghcr.io/schlangengoto/open-print-dashboard/frontend`
-- `ghcr.io/schlangengoto/open-print-dashboard/site`
-- `ghcr.io/schlangengoto/open-print-dashboard/demo`
+- `ghcr.io/schlangegoto/open-print-dashboard/backend`
+- `ghcr.io/schlangegoto/open-print-dashboard/frontend`
+- `ghcr.io/schlangegoto/open-print-dashboard/site`
+- `ghcr.io/schlangegoto/open-print-dashboard/demo`
 
 After the first `Release Containers` run, open each package under the
 repository's **Packages** tab and set its visibility to **Public**, or run
@@ -67,7 +67,7 @@ SECRET_KEY=<openssl rand -hex 32>       # or leave empty to auto-generate
 POSTGRES_PASSWORD=<openssl rand -hex 32> # URL-safe; it is embedded in DATABASE_URL
 DOMAIN=dashboard.example.com
 FRONTEND_HOST=https://dashboard.example.com
-IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 IMAGE_TAG=0.2.0
 ```
 
@@ -176,7 +176,7 @@ with `NEXT_PUBLIC_DEMO_MODE=true`. `Release Containers` publishes both as
 images, and `compose.public.yml` serves them with Caddy:
 
 ```bash
-export IMAGE_PREFIX=ghcr.io/schlangengoto/open-print-dashboard
+export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 export IMAGE_TAG=0.2.0
 export SITE_DOMAIN=openprintdash.app
 export DEMO_DOMAIN=demo.openprintdash.app

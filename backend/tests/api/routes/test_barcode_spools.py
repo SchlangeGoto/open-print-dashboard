@@ -1,0 +1,1154 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
+
+from app.core.config import settings
+from app.models import Filament, FilamentBarcode, Printer, Spool
+from app.services.bambu_client import BambuClient
+from tests.utils.utils import random_lower_string
+
+
+def test_scan_known_barcode_creates_spool(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337032380"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["found"] is True
+    assert data["filament"]["color_name"] == "Mandarin Orange"
+    assert data["filament"]["spool_weight_g"] == 1000
+    assert data["spool"]["total_weight_g"] == 1000
+    assert data["spool"]["barcode"] == "6975337032380"
+
+
+def test_barcode_lookup_and_duplicate_creation(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    code = "6975337031376"  # PLA Matte Scarlet Red
+
+    # Start clean even if a previous run left this barcode behind.
+    for existing in db.exec(select(Spool).where(Spool.barcode == code)).all():
+        db.delete(existing)
+    for mapping in db.exec(
+        select(FilamentBarcode).where(FilamentBarcode.code == code)
+    ).all():
+        db.delete(mapping)
+    db.commit()
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code, "create": False},
+    )
+    assert r.status_code == 200
+    lookup = r.json()
+    # A lookup must not create a product or a permanent mapping.
+    assert lookup["found"] is False
+    assert lookup["created"] is False
+    assert lookup["spool"] is None
+    assert lookup["existing_spools"] == []
+    assert lookup["suggested_filament"]["series"] == "PLA Matte"
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code, "create": True},
+    )
+    assert r.status_code == 200
+    first = r.json()
+    assert first["created"] is True
+    assert first["spool"]["barcode"] == code
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code, "create": False},
+    )
+    assert r.status_code == 200
+    duplicate = r.json()
+    assert duplicate["created"] is False
+    assert duplicate["spool"]["id"] == first["spool"]["id"]
+    assert len(duplicate["existing_spools"]) == 1
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code, "create": True},
+    )
+    assert r.status_code == 200
+    second = r.json()
+    assert second["created"] is True
+    assert second["spool"]["id"] != first["spool"]["id"]
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code, "create": False},
+    )
+    assert len(r.json()["existing_spools"]) == 2
+
+
+def test_ams_links_barcode_spool_by_tag(
+    db: Session,
+) -> None:
+    printer = Printer(
+        name="AMS Link Test",
+        serial=random_lower_string(),
+    )
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="AMS Link Test",
+        color_hex="#AABBCC",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    # A scanned 750 g refill: the AMS tray still reports 1000 g because it
+    # omits tray_weight. Adopting the spool must not overwrite the user's
+    # total; the percentage is applied to 750 g instead.
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=750,
+        remaining_g=600,
+        barcode="TEST-AMS-LINK",
+        source="barcode",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "AABBCCDD",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "AABBCC",
+                        "tray_weight": "1000",
+                        "remain": "80",
+                        "tray_id_name": "AMS Link Test",
+                    }
+                ],
+            }
+        ]
+    }
+    ams_client = BambuClient()
+    ams_client.serial = printer.serial
+    ams_client._current_status = {"tray_now": 0, "ams": ams}
+    ams_client._sync_ams_trays(ams, "test")
+
+    db.expire_all()
+    linked = db.get(Spool, spool.id)
+    assert linked
+    assert linked.tag_uid == "AABBCCDD"
+    assert linked.total_weight_g == 750
+    assert linked.remaining_g == 600
+
+    matches = db.exec(select(Spool).where(Spool.filament_id == filament.id)).all()
+    assert len(matches) == 1
+
+
+def test_ams_links_oldest_barcode_spool_when_multiple(
+    db: Session,
+) -> None:
+    printer = Printer(
+        name="AMS FIFO Test",
+        serial=random_lower_string(),
+    )
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Green Mate",
+        color_hex="#00AE42",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    other_printer = Printer(name="Other printer", serial=random_lower_string())
+    db.add(other_printer)
+    db.commit()
+    db.refresh(other_printer)
+
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    spools = []
+    for index in range(4):
+        spool = Spool(
+            filament_id=filament.id,
+            total_weight_g=1000,
+            remaining_g=1000,
+            barcode="TEST-FIFO-BARCODE",
+            source="barcode",
+            created_at=base + timedelta(minutes=index),
+        )
+        if index == 1:
+            # Loaded in another printer: it must not be re-tagged or moved.
+            spool.printer_id = other_printer.id
+            spool.active = True
+        db.add(spool)
+        spools.append(spool)
+    db.commit()
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "FIFO1234",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "00AE42",
+                        "tray_weight": "1000",
+                        "remain": "100",
+                        "tray_id_name": "Green Mate",
+                    }
+                ],
+            }
+        ]
+    }
+    ams_client = BambuClient()
+    ams_client.serial = printer.serial
+    ams_client._current_status = {"tray_now": 0, "ams": ams}
+    ams_client._sync_ams_trays(ams, "test")
+
+    db.expire_all()
+    rows = db.exec(
+        select(Spool)
+        .where(Spool.filament_id == filament.id)
+        .order_by(Spool.created_at.asc())
+    ).all()
+    assert len(rows) == 4
+
+    oldest = db.get(Spool, spools[0].id)
+    assert oldest is not None
+    assert oldest.tag_uid == "FIFO1234"
+    assert oldest.remaining_g == 1000
+    assert oldest.active is True
+    assert oldest.printer_id == printer.id
+
+    assert [row.tag_uid for row in rows].count("FIFO1234") == 1
+    assert all(row.tag_uid is None for row in rows if row.id != oldest.id)
+
+    untouched = db.get(Spool, spools[1].id)
+    assert untouched is not None
+    assert untouched.tag_uid is None
+    assert untouched.printer_id == other_printer.id
+
+
+def test_barcode_scan_does_not_adopt_an_ams_spool(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    code = "6975337030287"  # PLA Metal Space Gray
+    for existing in db.exec(select(Spool).where(Spool.barcode == code)).all():
+        db.delete(existing)
+    db.commit()
+
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Space Gray",
+        color_hex="#565451",
+        bambu_info_idx="GFA02",
+        spool_weight_g=1000,
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    ams_spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=540,
+        tag_uid="AMS-SPACE-GRAY",
+        source="ams",
+    )
+    db.add(ams_spool)
+    db.commit()
+    db.refresh(ams_spool)
+
+    # One scan adds one spool (D-06). It must not attach the barcode to the
+    # AMS spool that happens to use the same filament.
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code, "create": True},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["created"] is True
+    assert data["spool"]["id"] != str(ams_spool.id)
+    assert data["spool"]["barcode"] == code
+
+    db.expire_all()
+    matches = db.exec(select(Spool).where(Spool.filament_id == filament.id)).all()
+    assert len(matches) == 2
+
+    untouched = db.get(Spool, ams_spool.id)
+    assert untouched is not None
+    assert untouched.barcode is None
+    assert untouched.tag_uid == "AMS-SPACE-GRAY"
+
+
+def test_unknown_barcode_can_create_filament_and_spool(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    code = "TEST-UNKNOWN-BARCODE"
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": code},
+    )
+    assert r.status_code == 200
+    assert r.json()["found"] is False
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json={
+            "code": code,
+            "filament": {
+                "brand": "Test Brand",
+                "material": "PLA",
+                "color_name": "Test Blue",
+                "color_hex": "#123456",
+                "spool_weight_g": 750,
+            },
+            "total_weight_g": 750,
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["found"] is True
+    assert data["filament"]["color_name"] == "Test Blue"
+    assert data["spool"]["total_weight_g"] == 750
+    assert data["spool"]["source"] == "barcode"
+
+
+def test_scan_imported_catalog_barcode(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337030164"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["found"] is True
+    assert data["filament"]["color_name"] == "Jade White"
+    assert data["filament"]["color_hex"] == "#FFFFFF"
+    assert data["filament"]["material"] == "PLA"
+    assert data["spool"]["barcode"] == "6975337030164"
+
+
+def test_link_barcode_tolerates_a_concurrent_insert(db: Session) -> None:
+    from app.api.routes.spools import _link_barcode
+
+    code = f"race-{random_lower_string()}"
+    winner = Filament(
+        brand="Race", material="PLA", color_name="Race", color_hex="#123456"
+    )
+    loser = Filament(
+        brand="Race", material="PLA", color_name="Race", color_hex="#123456"
+    )
+    db.add(winner)
+    db.add(loser)
+    db.commit()
+    db.refresh(winner)
+    db.refresh(loser)
+    db.add(FilamentBarcode(code=code, filament_id=winner.id))
+    db.commit()
+
+    # The loser's insert hits the unique index; it must fall back to the
+    # committed mapping instead of raising.
+    result = _link_barcode(session=db, code=code, filament=loser)
+    db.commit()
+
+    assert result.id == winner.id
+    mapping = db.exec(
+        select(FilamentBarcode).where(FilamentBarcode.code == code)
+    ).first()
+    assert mapping is not None
+    assert mapping.filament_id == winner.id
+
+
+def test_catalog_match_does_not_cross_brands(db: Session) -> None:
+    from app.api.routes.spools import _find_or_create_catalog_filament
+
+    color = f"#{uuid.uuid4().hex[:6]}"
+    sunlu = Filament(
+        brand="Sunlu",
+        material="PLA",
+        color_name="Green",
+        color_hex=color,
+        bambu_info_idx=None,
+    )
+    db.add(sunlu)
+    db.commit()
+    db.refresh(sunlu)
+
+    filament = _find_or_create_catalog_filament(
+        session=db,
+        data={
+            "brand": "Bambu Lab",
+            "material": "PLA",
+            "color_name": "Green",
+            "color_hex": color,
+            "bambu_info_idx": None,
+            "spool_weight_g": 1000,
+        },
+    )
+
+    assert filament.id != sunlu.id
+    assert filament.brand == "Bambu Lab"
+
+
+def test_catalog_fallback_matches_the_same_brand(db: Session) -> None:
+    from app.api.routes.spools import _find_or_create_catalog_filament
+
+    color = f"#{uuid.uuid4().hex[:6]}"
+    bambu = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Green",
+        color_hex=color,
+        bambu_info_idx=None,
+    )
+    db.add(bambu)
+    db.commit()
+    db.refresh(bambu)
+
+    filament = _find_or_create_catalog_filament(
+        session=db,
+        data={
+            "brand": "Bambu Lab",
+            "material": "PLA",
+            "color_name": "Green",
+            "color_hex": color,
+            "bambu_info_idx": None,
+            "spool_weight_g": 1000,
+        },
+    )
+
+    assert filament.id == bambu.id
+
+
+def test_scan_rejects_an_invalid_ean13_check_digit(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337032381"},
+    )
+
+    assert r.status_code == 422
+
+
+def test_scan_normalizes_a_gtin14(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "06975337032380", "create": True},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["spool"]["barcode"] == "6975337032380"
+
+
+def test_unknown_barcode_uses_the_optional_sku(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={
+            "code": "TEST-UNKNOWN-SKU",
+            "sku": "A01-A2-1.75-1000-SPL",
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["found"] is False
+    assert data["suggested_filament"]["series"] == "PLA Matte"
+    assert data["suggested_filament"]["spool_weight_g"] == 1000
+
+
+def test_scan_accepts_a_twelve_digit_code128_payload(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    # A 12-digit Code128 payload is not a UPC-A. Padding it would produce an
+    # EAN-13 with a bad check digit and a 422.
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "123456789012", "create": False, "type": "code128"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["code"] == "123456789012"
+    assert r.json()["found"] is False
+
+
+def test_scan_without_a_type_keeps_ean13_validation(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337032381", "create": False},
+    )
+
+    assert r.status_code == 422
+
+
+def test_ams_does_not_adopt_a_full_spool_for_a_partial_tray(
+    db: Session,
+) -> None:
+    printer = Printer(name="Partial tray", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Partial Test",
+        color_hex="#112233",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    full = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        barcode="PARTIAL-TEST",
+        source="barcode",
+    )
+    db.add(full)
+    db.commit()
+    db.refresh(full)
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "PARTIAL1",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "112233",
+                        "tray_weight": "1000",
+                        "remain": "36",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "partial")
+
+    db.expire_all()
+    untouched = db.get(Spool, full.id)
+    assert untouched is not None
+    assert untouched.tag_uid is None
+
+    created = db.exec(select(Spool).where(Spool.tag_uid == "PARTIAL1")).one()
+    assert created.id != full.id
+    assert created.source == "ams"
+    assert created.remaining_g == 360
+    assert created.remaining_unknown is False
+
+
+def test_ams_adopts_a_partial_spool_with_a_matching_weight(
+    db: Session,
+) -> None:
+    printer = Printer(name="Matching partial", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Matching Partial",
+        color_hex="#445566",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    partial = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=365,
+        barcode="MATCHING-PARTIAL",
+        source="barcode",
+    )
+    db.add(partial)
+    db.commit()
+    db.refresh(partial)
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "MATCH123",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "445566",
+                        "tray_weight": "1000",
+                        "remain": "36",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "match")
+
+    db.expire_all()
+    adopted = db.get(Spool, partial.id)
+    assert adopted is not None
+    assert adopted.tag_uid == "MATCH123"
+    assert adopted.remaining_g == 360
+
+
+def test_ams_unknown_remaining_creates_an_unknown_spool(
+    db: Session,
+) -> None:
+    printer = Printer(name="Unknown weight", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Unknown Weight",
+        color_hex="#778899",
+        bambu_info_idx="GFL99",
+        spool_weight_g=1000,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    full = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        barcode="UNKNOWN-TEST",
+        source="barcode",
+    )
+    db.add(full)
+    db.commit()
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "UNKNOWN1",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "778899",
+                        "tray_weight": "1000",
+                        "remain": "-1",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "unknown")
+
+    db.expire_all()
+    created = db.exec(select(Spool).where(Spool.tag_uid == "UNKNOWN1")).one()
+    assert created.remaining_unknown is True
+    assert created.remaining_g == 1000
+    assert created.remaining_g != 0
+
+
+def test_support_skus_do_not_collapse(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    codes = ("6975337030409", "6975337038078")
+    for code in codes:
+        r = client.post(
+            f"{settings.API_V1_STR}/spools/scan/barcode",
+            headers=superuser_token_headers,
+            json={"code": code, "create": True},
+        )
+        assert r.status_code == 200, r.text
+
+    filaments = db.exec(select(Filament).where(Filament.material == "Support")).all()
+    by_series = {filament.series: filament for filament in filaments}
+    assert by_series["Support W"].spool_weight_g == 750
+    assert by_series["Support for ABS"].spool_weight_g == 1000
+
+    spools = db.exec(select(Spool).where(Spool.barcode.in_(codes))).all()
+    assert sorted(spool.total_weight_g for spool in spools) == [750, 1000]
+
+
+def test_scan_and_confirm_are_idempotent(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    scan_payload = {
+        "code": "6975337032380",
+        "create": True,
+        "request_id": "scan-request-1",
+    }
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json=scan_payload,
+    )
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json=scan_payload,
+    )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["spool"]["id"] == second.json()["spool"]["id"]
+
+    db.expire_all()
+    assert (
+        len(db.exec(select(Spool).where(Spool.barcode == "6975337032380")).all()) == 1
+    )
+
+    confirm_payload = {
+        "code": "TEST-IDEMPOTENT-CONFIRM",
+        "request_id": "confirm-request-1",
+        "filament": {
+            "brand": "Test",
+            "material": "PLA",
+            "color_name": "Idempotent",
+            "color_hex": "#112233",
+        },
+        "total_weight_g": 1000,
+    }
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json=confirm_payload,
+    )
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json=confirm_payload,
+    )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["spool"]["id"] == second.json()["spool"]["id"]
+    db.expire_all()
+    assert (
+        len(
+            db.exec(
+                select(Spool).where(Spool.barcode == "TEST-IDEMPOTENT-CONFIRM")
+            ).all()
+        )
+        == 1
+    )
+
+
+def test_empty_request_id_is_treated_as_absent(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    payload = {"code": "6975337032380", "create": True, "request_id": ""}
+    for _ in range(2):
+        r = client.post(
+            f"{settings.API_V1_STR}/spools/scan/barcode",
+            headers=superuser_token_headers,
+            json=payload,
+        )
+        assert r.status_code == 200, r.text
+
+
+def test_request_id_cannot_be_reused_for_another_barcode(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={
+            "code": "6975337032380",
+            "create": True,
+            "request_id": "shared-id",
+        },
+    )
+    assert first.status_code == 200, first.text
+
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={
+            "code": "6975337031376",
+            "create": True,
+            "request_id": "shared-id",
+        },
+    )
+    assert second.status_code == 409
+
+
+def test_ams_adopts_a_750g_spool_by_percentage(
+    db: Session,
+) -> None:
+    printer = Printer(name="Ratio test", serial=random_lower_string())
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Ratio",
+        color_hex="#445566",
+        bambu_info_idx="GFL99",
+        spool_weight_g=750,
+    )
+    db.add(printer)
+    db.add(filament)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=750,
+        remaining_g=375,
+        barcode="RATIO-TEST",
+        source="barcode",
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    ams = {
+        "ams": [
+            {
+                "id": "0",
+                "tray": [
+                    {
+                        "id": "0",
+                        "tag_uid": "RATIO123",
+                        "tray_type": "PLA",
+                        "tray_info_idx": "GFL99",
+                        "tray_color": "445566",
+                        "tray_weight": "1000",
+                        "remain": "50",
+                    }
+                ],
+            }
+        ]
+    }
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {"tray_now": 0, "ams": ams}
+    client._sync_ams_trays(ams, "ratio")
+
+    db.expire_all()
+    adopted = db.get(Spool, spool.id)
+    assert adopted is not None
+    assert adopted.tag_uid == "RATIO123"
+    assert adopted.remaining_g == 375
+
+
+def test_preset_match_uses_all_colours(
+    db: Session,
+) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = Printer(name="Preset colours", serial=random_lower_string())
+    older = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Older colour",
+        color_hex="#111111",
+        bambu_info_idx="GFL99",
+    )
+    younger = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Younger colour",
+        color_hex="#222222",
+        bambu_info_idx="GFL99",
+    )
+    db.add(printer)
+    db.add(older)
+    db.add(younger)
+    db.commit()
+    db.refresh(printer)
+    db.refresh(older)
+    db.refresh(younger)
+
+    spool = Spool(
+        filament_id=younger.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    task = {"amsDetailMapping": [{"filamentId": "GFL99", "weight": 100}]}
+    client._deduct_filament_from_spools(db, task)
+    db.commit()
+
+    db.expire_all()
+    stored = db.get(Spool, spool.id)
+    assert stored is not None
+    assert stored.remaining_g == 900
+
+
+def test_scan_backfills_series_on_an_existing_filament(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    # A single-series colour group can safely adopt and relabel a legacy row.
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Legacy Matte",
+        color_hex="#D3B7A7",
+        spool_weight_g=1000,
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337030126", "create": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["spool"]["filament_id"] == str(filament.id)
+
+    db.expire_all()
+    updated = db.get(Filament, filament.id)
+    assert updated is not None
+    assert updated.series == "PLA Matte"
+
+
+def test_ambiguous_colour_group_is_not_relabelled(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    legacy = Filament(
+        brand="Bambu Lab",
+        material="Support",
+        color_name="Legacy Support",
+        color_hex="#FFFFFF",
+        spool_weight_g=1000,
+    )
+    db.add(legacy)
+    db.commit()
+    db.refresh(legacy)
+
+    # The white Support group contains several catalog series. The legacy row
+    # could be any of them, so it must not be relabelled; the scan creates
+    # Support for PLA instead.
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337031055", "create": True},
+    )
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    unchanged = db.get(Filament, legacy.id)
+    assert unchanged is not None
+    assert unchanged.series is None
+    assert unchanged.spool_weight_g == 1000
+
+    spool = db.exec(select(Spool).where(Spool.barcode == "6975337031055")).one()
+    assert spool.filament_id != legacy.id
+    created = db.get(Filament, spool.filament_id)
+    assert created is not None
+    assert created.series == "Support for PLA"
+    assert created.spool_weight_g == 500
+
+
+def test_whitespace_barcode_is_rejected(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    for path in ("/spools/scan/barcode", "/spools/scan/barcode/confirm"):
+        payload = {"code": "   "}
+        if path.endswith("confirm"):
+            payload["filament"] = {
+                "brand": "Test",
+                "material": "PLA",
+                "color_name": "Blank",
+                "color_hex": "#000000",
+            }
+        r = client.post(
+            f"{settings.API_V1_STR}{path}",
+            headers=superuser_token_headers,
+            json=payload,
+        )
+        assert r.status_code == 422, (path, r.text)
+
+
+def test_replay_with_a_cleared_barcode_is_rejected(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="No barcode",
+        color_hex="#101010",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    spool = Spool(
+        filament_id=filament.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        barcode=None,
+        request_id="cleared-barcode",
+    )
+    db.add(spool)
+    db.commit()
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={
+            "code": "6975337032380",
+            "create": True,
+            "request_id": "cleared-barcode",
+        },
+    )
+    assert r.status_code == 409
+
+
+def test_scan_prefers_a_series_match_over_the_stored_weight(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    # The AMS created this row without a box weight, so it picked the 1000 g
+    # default. Scanning the 750 g box must reuse the same product instead of
+    # splitting Support W into two filaments.
+    existing = Filament(
+        brand="Bambu Lab",
+        material="Support",
+        series="Support W",
+        color_name="Support W",
+        color_hex="#FFFFFF",
+        bambu_info_idx=None,
+        spool_weight_g=1000,
+    )
+    db.add(existing)
+    db.commit()
+    db.refresh(existing)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337030409", "create": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["spool"]["filament_id"] == str(existing.id)
+
+    db.expire_all()
+    updated = db.get(Filament, existing.id)
+    assert updated is not None
+    assert updated.spool_weight_g == 750
+    spool = db.exec(select(Spool).where(Spool.barcode == "6975337030409")).one()
+    assert spool.total_weight_g == 750
+
+
+def test_scan_prefers_the_same_weight_inside_a_series(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    light = Filament(
+        brand="Bambu Lab",
+        material="ABS",
+        series="ABS",
+        color_name="Black 750",
+        color_hex="#000000",
+        spool_weight_g=750,
+        bambu_info_idx="GFB00",
+    )
+    heavy = Filament(
+        brand="Bambu Lab",
+        material="ABS",
+        series="ABS",
+        color_name="Black 1000",
+        color_hex="#000000",
+        spool_weight_g=1000,
+        bambu_info_idx="GFB00",
+    )
+    db.add(light)
+    db.add(heavy)
+    db.commit()
+    db.refresh(light)
+    db.refresh(heavy)
+
+    r = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode",
+        headers=superuser_token_headers,
+        json={"code": "6975337030331", "create": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["spool"]["filament_id"] == str(heavy.id)
+
+    db.expire_all()
+    assert db.get(Filament, light.id).spool_weight_g == 750  # type: ignore[union-attr]
+    assert db.get(Filament, heavy.id).spool_weight_g == 1000  # type: ignore[union-attr]

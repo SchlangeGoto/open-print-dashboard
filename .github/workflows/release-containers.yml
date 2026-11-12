@@ -1,0 +1,192 @@
+name: Release Containers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-containers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    # No deployable version tag may be pushed from a branch that is not main.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      main_tip: ${{ steps.main_tip.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the tag to be on main
+        id: main_tip
+        run: |
+          main_tip=""
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            git fetch --no-tags origin main
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+            main_tip=$(git rev-parse origin/main)
+          else
+            echo "Not a tag push; skipping the ancestry check."
+          fi
+          echo "sha=${main_tip}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: guard
+    # A manual run may publish from main, but never from a feature branch.
+    if: github.ref_type == 'tag' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: .
+            file: backend/Dockerfile
+            build_args: ""
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile.prod
+            build_args: |
+              NEXT_PUBLIC_API_URL=
+              NEXT_PUBLIC_DEMO_MODE=false
+          - name: demo
+            context: frontend
+            file: frontend/Dockerfile.prod
+            build_args: |
+              NEXT_PUBLIC_API_URL=
+              NEXT_PUBLIC_DEMO_MODE=true
+          - name: site
+            context: site
+            file: site/Dockerfile
+            build_args: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangengoto/open-print-dashboard' }}/${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.build_args }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          provenance: true
+          sbom: true
+
+  latest:
+    # Only a tag that is already on main may move latest. The matrix above
+    # pushes version tags only; this single job flips all components after
+    # every build has finished.
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    needs: [guard, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: release-containers-latest
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangengoto/open-print-dashboard' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check this is the newest semver release
+        id: release_tag
+        env:
+          GUARD_MAIN_TIP: ${{ needs.guard.outputs.main_tip }}
+        run: |
+          echo "eligible=false" >> "$GITHUB_OUTPUT"
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Not a semver release tag; latest unchanged."
+            exit 0
+          fi
+          # Only tags merged into main can represent a release. A rejected
+          # branch tag must not block the next real release forever.
+          git fetch --no-tags origin main
+          git fetch --tags --force
+          newest=$(git tag --merged origin/main --list 'v*' --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ "${GITHUB_REF_NAME}" != "${newest}" ]; then
+            echo "::warning::${GITHUB_REF_NAME} is not the newest semver tag on main (${newest}); latest was not moved."
+            exit 0
+          fi
+          # Compare with the tip captured by the guard, not the tip after
+          # the 45-minute publish: main may legitimately advance meanwhile.
+          if [[ "$GITHUB_SHA" != "${GUARD_MAIN_TIP}" ]]; then
+            echo "::warning::${GITHUB_REF_NAME} was not tagged from the main tip at release time; latest was not moved."
+            exit 0
+          fi
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote the version tags to latest
+        if: steps.release_tag.outputs.eligible == 'true'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for name in backend frontend demo site; do
+            docker buildx imagetools create \
+              -t "${IMAGE_PREFIX}/${name}:latest" \
+              "${IMAGE_PREFIX}/${name}:${VERSION}"
+          done

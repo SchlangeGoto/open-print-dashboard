@@ -1,0 +1,123 @@
+name: Test Docker Compose
+
+on:
+  pull_request:
+    paths:
+      - "backend/Dockerfile"
+      - "backend/docker-entrypoint.sh"
+      - "frontend/Dockerfile"
+      - "frontend/Dockerfile.prod"
+      - "site/**"
+      - "compose.yml"
+      - "compose.prod.yml"
+      - "compose.public.yml"
+      - "compose.public.local.yml"
+      - "compose.ghcr.yml"
+      - "deploy/Caddyfile"
+      - "deploy/Caddyfile.public"
+      - "backend/scripts/start.sh"
+      - "backend/scripts/prestart.sh"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "backend/pyproject.toml"
+      - "frontend/next.config.ts"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/test-docker-compose.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-docker-compose-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          sed -i 's/^SECRET_KEY=.*/SECRET_KEY=ci-secret-0123456789abcdef0123456789abcdef0123456789abcdef/' .env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-password/' .env
+          sed -i 's/^EMAILS_FROM_EMAIL=.*/EMAILS_FROM_EMAIL=/' .env
+          sed -i 's/^SMTP_HOST=.*/SMTP_HOST=/' .env
+
+      - name: Validate the development compose
+        run: docker compose -f compose.yml config > /dev/null
+
+      - name: Validate public compose
+        run: docker compose -f compose.public.yml config > /dev/null
+
+      - name: Validate public compose with the local override
+        run: docker compose -f compose.public.yml -f compose.public.local.yml config > /dev/null
+
+      - name: Validate GHCR compose
+        env:
+          POSTGRES_PASSWORD: ci-password
+        run: docker compose -f compose.ghcr.yml config > /dev/null
+
+      - name: Check pinned image tags
+        run: |
+          for image in postgres caddy; do
+            tags=$(grep -h "image: ${image}:" compose*.yml | sed 's/.*image: //' | sort -u || true)
+            test -n "$tags"
+            if [ "$(printf '%s\n' "$tags" | wc -l)" -ne 1 ]; then
+              echo "Inconsistent ${image} tags across compose files:" >&2
+              printf '%s\n' "$tags" >&2
+              exit 1
+            fi
+          done
+
+      - name: Validate public Caddyfile
+        env:
+          SITE_DOMAIN: openprintdash.app
+          DEMO_DOMAIN: demo.openprintdash.app
+        run: |
+          docker run --rm \
+            -e SITE_DOMAIN -e DEMO_DOMAIN \
+            -v "$PWD/deploy:/etc/caddy:ro" \
+            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile.public
+
+      - name: Validate dashboard Caddyfile
+        env:
+          DOMAIN: localhost
+        run: |
+          docker run --rm \
+            -e DOMAIN \
+            -v "$PWD/deploy:/etc/caddy:ro" \
+            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Build and start production stack
+        run: docker compose -f compose.prod.yml up -d --build
+
+      - name: Wait for backend
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/api/v1/utils/health-check/ >/dev/null; then
+              echo "backend is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f compose.prod.yml logs --no-color
+          exit 1
+
+      - name: Check frontend
+        run: curl -fsS http://localhost:3000/ >/dev/null
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f compose.prod.yml logs --no-color
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f compose.prod.yml down -v --remove-orphans

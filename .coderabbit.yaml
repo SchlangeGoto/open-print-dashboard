@@ -1,0 +1,74 @@
+language: "en-US"
+
+reviews:
+  # "chill" keeps noise down; use "assertive" if you want more findings.
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 10
+    base_branches:
+      - "^main$"
+      - "^feat/marketing-site$"
+
+  path_filters:
+    - "!**/package-lock.json"
+    - "!**/uv.lock"
+    - "!**/*.lock"
+    - "!**/dist/**"
+    - "!**/.next/**"
+    - "!**/playwright-report/**"
+    - "!**/test-results/**"
+    - "!**/htmlcov/**"
+    - "!**/.agents/**"
+    - "!site/public/screenshots/**"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.gif"
+    - "!**/*.webp"
+
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Follow .github/REVIEW.md and AGENTS.md.
+        Report only confident findings with severity, file:line, the failure
+        scenario, and a concrete fix. Do not comment on formatting or style
+        that ESLint, Ruff, or Prettier already enforces.
+
+    - path: "backend/**"
+      instructions: |
+        Focus on FastAPI/SQLModel correctness, auth and refresh-token rotation,
+        database migrations, transaction boundaries, printer/MQTT state, and
+        security. Flag model changes without an Alembic migration.
+
+    - path: "frontend/**"
+      instructions: |
+        Focus on React hooks/effects, Next.js server/client boundaries, API
+        contract mismatches, accessibility, and state bugs. Ignore Tailwind
+        styling nits unless they break layout or accessibility.
+
+    - path: "mobile/**"
+      instructions: |
+        Focus on Expo/React Native behavior, secure storage, camera/barcode
+        handling, local-network requests, and parity with the web dashboard.
+
+    - path: "site/**"
+      instructions: |
+        Focus on static-export correctness, broken links, accessibility, and
+        content accuracy. Ignore visual taste unless it is a real usability bug.
+
+    - path: "**/*.sql"
+      instructions: |
+        Flag destructive migrations, missing indexes on new foreign keys, and
+        data-loss risks.
+
+chat:
+  auto_reply: true

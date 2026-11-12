@@ -1,0 +1,72 @@
+name: Test Site
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "site/**"
+      - ".github/workflows/test-site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/test-site.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check image variants
+        run: npm run images:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Build and check the nginx image
+        run: |
+          docker build -t opd-site-test .
+          docker run -d --name opd-site-test -p 8080:8080 opd-site-test
+          trap 'docker rm -f opd-site-test' EXIT
+          docker exec opd-site-test nginx -t
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/install/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/install/ > /dev/null
+          missing=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/definitely-missing)
+          [ "$missing" = "404" ] || { echo "missing path returned $missing" >&2; exit 1; }

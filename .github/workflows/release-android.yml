@@ -1,0 +1,144 @@
+name: Release Android
+
+# Builds a signed, directly installable APK with EAS Build. There is no Play
+# Store step: the APK is the release artifact. The `production` profile in
+# mobile/eas.json still produces an AAB if the app ever ships to Play.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    # Only tags on main may publish an APK.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the tag to be on main
+        run: |
+          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+            echo "Not a tag push; skipping the ancestry check."
+            exit 0
+          fi
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+  build:
+    needs: guard
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    # Free-tier EAS builds sit in a low-priority queue and can wait 90+ minutes.
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8
+        with:
+          eas-version: 27.x
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check the app version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(node -p "require('./app.json').expo.version")
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match expo.version ${version}"
+            exit 1
+          fi
+
+      - name: Build signed APK
+        run: eas build --platform android --profile preview --non-interactive --wait --json > eas-build.json
+
+      - name: Show build result
+        run: cat eas-build.json
+
+      - name: Download APK
+        run: |
+          mkdir -p artifacts
+          url=$(jq -r '.[0].artifacts.buildUrl // empty' eas-build.json)
+          [ -n "$url" ] || { echo "EAS returned no APK URL" >&2; exit 1; }
+          curl -fL "$url" -o artifacts/unsigned-name.apk
+          ls -lh artifacts
+
+      - name: Name APK after the release
+        id: apk
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=""
+          [ "$REF_TYPE" = "tag" ] && version="$REF_NAME"
+          [ -n "$version" ] || version="$(node -p "require('./app.json').expo.version")"
+          name="openprint-dashboard-${version}.apk"
+          mv artifacts/unsigned-name.apk "artifacts/$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          ls -lh "artifacts/$name"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-apk
+          path: mobile/artifacts/${{ steps.apk.outputs.name }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      # The job has no checkout; gh needs the repository explicitly.
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download the APK artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          gh run download "$GITHUB_RUN_ID" -n android-apk -D artifacts
+          ls -lh artifacts
+
+      - name: Attach to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes
+          gh release upload "$REF_NAME" artifacts/*.apk --clobber

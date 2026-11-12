@@ -1,0 +1,143 @@
+import uuid
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import col, func, select
+
+from app import crud
+from app.api.deps import SessionDep, get_current_user
+from app.models import (
+    Filament,
+    FilamentCreate,
+    FilamentPublic,
+    FilamentPublicWithStats,
+    FilamentsPublic,
+    FilamentStats,
+    FilamentUpdate,
+    Message,
+    Spool,
+    SpoolPublic,
+    SpoolsPublic,
+)
+
+router = APIRouter(
+    prefix="/filaments",
+    tags=["filaments"],
+    dependencies=[Depends(get_current_user)],
+)
+
+
+@router.get("/", response_model=FilamentsPublic)
+def read_filaments(session: SessionDep) -> Any:
+    """Retrieve all filaments, including remaining stock and average price."""
+    filaments = session.exec(select(Filament)).all()
+
+    remaining_rows = session.exec(
+        select(Spool.filament_id, func.sum(Spool.remaining_g))
+        .where(col(Spool.remaining_unknown).is_(False))
+        .group_by(col(Spool.filament_id))
+    ).all()
+    remaining = {filament_id: total or 0.0 for filament_id, total in remaining_rows}
+
+    # One window query keeps the five most recent prices per filament instead
+    # of issuing two queries for every row.
+    ranked_prices = (
+        select(
+            Spool.filament_id,
+            Spool.price_per_kg,
+            func.row_number()
+            .over(
+                partition_by=col(Spool.filament_id),
+                order_by=col(Spool.created_at).desc(),
+            )
+            .label("rn"),
+        )
+        .where(col(Spool.price_per_kg) > 0)
+        .subquery()
+    )
+    price_rows = session.exec(
+        select(ranked_prices.c.filament_id, ranked_prices.c.price_per_kg).where(
+            ranked_prices.c.rn <= 5
+        )
+    ).all()
+    prices_by_filament: dict[uuid.UUID, list[float]] = {}
+    for filament_id, price in price_rows:
+        if price and price > 0:
+            prices_by_filament.setdefault(filament_id, []).append(price)
+
+    data: list[FilamentPublicWithStats] = []
+    for filament in filaments:
+        prices = prices_by_filament.get(filament.id, [])
+        avg_price = sum(prices) / len(prices) if prices else None
+        data.append(
+            FilamentPublicWithStats.model_validate(
+                filament,
+                update={
+                    "total_remaining_g": remaining.get(filament.id, 0.0),
+                    "avg_price_per_kg": round(avg_price, 2) if avg_price else None,
+                },
+            )
+        )
+    return FilamentsPublic(data=data, count=len(data))
+
+
+@router.get("/stats/{filament_id}", response_model=FilamentStats)
+def read_filament_stats(filament_id: uuid.UUID, session: SessionDep) -> Any:
+    if not session.get(Filament, filament_id):
+        raise HTTPException(status_code=404, detail="Filament not found")
+    return crud.get_filament_stats(session=session, filament_id=filament_id)
+
+
+@router.get("/{filament_id}/spools", response_model=SpoolsPublic)
+def read_filament_spools(filament_id: uuid.UUID, session: SessionDep) -> Any:
+    if not session.get(Filament, filament_id):
+        raise HTTPException(status_code=404, detail="Filament not found")
+    spools = session.exec(select(Spool).where(Spool.filament_id == filament_id)).all()
+    return SpoolsPublic(
+        data=[SpoolPublic.model_validate(s) for s in spools], count=len(spools)
+    )
+
+
+@router.get("/{filament_id}", response_model=FilamentPublic)
+def read_filament(filament_id: uuid.UUID, session: SessionDep) -> Any:
+    filament = session.get(Filament, filament_id)
+    if not filament:
+        raise HTTPException(status_code=404, detail="Filament not found")
+    return filament
+
+
+@router.post("/", response_model=FilamentPublic)
+def create_filament(*, session: SessionDep, filament_in: FilamentCreate) -> Any:
+    filament = Filament.model_validate(filament_in)
+    session.add(filament)
+    session.commit()
+    session.refresh(filament)
+    return filament
+
+
+@router.put("/{filament_id}", response_model=FilamentPublic)
+def update_filament(
+    *,
+    session: SessionDep,
+    filament_id: uuid.UUID,
+    filament_in: FilamentUpdate,
+) -> Any:
+    filament = session.get(Filament, filament_id)
+    if not filament:
+        raise HTTPException(status_code=404, detail="Filament not found")
+    update_dict = filament_in.model_dump(exclude_unset=True)
+    filament.sqlmodel_update(update_dict)
+    session.add(filament)
+    session.commit()
+    session.refresh(filament)
+    return filament
+
+
+@router.delete("/{filament_id}", response_model=Message)
+def delete_filament(filament_id: uuid.UUID, session: SessionDep) -> Any:
+    filament = session.get(Filament, filament_id)
+    if not filament:
+        raise HTTPException(status_code=404, detail="Filament not found")
+    session.delete(filament)
+    session.commit()
+    return Message(message="Filament deleted")

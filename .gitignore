@@ -2,9 +2,8 @@
 node_modules/
 .pnp
 .pnp.js
-.yarn/install-state.gz
 
-# Testing
+# Testing / coverage
 coverage/
 .jest/
 .pytest_cache/
@@ -13,6 +12,8 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.ruff_cache/
+backend/htmlcov/
 
 # Build & Production
 .next/
@@ -74,12 +75,6 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Tools
-.python-version
-pnpm-lock.yaml
-yarn.lock
-package-lock.json
-
 # Database
 *.db
 *.sqlite
@@ -92,6 +87,26 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
 
-# AI
-AGENTS.md
+# Internal design reference (third-party screenshots, do not publish)
+docs/website-research/screenshots/
+
+# Local Expo exports
+mobile/dist-*/
+
+# Local agent config (OpenCode), intentionally not committed
+.opencode/
+
+# Android/iOS signing material — never commit. EAS stores the real copy.
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+mobile/credentials.json
+
+# Auto-generated SECRET_KEY (local runs outside Docker)
+/data/

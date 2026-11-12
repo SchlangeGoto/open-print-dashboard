@@ -1,0 +1,151 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AlertCircle, FlaskConical } from "lucide-react";
+
+import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { isDemoActive } from "@/lib/demo";
+import { AuthLayout } from "@/components/layout/AuthLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { LoadingButton } from "@/components/ui/loading-button";
+
+export default function Home() {
+  const router = useRouter();
+  const { username, isLoading, login, demoAvailable, enterDemo } = useAuth();
+  const [checking, setChecking] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (username) {
+      router.push("/dashboard");
+      return;
+    }
+
+    api
+      .getSetupStatus()
+      .then((data) => {
+        if (!data.user_created && !isDemoActive()) {
+          setNeedsSetup(true);
+          router.push("/setup");
+        }
+        setChecking(false);
+      })
+      .catch(() => setChecking(false));
+  }, [isLoading, username, router]);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api.loginUser(email, password);
+      if (result.ok) {
+        login(result.username);
+        router.push("/dashboard");
+      }
+    } catch (err: any) {
+      setError(err.message || "Invalid credentials");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (isLoading || checking || needsSetup) {
+    return (
+      <main className="flex min-h-svh items-center justify-center bg-background">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Spinner className="size-5 text-primary" />
+          <span className="text-sm">Loading...</span>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <AuthLayout
+      title="Welcome back"
+      description="Sign in to your dashboard"
+      footer={
+        <Link href="/recover-password" className="text-primary hover:underline">
+          Forgot your password?
+        </Link>
+      }
+    >
+      <form onSubmit={handleLogin} className="space-y-4">
+        <Field>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+        </Field>
+
+        {error ? (
+          <Alert variant="destructive">
+            <AlertCircle />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <LoadingButton type="submit" loading={busy} className="w-full">
+          Sign in
+        </LoadingButton>
+      </form>
+
+      {demoAvailable ? (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              or
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={enterDemo}
+          >
+            <FlaskConical /> Open demo dashboard
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Demo mode — mock data, no backend required.
+          </p>
+        </div>
+      ) : null}
+    </AuthLayout>
+  );
+}

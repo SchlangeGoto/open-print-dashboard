@@ -1,0 +1,86 @@
+# Production stack. For local development use compose.yml instead.
+#
+#   cp .env.example .env
+#   # set SECRET_KEY, POSTGRES_PASSWORD, NEXT_PUBLIC_API_URL, FRONTEND_HOST
+#   docker compose -f compose.prod.yml up -d --build
+#
+# NEXT_PUBLIC_API_URL is baked into the frontend at build time. Rebuild the
+# frontend image after changing it.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-opd}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}
+      - POSTGRES_DB=${POSTGRES_DB:-openprintdashboard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-opd} -d ${POSTGRES_DB:-openprintdashboard}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: openprintdashboard/backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    environment:
+      - PROJECT_NAME=${PROJECT_NAME:-OpenPrintDashboard}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - BAMBU_CREDENTIALS_KEY=${BAMBU_CREDENTIALS_KEY:-}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER:-}
+      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD:-}
+      - FRONTEND_HOST=${FRONTEND_HOST:-http://localhost:3000}
+      - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}
+      - API_V1_STR=${API_V1_STR:-/api/v1}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-opd}:${POSTGRES_PASSWORD:?Variable not set}@db:5432/${POSTGRES_DB:-openprintdashboard}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - SMTP_SSL=${SMTP_SSL:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - BAMBU_CLOUD_MQTT_HOST=${BAMBU_CLOUD_MQTT_HOST:-us.mqtt.bambulab.com}
+      - BAMBU_CLOUD_MQTT_PORT=${BAMBU_CLOUD_MQTT_PORT:-8883}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - backend_data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_DEMO_MODE: "false"
+    image: openprintdashboard/frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  postgres_data:
+  backend_data:

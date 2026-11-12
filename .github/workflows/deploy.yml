@@ -108,11 +108,24 @@ jobs:
           cd "$DEPLOY_PATH"
 
           # The compose file and any tracked config come from the release tag.
-          # Untracked files such as .env are left alone.
+          # The untracked .env survives the checkout; only its IMAGE_TAG line is
+          # rewritten so a later plain `up -d` stays on this release instead of
+          # falling back to `latest`.
           git fetch --tags origin
           git checkout --detach "$TAG"
 
           export IMAGE_PREFIX IMAGE_TAG="${TAG#v}"
+
+          if [ ! -f .env ]; then
+            echo "::error::Missing .env in $DEPLOY_PATH; create it from .env.example before deploying."
+            exit 1
+          fi
+          if grep -q '^IMAGE_TAG=' .env; then
+            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
+          else
+            printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+          fi
+
           docker compose -f compose.ghcr.yml pull
           docker compose -f compose.ghcr.yml up -d
           docker compose -f compose.ghcr.yml ps
@@ -178,6 +191,16 @@ jobs:
           git checkout --detach "$TAG"
 
           export IMAGE_PREFIX IMAGE_TAG="${TAG#v}"
+
+          # Same reason as the dashboard: keep the deployed tag in the untracked
+          # .env so a later plain `up -d` cannot jump back to `latest`. This
+          # file also carries SITE_DOMAIN / DEMO_DOMAIN when they are custom.
+          if grep -q '^IMAGE_TAG=' .env 2>/dev/null; then
+            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
+          else
+            printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+          fi
+
           docker compose -f compose.public.yml pull
           docker compose -f compose.public.yml up -d
           docker compose -f compose.public.yml ps

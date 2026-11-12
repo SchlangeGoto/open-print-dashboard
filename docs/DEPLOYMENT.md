@@ -190,9 +190,12 @@ SITE_DOMAIN=openprintdash.app
 DEMO_DOMAIN=demo.openprintdash.app
 ```
 
-The deploy workflow sets `IMAGE_PREFIX` and `IMAGE_TAG` itself; do not pin
-`IMAGE_TAG` in `.env` or it will fight the tag being deployed. The dashboard
-clone likewise needs its normal `.env` from `.env.example`.
+The deploy workflow exports `IMAGE_PREFIX` and `IMAGE_TAG` for the pull and
+rewrites the `IMAGE_TAG=` line in the server `.env`. A later plain
+`docker compose ... up -d` therefore stays on the deployed release instead of
+falling back to `latest`, which is what makes a manual rollback stick. Do not
+edit that line by hand. The dashboard clone needs its normal `.env` from
+`.env.example`; deployment fails if it is missing.
 
 ### Secrets
 

@@ -140,6 +140,10 @@ jobs:
 
           docker compose -f compose.ghcr.yml pull
           docker compose -f compose.ghcr.yml up -d
+          # A changed Caddyfile does not change the service definition, so
+          # `up -d` alone leaves the old configuration running. Recreate Caddy
+          # so the routes from this tag are actually served.
+          docker compose -f compose.ghcr.yml up -d --force-recreate --no-deps caddy
           docker compose -f compose.ghcr.yml ps
 
           if [ -n "$HEALTH_URL" ]; then
@@ -227,6 +231,8 @@ jobs:
 
           docker compose -f compose.public.yml pull
           docker compose -f compose.public.yml up -d
+          # Same reason as the dashboard: reload the checked-out Caddyfile.
+          docker compose -f compose.public.yml up -d --force-recreate --no-deps caddy
           docker compose -f compose.public.yml ps
 
           if [ -n "$HEALTH_URL" ]; then

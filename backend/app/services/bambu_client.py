@@ -537,21 +537,14 @@ class BambuClient:
                 ).first()
                 if not job:
                     return
-                if job.filament_deducted_at is None and job.deduction_spools:
-                    # A deferred deduction is still pending; reopening the
-                    # row would drop it out of the retry query and discard
-                    # the recorded spools.
-                    logger.info(
-                        "Keeping the deferred deduction for task %s; not reopening",
-                        task_id,
-                    )
-                    return
                 job.status = 4
                 job.finished_at = None
                 job.finish_requested_at = None
                 job.finish_attempts = 0
                 job.finish_state = None
-                job.deduction_spools = None
+                # Keep deduction_spools: the deferred map and the open state
+                # are not mutually exclusive, and the eventual finish still
+                # needs the rolls recorded for the previous run.
                 session.add(job)
                 session.commit()
         except Exception as exc:
@@ -824,7 +817,6 @@ class BambuClient:
                         weight,
                     )
                     if usage:
-                        job.filament_usage = json.dumps(usage)
                         primary = max(usage, key=lambda key: usage[key]["weight"] or 0)
                         job.filament_id = uuid.UUID(primary)
                         total_cost = sum(item["cost"] or 0 for item in usage.values())
@@ -1394,21 +1386,12 @@ class BambuClient:
                     update(PrintJob)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == cloud_task_id)
-                    # Never wipe an unclaimed deferred deduction; the retry
-                    # still owns that map.
-                    .where(
-                        or_(
-                            PrintJob.filament_deducted_at.is_not(None),
-                            PrintJob.deduction_spools.is_(None),
-                        )
-                    )
                     .values(
                         status=4,
                         finished_at=None,
                         finish_requested_at=None,
                         finish_attempts=0,
                         finish_state=None,
-                        deduction_spools=None,
                     )
                 )
                 session.commit()
@@ -1491,7 +1474,6 @@ class BambuClient:
         if existing is not None:
             return
         usage = {str(filament_id): {"weight": weight, "cost": cost}}
-        job.filament_usage = json.dumps(usage)
         if job.filament_id is None:
             job.filament_id = filament_id
         self._persist_filament_usage(session, job, usage)
@@ -1858,7 +1840,6 @@ class BambuClient:
                         task.get("weight") or job.weight,
                     )
                 if usage:
-                    job.filament_usage = json.dumps(usage)
                     primary = max(usage, key=lambda key: usage[key]["weight"] or 0)
                     job.filament_id = uuid.UUID(primary)
                     total_cost = sum(item["cost"] or 0 for item in usage.values())

@@ -278,9 +278,7 @@ class BambuCloudClient:
                     logger.warning("Cover URL returned an empty body: %s", url)
                     return None
                 media_type = (
-                    content_type
-                    if content_type.startswith("image/")
-                    else "image/jpeg"
+                    content_type if content_type.startswith("image/") else "image/jpeg"
                 )
                 return bytes(content), media_type
         except requests.RequestException as e:

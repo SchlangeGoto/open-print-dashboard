@@ -144,9 +144,6 @@ def _series_by_product() -> dict[tuple[str, str, str], frozenset[str]]:
         return _SERIES_CACHE
     groups: dict[tuple[str, str, str], set[str]] = {}
     entries = list(_catalog().values()) + list(BAMBU_BARCODES.values())
-    if _CATALOG_CACHE is None:
-        # The catalog could not be read; do not cache a partial map.
-        return {}
     for entry in entries:
         if not isinstance(entry, dict):
             continue

@@ -3614,7 +3614,14 @@ def test_multi_material_print_attributes_each_filament(
     db.expire_all()
     stored = db.get(PrintJob, job.id)
     assert stored is not None
-    usage = json.loads(stored.filament_usage or "{}")
+    rows = db.exec(
+        select(PrintJobFilamentUsage).where(
+            PrintJobFilamentUsage.print_job_id == job.id
+        )
+    ).all()
+    usage = {
+        str(row.filament_id): {"weight": row.weight_g, "cost": row.cost} for row in rows
+    }
     assert usage[str(pla.id)]["weight"] == 60
     assert usage[str(petg.id)]["weight"] == 40
     assert usage[str(pla.id)]["cost"] == 1.2
@@ -4100,9 +4107,132 @@ def test_running_edge_keeps_a_deferred_deduction(db: Session) -> None:
     db.expire_all()
     stored = db.get(PrintJob, job.id)
     assert stored is not None
-    assert stored.status == 2
-    assert stored.finished_at is not None
+    assert stored.status == 4
+    assert stored.finished_at is None
     assert stored.deduction_spools == recorded
+
+
+def test_running_edge_init_keeps_a_deferred_map(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    recorded = '{"0:0": "00000000-0000-0000-0000-000000000000"}'
+    job = PrintJob(
+        title="Deferred init",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-init-map",
+        finished_at=datetime.now(UTC),
+        deduction_spools=recorded,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-init-map",
+        "title": "Deferred init",
+        "status": 4,
+        "weight": 10,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job_init("task-init-map")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.status == 4
+    assert stored.finished_at is None
+    assert stored.deduction_spools == recorded
+
+
+def test_unmapped_finish_without_a_start_spool_is_unclaimed(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="No start spool",
+        color_hex="#AABBCC",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    spool = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        active=True,
+    )
+    db.add(spool)
+    db.commit()
+    db.refresh(spool)
+
+    job = PrintJob(
+        title="No start spool",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="task-no-start",
+        finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "task-no-start",
+        "title": "No start spool",
+        "status": 2,
+        "weight": 100,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("task-no-start", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+    stored_spool = db.get(Spool, spool.id)
+    assert stored_spool is not None
+    assert stored_spool.remaining_g == 1000
+
+
+def test_cover_proxy_keeps_the_image_content_type(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    from urllib.parse import quote
+
+    from app.services.printer_service import printer_service
+
+    monkeypatch.setattr(
+        printer_service.cloud_client,
+        "download_cover_image",
+        lambda url: (b"png-bytes", "image/png"),
+    )
+    cover = quote("http://example.com/a.png", safe="")
+    r = client.get(
+        f"{settings.API_V1_STR}/printers/cover/{cover}",
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("image/png")
+    assert r.content == b"png-bytes"
 
 
 def test_timeout_does_not_persist_usage_when_unclaimed(

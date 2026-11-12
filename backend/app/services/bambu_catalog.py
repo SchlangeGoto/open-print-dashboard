@@ -143,7 +143,8 @@ def _series_by_product() -> dict[tuple[str, str, str], frozenset[str]]:
     if _SERIES_CACHE is not None:
         return _SERIES_CACHE
     groups: dict[tuple[str, str, str], set[str]] = {}
-    entries = list(_catalog().values()) + list(BAMBU_BARCODES.values())
+    catalog = _catalog()
+    entries = list(catalog.values()) + list(BAMBU_BARCODES.values())
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -156,8 +157,13 @@ def _series_by_product() -> dict[tuple[str, str, str], frozenset[str]]:
             entry.get("color_hex") or "",
         )
         groups.setdefault(key, set()).add(str(series))
-    _SERIES_CACHE = {key: frozenset(values) for key, values in groups.items()}
-    return _SERIES_CACHE
+    result = {key: frozenset(values) for key, values in groups.items()}
+    if _CATALOG_CACHE is not None:
+        # Only a successful catalog load is cacheable. The static barcode map
+        # may still answer this call, but caching it would hide the catalog
+        # for the lifetime of the process after a transient read failure.
+        _SERIES_CACHE = result
+    return result
 
 
 def catalog_series_for(brand: Any, material: Any, color_hex: Any) -> frozenset[str]:

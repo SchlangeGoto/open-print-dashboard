@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from app.core.barcodes import ean13_check_digit, is_valid_ean13, normalize_barcode
@@ -38,3 +39,40 @@ def test_catalog_ignores_a_non_object_barcodes_map(tmp_path: Path, monkeypatch) 
         assert _catalog() == {}
     finally:
         reset_catalog_cache()
+
+
+def test_series_map_retries_after_a_catalog_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from app.services import bambu_catalog
+
+    bambu_catalog.reset_catalog_cache()
+    try:
+        monkeypatch.setattr(bambu_catalog, "_CATALOG_PATH", tmp_path / "missing.json")
+        assert (
+            bambu_catalog.catalog_series_for("Bambu Lab", "PLA", "#F99963")
+            == frozenset()
+        )
+        assert bambu_catalog._SERIES_CACHE is None
+
+        catalog = tmp_path / "catalog.json"
+        catalog.write_text(
+            json.dumps(
+                {
+                    "barcodes": {
+                        "test": {
+                            "brand": "Bambu Lab",
+                            "material": "PLA",
+                            "color_hex": "#F99963",
+                            "series": "PLA Matte",
+                        }
+                    }
+                }
+            )
+        )
+        monkeypatch.setattr(bambu_catalog, "_CATALOG_PATH", catalog)
+        assert bambu_catalog.catalog_series_for(
+            "Bambu Lab", "PLA", "#F99963"
+        ) == frozenset({"PLA Matte"})
+    finally:
+        bambu_catalog.reset_catalog_cache()

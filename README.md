@@ -56,6 +56,12 @@ the same inventory as the dashboard. The web dashboard stays complete without it
   <img src="docs/assets/readme/app-scan.jpg" alt="Barcode scanner on the native app" width="240" />
 </p>
 
+Android ships as a signed APK attached to each
+[GitHub Release](https://github.com/SchlangeGoto/open-print-dashboard/releases).
+Download `openprint-dashboard-vX.Y.Z.apk` and sideload it. Newer APKs install
+over older ones because they use the same signing key. iOS has no equivalent
+without a paid Apple Developer account.
+
 ## Self-hosted by default
 
 | Where | What lives there |
@@ -133,12 +139,28 @@ Edit the public port in `compose.prod.yml` if 3000 is already taken.
 
 ## Updating
 
+Source build:
+
 ```bash
 git pull
 docker compose -f compose.prod.yml up -d --build
 ```
 
+Prebuilt images:
+
+```bash
+export IMAGE_TAG=0.1.0
+docker compose -f compose.ghcr.yml pull
+docker compose -f compose.ghcr.yml up -d
+```
+
+Android: download the newer APK from
+[Releases](https://github.com/SchlangeGoto/open-print-dashboard/releases) and
+install it over the existing app. Keep the dashboard and app on compatible
+versions.
+
 The database lives in the `postgres_data` Docker volume and survives updates.
+Migrations run automatically in `backend/scripts/start.sh`.
 
 ## Development
 

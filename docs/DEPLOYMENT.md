@@ -152,6 +152,84 @@ docker compose -f compose.ghcr.yml up -d
 The database lives in the `postgres_data` Docker volume and survives rebuilds.
 Migrations run automatically in `backend/scripts/start.sh`.
 
+## Automatic deployment on tags (optional)
+
+`Deploy` (`.github/workflows/deploy.yml`) runs after `Release Containers`
+succeeds for a plain `vX.Y.Z` tag. It SSHes to the server, checks out the tag,
+pulls the matching images, restarts the stack, and calls an optional health URL.
+
+Both targets are disabled until their `DEPLOY_*` variable is `true`. This keeps
+tag releases working before a server is configured.
+
+### Server prerequisites
+
+- The repository is cloned on the server at the configured path.
+- `.env` is configured and the stack has been started once manually.
+- The deploy user can run `docker compose` (normally the `docker` group) and has
+  `git` and `curl`.
+- The clone has no tracked local changes; untracked files such as `.env` are
+  fine.
+
+### Secrets
+
+| Name | Purpose |
+| --- | --- |
+| `DEPLOY_SSH_KEY` | Private key for the deploy user |
+| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan` output for every deploy host |
+
+### Variables
+
+| Name | Example | Purpose |
+| --- | --- | --- |
+| `DEPLOY_DASHBOARD` | `true` | Enable `compose.ghcr.yml` deployment |
+| `DASHBOARD_HOST` | `dashboard.example.com` | SSH host |
+| `DASHBOARD_USER` | `deploy` | SSH user |
+| `DASHBOARD_PATH` | `/opt/open-print-dashboard` | Clone on the server |
+| `DASHBOARD_URL` | `https://dashboard.example.com` | Link on the deployment |
+| `DASHBOARD_HEALTH_URL` | `https://dashboard.example.com/api/v1/utils/health-check/` | Checked after restart |
+| `DEPLOY_SITE` | `true` | Enable `compose.public.yml` deployment |
+| `SITE_HOST` | `openprintdash.app` | SSH host |
+| `SITE_USER` | `deploy` | SSH user |
+| `SITE_PATH` | `/opt/openprint-public` | Clone on the server |
+| `SITE_URL` | `https://openprintdash.app` | Link on the deployment |
+| `SITE_HEALTH_URL` | `https://openprintdash.app/` | Checked after restart |
+
+### One-time setup
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
+
+# Add deploy_key.pub to ~/.ssh/authorized_keys on each server, then:
+gh secret set DEPLOY_SSH_KEY -R SchlangeGoto/open-print-dashboard < deploy_key
+ssh-keyscan -H dashboard.example.com openprintdash.app > known_hosts
+gh secret set DEPLOY_KNOWN_HOSTS -R SchlangeGoto/open-print-dashboard < known_hosts
+
+gh variable set DEPLOY_DASHBOARD -R SchlangeGoto/open-print-dashboard --body true
+gh variable set DASHBOARD_HOST -R SchlangeGoto/open-print-dashboard --body dashboard.example.com
+gh variable set DASHBOARD_USER -R SchlangeGoto/open-print-dashboard --body deploy
+gh variable set DASHBOARD_PATH -R SchlangeGoto/open-print-dashboard --body /opt/open-print-dashboard
+gh variable set DASHBOARD_URL -R SchlangeGoto/open-print-dashboard --body https://dashboard.example.com
+gh variable set DASHBOARD_HEALTH_URL -R SchlangeGoto/open-print-dashboard --body https://dashboard.example.com/api/v1/utils/health-check/
+
+gh variable set DEPLOY_SITE -R SchlangeGoto/open-print-dashboard --body true
+gh variable set SITE_HOST -R SchlangeGoto/open-print-dashboard --body openprintdash.app
+gh variable set SITE_USER -R SchlangeGoto/open-print-dashboard --body deploy
+gh variable set SITE_PATH -R SchlangeGoto/open-print-dashboard --body /opt/openprint-public
+gh variable set SITE_URL -R SchlangeGoto/open-print-dashboard --body https://openprintdash.app
+gh variable set SITE_HEALTH_URL -R SchlangeGoto/open-print-dashboard --body https://openprintdash.app/
+```
+
+### Manual deploy and rollback
+
+```bash
+gh workflow run deploy.yml -f tag=v0.1.0
+```
+
+Use the same command with an older tag to roll back. Back up the database first:
+several migrations have lossy downgrades, and redeploying an older image does not
+undo a migration.
+
+
 ## Backup
 
 ```bash

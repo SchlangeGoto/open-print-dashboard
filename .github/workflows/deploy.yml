@@ -1,0 +1,191 @@
+name: Deploy
+
+# Deploys a released tag to the server(s) after Release Containers has pushed
+# the matching GHCR images. Everything is opt-in: a target only runs when its
+# DEPLOY_* variable is set to "true" and its secrets are configured.
+#
+# Manual deploy or rollback:
+#   gh workflow run deploy.yml -f tag=v0.1.0
+on:
+  workflow_run:
+    workflows: ["Release Containers"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to deploy (for example v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    # A manual run is always allowed; an automatic run only after a successful
+    # Release Containers run.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Resolve the release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          tag=""
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="$INPUT_TAG"
+          else
+            # For a tag push, workflow_run.head_branch is the tag name.
+            tag="$RUN_BRANCH"
+          fi
+
+          # Only plain semver tags are production releases.
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Not a plain semver tag ('$tag'); nothing to deploy."
+            exit 0
+          fi
+
+          if ! git ls-remote --exit-code --tags \
+            "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${tag}" >/dev/null; then
+            echo "::error::Tag ${tag} does not exist."
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  dashboard:
+    needs: resolve
+    if: needs.resolve.outputs.tag != '' && vars.DEPLOY_DASHBOARD == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-dashboard
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ vars.DASHBOARD_URL }}
+    steps:
+      - name: Pull the release and restart the dashboard
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.DASHBOARD_HOST }}
+          SSH_USER: ${{ vars.DASHBOARD_USER }}
+          DEPLOY_PATH: ${{ vars.DASHBOARD_PATH }}
+          HEALTH_URL: ${{ vars.DASHBOARD_HEALTH_URL }}
+          IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for name in SSH_KEY KNOWN_HOSTS SSH_HOST SSH_USER DEPLOY_PATH; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing $name; see docs/DEPLOYMENT.md"
+              exit 1
+            fi
+          done
+
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "TAG=$(printf %q "$TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          # The compose file and any tracked config come from the release tag.
+          # Untracked files such as .env are left alone.
+          git fetch --tags origin
+          git checkout --detach "$TAG"
+
+          export IMAGE_PREFIX IMAGE_TAG="${TAG#v}"
+          docker compose -f compose.ghcr.yml pull
+          docker compose -f compose.ghcr.yml up -d
+          docker compose -f compose.ghcr.yml ps
+
+          if [ -n "$HEALTH_URL" ]; then
+            for _ in $(seq 1 30); do
+              if curl -fsS "$HEALTH_URL" >/dev/null; then
+                echo "Health check passed."
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "::error::Health check failed: $HEALTH_URL"
+            exit 1
+          fi
+          REMOTE
+
+  site:
+    needs: resolve
+    if: needs.resolve.outputs.tag != '' && vars.DEPLOY_SITE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-site
+      cancel-in-progress: false
+    environment:
+      name: production-site
+      url: ${{ vars.SITE_URL }}
+    steps:
+      - name: Pull the release and restart the site and demo
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.SITE_HOST }}
+          SSH_USER: ${{ vars.SITE_USER }}
+          DEPLOY_PATH: ${{ vars.SITE_PATH }}
+          HEALTH_URL: ${{ vars.SITE_HEALTH_URL }}
+          IMAGE_PREFIX: ${{ vars.IMAGE_PREFIX || 'ghcr.io/schlangegoto/open-print-dashboard' }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for name in SSH_KEY KNOWN_HOSTS SSH_HOST SSH_USER DEPLOY_PATH; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing $name; see docs/DEPLOYMENT.md"
+              exit 1
+            fi
+          done
+
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "TAG=$(printf %q "$TAG") DEPLOY_PATH=$(printf %q "$DEPLOY_PATH") HEALTH_URL=$(printf %q "$HEALTH_URL") IMAGE_PREFIX=$(printf %q "$IMAGE_PREFIX") bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          git fetch --tags origin
+          git checkout --detach "$TAG"
+
+          export IMAGE_PREFIX IMAGE_TAG="${TAG#v}"
+          docker compose -f compose.public.yml pull
+          docker compose -f compose.public.yml up -d
+          docker compose -f compose.public.yml ps
+
+          if [ -n "$HEALTH_URL" ]; then
+            for _ in $(seq 1 30); do
+              if curl -fsS "$HEALTH_URL" >/dev/null; then
+                echo "Health check passed."
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "::error::Health check failed: $HEALTH_URL"
+            exit 1
+          fi
+          REMOTE

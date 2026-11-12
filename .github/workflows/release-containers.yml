@@ -194,3 +194,19 @@ jobs:
               -t "${IMAGE_PREFIX}/${name}:latest" \
               "${IMAGE_PREFIX}/${name}:${VERSION}"
           done
+
+  deploy:
+    # Only a plain semver tag deploys. Runs after the version images and the
+    # latest promotion so the server can pull the exact released version.
+    needs: [guard, publish, latest]
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    permissions:
+      contents: read
+    # `$/` is the recommended self-repository syntax, but released actionlint
+    # does not understand it yet (rhysd/actionlint#711), so stay on `./`.
+    uses: ./.github/workflows/deploy.yml # zizmor: ignore[self-repository]
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}

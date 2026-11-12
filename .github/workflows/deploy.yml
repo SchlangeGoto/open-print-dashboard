@@ -1,15 +1,27 @@
 name: Deploy
 
 # Deploys a released tag to the server(s) after Release Containers has pushed
-# the matching GHCR images. Everything is opt-in: a target only runs when its
-# DEPLOY_* variable is set to "true" and its secrets are configured.
+# the matching GHCR images. Release Containers calls this workflow directly as
+# a final job, so no `workflow_run` trigger is involved. Everything is opt-in:
+# a target only runs when its DEPLOY_* variable is set to "true" and its
+# secrets are configured.
 #
 # Manual deploy or rollback:
 #   gh workflow run deploy.yml -f tag=v0.1.0
 on:
-  workflow_run:
-    workflows: ["Release Containers"]
-    types: [completed]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to deploy (for example v0.1.0)"
+        required: true
+        type: string
+    # Declared optional: callers without a server configured can still release
+    # containers, and the jobs below only fail when a target is enabled.
+    secrets:
+      DEPLOY_SSH_KEY:
+        required: false
+      DEPLOY_KNOWN_HOSTS:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
@@ -22,9 +34,6 @@ permissions:
 
 jobs:
   resolve:
-    # A manual run is always allowed; an automatic run only after a successful
-    # Release Containers run.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -33,18 +42,10 @@ jobs:
       - name: Resolve the release tag
         id: tag
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_TAG: ${{ github.event.inputs.tag }}
-          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          tag=""
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            tag="$INPUT_TAG"
-          else
-            # For a tag push, workflow_run.head_branch is the tag name.
-            tag="$RUN_BRANCH"
-          fi
+          tag="$INPUT_TAG"
 
           # Only plain semver tags are production releases.
           if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

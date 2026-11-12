@@ -154,9 +154,11 @@ Migrations run automatically in `backend/scripts/start.sh`.
 
 ## Automatic deployment on tags (optional)
 
-`Deploy` (`.github/workflows/deploy.yml`) runs after `Release Containers`
-succeeds for a plain `vX.Y.Z` tag. It SSHes to the server, checks out the tag,
-pulls the matching images, restarts the stack, and calls an optional health URL.
+`Deploy` (`.github/workflows/deploy.yml`) is a reusable workflow that
+`Release Containers` calls as its final job for a plain `vX.Y.Z` tag, after the
+version images and the `latest` promotion. It SSHes to the server, checks out
+the tag, pulls the matching images, restarts the stack, and calls an optional
+health URL.
 
 Both targets are disabled until their `DEPLOY_*` variable is `true`. This keeps
 tag releases working before a server is configured.

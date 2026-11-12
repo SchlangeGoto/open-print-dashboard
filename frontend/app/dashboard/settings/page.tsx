@@ -95,27 +95,6 @@ export default function SettingsPage() {
     );
   }
 
-  if (loadError) {
-    return (
-      <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
-        >
-          <p>Could not load settings: {loadError}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            onClick={() => void loadSettings()}
-          >
-            Try again
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   const cloudConnected = Boolean(
     settings.bambu_cloud_email || settings.bambu_cloud_token,
   );
@@ -289,33 +268,64 @@ export default function SettingsPage() {
                 </div>
               </div>
               <CardAction>
-                <Badge variant={cloudConnected ? "success" : "secondary"}>
-                  {cloudConnected ? "Connected" : "Not connected"}
+                <Badge
+                  variant={
+                    loadError
+                      ? "secondary"
+                      : cloudConnected
+                        ? "success"
+                        : "secondary"
+                  }
+                >
+                  {loadError
+                    ? "Unavailable"
+                    : cloudConnected
+                      ? "Connected"
+                      : "Not connected"}
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground">Account</p>
-                <p className="mt-0.5 truncate text-sm font-medium">
-                  {settings.bambu_cloud_email || "Not connected"}
-                </p>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-muted-foreground">
-                  {cloudConnected
-                    ? "Signing out forgets the stored account and stops cloud printers."
-                    : "Connect a Bambu Lab account to use cloud printers."}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBambuConnection}
-                  disabled={cloudConnected && bambuBusy}
+              {loadError ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
                 >
-                  <LogOut /> {cloudConnected ? "Sign out" : "Connect"}
-                </Button>
-              </div>
+                  <p>Could not load settings: {loadError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => void loadSettings()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">Account</p>
+                    <p className="mt-0.5 truncate text-sm font-medium">
+                      {settings.bambu_cloud_email || "Not connected"}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {cloudConnected
+                        ? "Signing out forgets the stored account and stops cloud printers."
+                        : "Connect a Bambu Lab account to use cloud printers."}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBambuConnection}
+                      disabled={cloudConnected && bambuBusy}
+                    >
+                      <LogOut /> {cloudConnected ? "Sign out" : "Connect"}
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
       </div>

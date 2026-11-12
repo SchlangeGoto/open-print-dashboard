@@ -7,7 +7,7 @@
 | `compose.yml` | Local development. Mounts source, runs `fastapi dev` and `next dev`, exposes PostgreSQL and Mailpit |
 | `compose.prod.yml` | Production built from source. `fastapi run`, standalone `node server.js`, no source mounts, no database port, no Mailpit |
 | `compose.ghcr.yml` | Production using published GHCR images. Caddy serves the frontend and proxies `/api` to the backend |
-| `compose.public.yml` | Public marketing site and demo, served from GHCR images through Caddy |
+| `compose.public.yml` | Public marketing site and demo from GHCR images, publishing on loopback behind the host proxy |
 
 Do not use `compose.yml` for a public deployment: it runs development servers
 and exposes the database.
@@ -183,20 +183,12 @@ dispatch below.
 ### Persistent settings on the server
 
 The SSH session starts a fresh shell, so anything you only `export`ed in an
-interactive login is gone. Keep the site’s domains in the untracked `.env` next
-to the clone so Compose reads them on every deploy:
-
-```bash
-# /opt/openprint-public/.env
-SITE_DOMAIN=openprintdash.app
-DEMO_DOMAIN=demo.openprintdash.app
-```
-
-The deploy workflow exports `IMAGE_PREFIX` and `IMAGE_TAG` for the pull and
-rewrites both lines in the server `.env` (creating the file for the site stack
-if it does not exist yet). A later plain `docker compose ... up -d` therefore
-uses the same images instead of falling back to `latest` or to the default
-prefix, which is what makes a manual rollback stick. Do not edit those lines by
+interactive login is gone. The deploy workflow exports `IMAGE_PREFIX` and
+`IMAGE_TAG` for the pull and rewrites both lines in the server `.env` (creating
+the file for the site stack if it does not exist yet). A later plain
+`docker compose ... up -d` therefore uses the same images instead of falling
+back to `latest` or to the default prefix, which is what makes a manual
+rollback stick. Do not edit those lines by
 hand. The dashboard clone needs its normal `.env` from `.env.example`;
 deployment fails if it is missing.
 
@@ -293,39 +285,48 @@ run.
 
 `site/` is a static Next.js export. `frontend/` can run as a standalone demo
 with `NEXT_PUBLIC_DEMO_MODE=true`. `Release Containers` publishes both as
-images, and `compose.public.yml` serves them with Caddy:
+images, and `compose.public.yml` runs them as two services on one host:
+
+| Service | Container port | Host binding |
+| --- | --- | --- |
+| `site` | 8080 | `127.0.0.1:${SITE_PORT:-8080}` |
+| `demo` | 3000 | `127.0.0.1:${DEMO_PORT:-3000}` |
+
+No reverse proxy is bundled. The proxy already running on the host terminates
+TLS and forwards each hostname to its loopback port.
 
 ```bash
 export IMAGE_PREFIX=ghcr.io/schlangegoto/open-print-dashboard
 export IMAGE_TAG=0.2.0
-export SITE_DOMAIN=openprintdash.app
-export DEMO_DOMAIN=demo.openprintdash.app
 
 docker compose -f compose.public.yml pull
-docker compose -f compose.public.yml up -d
+docker compose -f compose.public.yml up -d --remove-orphans
 ```
 
-Point both DNS records at the server and open ports 80/443. Caddy obtains
-certificates automatically.
-
-`compose.ghcr.yml` and `compose.public.yml` both bind ports 80/443. Run them on
-separate hosts, or terminate TLS in one external Caddy and route by hostname.
-The Compose project names are isolated (`openprintdashboard` and
-`openprint-public`), but port bindings still conflict on a single host.
-
-The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
-`https://demo.openprintdash.app`). If `DEMO_DOMAIN` differs, rebuild the site
-image with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
-
-For local testing, the base stack publishes only Caddy's 80/443. To skip Caddy
-and run just the site and demo, add the local override:
+If this host previously ran the bundled Caddy from an older release, remove the
+old container once so it cannot keep ports 80/443:
 
 ```bash
-docker compose -f compose.public.yml -f compose.public.local.yml up -d site demo
+docker compose -f compose.public.yml down --remove-orphans
 ```
 
-Then open `http://localhost:8080` and `http://localhost:8081`. The override
-binds only `127.0.0.1:8080` and `127.0.0.1:8081`; never use it on a public host.
+Point both DNS records at the server and open ports 80/443 for the host proxy.
+Route `openprintdash.app` to `127.0.0.1:8080` and `demo.openprintdash.app` to
+`127.0.0.1:3000`. The container ports stay on loopback, so they do not conflict
+with the dashboard stack or anything else on the host.
+
+If your proxy runs in a container, `127.0.0.1` inside it is the proxy container,
+not the host. Either run that proxy with host networking (then `127.0.0.1` is
+the host), or attach it to the `openprint-public` network and use `site:8080`
+and `demo:3000` as upstreams. The Docker bridge-gateway address does not work
+with loopback-only port mappings.
+
+The site image bakes `NEXT_PUBLIC_DEMO_URL` at build time (default
+`https://demo.openprintdash.app`). If the demo hostname differs, rebuild the
+site image with the matching `--build-arg NEXT_PUBLIC_DEMO_URL=...`.
+
+For local testing, `docker compose -f compose.public.yml up -d` serves the site
+at `http://127.0.0.1:8080` and the demo at `http://127.0.0.1:3000`.
 
 There is no Vercel or Cloudflare dependency. The site and demo are self-hosted.
 

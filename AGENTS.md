@@ -14,7 +14,8 @@ everything stacked on it use:
 - `compose.yml` — development Docker Compose stack (source mounts, dev servers)
 - `compose.prod.yml` — production Docker Compose stack (built images, no source mounts)
 - `compose.ghcr.yml` — production from published GHCR images, with Caddy
-- `compose.public.yml` — public site and demo from GHCR images, with Caddy
+- `compose.public.yml` — public site and demo from GHCR images, on loopback
+  behind the host's proxy
 
 CI details: `docs/CI.md`. Production deployment: `docs/DEPLOYMENT.md`.
 

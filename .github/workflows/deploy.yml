@@ -210,8 +210,8 @@ jobs:
 
           # Same reason as the dashboard: keep the release pin in the untracked
           # .env so a later plain `up -d` cannot jump back to `latest` or to the
-          # default prefix. This file also carries SITE_DOMAIN / DEMO_DOMAIN.
-          # It is optional for Compose, so create it for the pin if missing.
+          # default prefix. The host proxy owns the domains, so this file only
+          # needs the pin. It is optional for Compose, so create it if missing.
           [ -f .env ] || touch .env
 
           set_env() {
@@ -230,9 +230,7 @@ jobs:
           set_env IMAGE_TAG "$IMAGE_TAG"
 
           docker compose -f compose.public.yml pull
-          docker compose -f compose.public.yml up -d
-          # Same reason as the dashboard: reload the checked-out Caddyfile.
-          docker compose -f compose.public.yml up -d --force-recreate --no-deps caddy
+          docker compose -f compose.public.yml up -d --remove-orphans
           docker compose -f compose.public.yml ps
 
           if [ -n "$HEALTH_URL" ]; then

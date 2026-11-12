@@ -1,8 +1,0 @@
-# Local-only ports for compose.public.yml. Keep this out of production.
-services:
-  site:
-    ports:
-      - "127.0.0.1:8080:8080"
-  demo:
-    ports:
-      - "127.0.0.1:8081:3000"

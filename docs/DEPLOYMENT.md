@@ -144,13 +144,133 @@ docker compose -f compose.prod.yml up -d --build
 Prebuilt images:
 
 ```bash
-export IMAGE_TAG=0.3.0
+# Set IMAGE_TAG=0.3.0 in .env, then pull and restart. Do not export it in the
+# shell: Compose reads shell variables before .env, so a leftover export would
+# override the pin on later runs.
 docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d
 ```
 
 The database lives in the `postgres_data` Docker volume and survives rebuilds.
 Migrations run automatically in `backend/scripts/start.sh`.
+
+## Automatic deployment on tags (optional)
+
+`Deploy` (`.github/workflows/deploy.yml`) is a reusable workflow that
+`Release Containers` calls as its final job for a plain `vX.Y.Z` tag, after the
+version images and the `latest` promotion. It SSHes to the server, checks out
+the tag, pulls the matching images, restarts the stack, and calls an optional
+health URL.
+
+Both targets are disabled until their `DEPLOY_*` variable is `true`. This keeps
+tag releases working before a server is configured.
+
+Automatic deployment shares the `latest` promotion gate: only the newest plain
+`vX.Y.Z` tag, created at the then-current `main` tip, deploys. Re-running an
+older `Release Containers` run rebuilds its images but does not deploy them, so
+a stale rerun cannot silently downgrade production. Rolling back is the manual
+dispatch below.
+
+### Server prerequisites
+
+- The repository is cloned on the server at the configured path.
+- `.env` is configured and the stack has been started once manually.
+- The deploy user can run `docker compose` (normally the `docker` group) and has
+  `git` and `curl`.
+- The clone has no tracked local changes; untracked files such as `.env` are
+  fine.
+
+### Persistent settings on the server
+
+The SSH session starts a fresh shell, so anything you only `export`ed in an
+interactive login is gone. Keep the site’s domains in the untracked `.env` next
+to the clone so Compose reads them on every deploy:
+
+```bash
+# /opt/openprint-public/.env
+SITE_DOMAIN=openprintdash.app
+DEMO_DOMAIN=demo.openprintdash.app
+```
+
+The deploy workflow exports `IMAGE_PREFIX` and `IMAGE_TAG` for the pull and
+rewrites both lines in the server `.env` (creating the file for the site stack
+if it does not exist yet). A later plain `docker compose ... up -d` therefore
+uses the same images instead of falling back to `latest` or to the default
+prefix, which is what makes a manual rollback stick. Do not edit those lines by
+hand. The dashboard clone needs its normal `.env` from `.env.example`;
+deployment fails if it is missing.
+
+### Secrets
+
+| Name | Purpose |
+| --- | --- |
+| `DEPLOY_SSH_KEY` | Private key for the deploy user |
+| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan` output for every deploy host |
+
+### Variables
+
+| Name | Example | Purpose |
+| --- | --- | --- |
+| `DEPLOY_DASHBOARD` | `true` | Enable `compose.ghcr.yml` deployment |
+| `DASHBOARD_HOST` | `dashboard.example.com` | SSH host |
+| `DASHBOARD_USER` | `deploy` | SSH user |
+| `DASHBOARD_PATH` | `/opt/open-print-dashboard` | Clone on the server |
+| `DASHBOARD_URL` | `https://dashboard.example.com` | Link on the deployment |
+| `DASHBOARD_HEALTH_URL` | `https://dashboard.example.com/api/v1/utils/health-check/` | Checked after restart |
+| `DEPLOY_SITE` | `true` | Enable `compose.public.yml` deployment |
+| `SITE_HOST` | `openprintdash.app` | SSH host |
+| `SITE_USER` | `deploy` | SSH user |
+| `SITE_PATH` | `/opt/openprint-public` | Clone on the server |
+| `SITE_URL` | `https://openprintdash.app` | Link on the deployment |
+| `SITE_HEALTH_URL` | `https://openprintdash.app/` | Checked after restart |
+
+### One-time setup
+
+```bash
+# Create the key outside the repository clone so it can never be staged.
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/openprint-deploy -N ""
+
+# Verify the fingerprints, add ~/.ssh/openprint-deploy.pub to
+# ~/.ssh/authorized_keys on each server, then:
+gh secret set DEPLOY_SSH_KEY -R SchlangeGoto/open-print-dashboard < ~/.ssh/openprint-deploy
+ssh-keyscan -H dashboard.example.com openprintdash.app > ~/.ssh/openprint-known-hosts
+
+# ssh-keyscan trusts whatever the network returns. Compare every fingerprint
+# with the server's own key read over a trusted channel (for example console
+# access) before storing the secret:
+#   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # on the server
+ssh-keygen -lf ~/.ssh/openprint-known-hosts
+gh secret set DEPLOY_KNOWN_HOSTS -R SchlangeGoto/open-print-dashboard < ~/.ssh/openprint-known-hosts
+
+# The private key and host list are only needed for the two `gh secret set`
+# commands above.
+rm -f ~/.ssh/openprint-deploy ~/.ssh/openprint-known-hosts
+
+gh variable set DEPLOY_DASHBOARD -R SchlangeGoto/open-print-dashboard --body true
+gh variable set DASHBOARD_HOST -R SchlangeGoto/open-print-dashboard --body dashboard.example.com
+gh variable set DASHBOARD_USER -R SchlangeGoto/open-print-dashboard --body deploy
+gh variable set DASHBOARD_PATH -R SchlangeGoto/open-print-dashboard --body /opt/open-print-dashboard
+gh variable set DASHBOARD_URL -R SchlangeGoto/open-print-dashboard --body https://dashboard.example.com
+gh variable set DASHBOARD_HEALTH_URL -R SchlangeGoto/open-print-dashboard --body https://dashboard.example.com/api/v1/utils/health-check/
+
+gh variable set DEPLOY_SITE -R SchlangeGoto/open-print-dashboard --body true
+gh variable set SITE_HOST -R SchlangeGoto/open-print-dashboard --body openprintdash.app
+gh variable set SITE_USER -R SchlangeGoto/open-print-dashboard --body deploy
+gh variable set SITE_PATH -R SchlangeGoto/open-print-dashboard --body /opt/openprint-public
+gh variable set SITE_URL -R SchlangeGoto/open-print-dashboard --body https://openprintdash.app
+gh variable set SITE_HEALTH_URL -R SchlangeGoto/open-print-dashboard --body https://openprintdash.app/
+```
+
+### Manual deploy and rollback
+
+```bash
+gh workflow run deploy.yml -f tag=v0.1.0
+```
+
+Use the same command with an older tag to roll back. Back up the database first:
+several migrations have lossy downgrades, and redeploying an older image does not
+undo a migration.
+
 
 ## Backup
 

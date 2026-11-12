@@ -132,6 +132,11 @@ jobs:
     needs: [guard, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Deploy reuses this decision: only the release that is allowed to move
+    # `latest` may deploy automatically. Re-running an older release therefore
+    # cannot silently downgrade production; that stays a manual dispatch.
+    outputs:
+      eligible: ${{ steps.release_tag.outputs.eligible }}
     concurrency:
       group: release-containers-latest
       cancel-in-progress: false
@@ -194,3 +199,20 @@ jobs:
               -t "${IMAGE_PREFIX}/${name}:latest" \
               "${IMAGE_PREFIX}/${name}:${VERSION}"
           done
+
+  deploy:
+    # Only the release that was allowed to move `latest` deploys
+    # automatically. Manual dispatch still deploys any tag, which is the
+    # rollback path.
+    needs: [guard, publish, latest]
+    if: needs.latest.outputs.eligible == 'true'
+    permissions:
+      contents: read
+    # `$/` is the recommended self-repository syntax, but released actionlint
+    # does not understand it yet (rhysd/actionlint#711), so stay on `./`.
+    uses: ./.github/workflows/deploy.yml # zizmor: ignore[self-repository]
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}

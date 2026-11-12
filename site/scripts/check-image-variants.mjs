@@ -63,7 +63,14 @@ function checkFile(name, expectedWidth) {
   }
 }
 
-const manifestFiles = new Set(manifest.masters.map((entry) => entry.file));
+const manifestFiles = new Set();
+for (const entry of manifest.masters) {
+  manifestFiles.add(entry.file);
+  const base = entry.file.slice(0, -4);
+  for (const width of entry.variants) {
+    manifestFiles.add(`${base}-${width}.jpg`);
+  }
+}
 
 for (const entry of manifest.masters) {
   checkFile(entry.file, entry.width);

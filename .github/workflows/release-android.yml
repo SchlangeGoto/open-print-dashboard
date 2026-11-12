@@ -123,6 +123,9 @@ jobs:
       actions: read
       contents: write
     runs-on: ubuntu-latest
+    env:
+      # The job has no checkout; gh needs the repository explicitly.
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Download the APK artifact
         env:

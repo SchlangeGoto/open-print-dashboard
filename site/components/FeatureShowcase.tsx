@@ -180,10 +180,12 @@ export function FeatureShowcase() {
     });
   }
 
+  // Section height = the 100vh pinned stage plus 6 × 40vh, one scroll step
+  // per feature. Under half a viewport per tab keeps the tour moving.
   return (
     <div
       ref={sectionRef}
-      className={`relative mt-12 ${phase === "tour" ? "lg:h-[480vh]" : ""}`}
+      className={`relative mt-12 ${phase === "tour" ? "lg:h-[340vh]" : ""}`}
     >
       <div
         className={

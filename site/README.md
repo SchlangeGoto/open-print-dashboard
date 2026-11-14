@@ -101,7 +101,7 @@ screens behind it. Scroll flattens the tilt; a fine pointer adds a small lean.
 Sections reveal on scroll, and the native app is shown as a fan of three real
 phone captures in the spool section. The six-job section is a scroll-driven
 sticky tour: the tab bar and full-width preview stay pinned while scrolling
-advances through the six features, at roughly two-thirds of a viewport each; clicking a
+advances through the six features, at 40% of a viewport per step; clicking a
 tab jumps to one. Once you scroll past it, it collapses to a compact tabbed
 viewer so it does not re-trap you on the way back up. The native scanner is last.
 Large captures tilt toward a fine pointer, rotating the whole card so the

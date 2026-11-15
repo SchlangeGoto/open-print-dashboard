@@ -310,21 +310,28 @@ old container once so it cannot keep ports 80/443:
 docker compose -f compose.public.yml down --remove-orphans
 ```
 
-Point both DNS records at the server and open ports 80/443 for the host proxy.
-The containers bind to loopback by default, so with a proxy on this host route
+Point both DNS records at the proxy host and open ports 80/443 there. The
+containers bind to loopback by default, so with a proxy on this host route
 `openprintdash.app` to `127.0.0.1:8080` and `demo.openprintdash.app` to
 `127.0.0.1:3000`.
 
 If the proxy runs on another machine, set both bind addresses to this server's
-LAN IP before starting:
+LAN IP in the `.env` file next to `compose.public.yml`, then start the stack
+again so Compose recreates the containers with the new bindings:
 
 ```dotenv
 SITE_BIND=192.168.0.21
 DEMO_BIND=192.168.0.21
 ```
 
-Then point the proxy at `192.168.0.21:8080` and `192.168.0.21:3000`, and allow
-those ports from the proxy host in the firewall.
+```bash
+docker compose -f compose.public.yml up -d
+```
+
+Compose applies port bindings when it creates a container, so a `.env` written
+after the first `up` has no effect until the containers are recreated. Then
+point the proxy at `192.168.0.21:8080` and `192.168.0.21:3000`, and allow those
+ports from the proxy host in the firewall.
 
 If your proxy runs in a container, `127.0.0.1` inside it is the proxy container,
 not the host. Either run that proxy with host networking (then `127.0.0.1` is

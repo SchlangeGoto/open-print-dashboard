@@ -5,7 +5,7 @@ description = "OpenPrintDashboard backend"
 requires-python = ">=3.13,<4.0"
 dependencies = [
     "fastapi[standard]>=0.115,<1.0.0",
-    "python-multipart<1.0.0,>=0.0.9",
+    "python-multipart>=0.0.33,<1.0.0",
     "email-validator<3.0.0.0,>=2.1.0.post1",
     "pydantic>=2.9",
     "pydantic-settings<3.0.0,>=2.2.1",

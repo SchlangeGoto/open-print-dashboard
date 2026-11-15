@@ -11,9 +11,8 @@ Please do **not** open a public issue for security problems.
 
 Use GitHub's private vulnerability reporting:
 
-1. Go to the repository's **Security** tab.
-2. Open **Advisories**.
-3. Click **Report a vulnerability**.
+1. Open the [private vulnerability report form](https://github.com/SchlangeGoto/open-print-dashboard/security/advisories/new).
+2. Describe the issue and its impact. The report stays private until it is resolved.
 
 If private reporting is unavailable, contact the maintainer through the
 repository's security contact rather than posting details publicly.

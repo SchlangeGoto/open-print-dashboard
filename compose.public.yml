@@ -1,9 +1,10 @@
 # Public marketing site and demo, served from published GHCR images.
 name: openprint-public
 #
-# No reverse proxy is bundled. Both containers publish on loopback, and the
-# proxy already running on the host (Caddy, nginx, ...) terminates TLS and
-# forwards each hostname to its port:
+# No reverse proxy is bundled. Both containers publish on loopback by default;
+# set SITE_BIND and DEMO_BIND to the host's LAN IP when the proxy runs on
+# another machine. The proxy terminates TLS and forwards each hostname to its
+# port:
 #
 #   openprintdash.app      -> 127.0.0.1:8080
 #   demo.openprintdash.app -> 127.0.0.1:3000
@@ -17,12 +18,14 @@ services:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/site:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      # Loopback only. Change SITE_PORT if 8080 is taken on the host.
-      - "127.0.0.1:${SITE_PORT:-8080}:8080"
+      # Loopback by default. Set SITE_BIND to the host's LAN IP when the proxy
+      # runs on another machine.
+      - "${SITE_BIND:-127.0.0.1}:${SITE_PORT:-8080}:8080"
 
   demo:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/demo:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      # Loopback only. Change DEMO_PORT if 3000 is taken on the host.
-      - "127.0.0.1:${DEMO_PORT:-3000}:3000"
+      # Loopback by default. Set DEMO_BIND to the host's LAN IP when the proxy
+      # runs on another machine.
+      - "${DEMO_BIND:-127.0.0.1}:${DEMO_PORT:-3000}:3000"

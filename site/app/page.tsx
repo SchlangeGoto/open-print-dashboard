@@ -6,7 +6,14 @@ import { DashboardStage } from "@/components/DashboardStage";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { NativePhones } from "@/components/NativePhones";
 import { ScreenshotFrame } from "@/components/ScreenshotFrame";
-import { DEMO_URL, DOCS_URL, GITHUB_URL, SITE_URL, SPONSOR_URL } from "@/lib/site";
+import {
+  DEMO_URL,
+  DOCS_URL,
+  GITHUB_URL,
+  HOSTED_URL,
+  SITE_URL,
+  SPONSOR_URL,
+} from "@/lib/site";
 
 const installCommands = `git clone https://github.com/SchlangeGoto/open-print-dashboard.git
 cd open-print-dashboard
@@ -319,15 +326,17 @@ export default function HomePage() {
 
           <div className="mt-10 flex flex-col gap-3 border-t border-[var(--color-rule)] pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="max-w-2xl text-sm leading-6 text-[var(--color-muted)]">
-              Would rather not run the stack yourself? Managed hosting is in
-              beta.
+              Would rather not run the stack yourself? Managed hosting is
+              available separately.
             </p>
-            <Link
-              href="/hosting/"
+            <a
+              href={HOSTED_URL}
+              target="_blank"
+              rel="noreferrer"
               className="shrink-0 text-sm font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)]"
             >
-              See the hosting beta
-            </Link>
+              See managed hosting
+            </a>
           </div>
         </div>
       </section>
@@ -494,8 +503,8 @@ export default function HomePage() {
                 "PostgreSQL on your machine. Back it up, move it, inspect it.",
               ],
               [
-                "A hosted option is in beta.",
-                "For people who want the dashboard without running a server. The beta is small; self-hosting stays free.",
+                "A hosted option is available separately.",
+                "For people who want the dashboard without running a server. Self-hosting stays free.",
               ],
             ].map(([title, body]) => (
               <div

@@ -5,6 +5,7 @@ import {
   DEMO_URL,
   DOCS_URL,
   GITHUB_URL,
+  HOSTED_URL,
   ISSUES_URL,
   SITE_FULL_NAME,
   SPONSOR_URL,
@@ -16,7 +17,7 @@ const columns = [
     links: [
       { label: "Features", href: "/#features" },
       { label: "Install", href: "/install/" },
-      { label: "Managed hosting", href: "/hosting/" },
+      { label: "Managed hosting", href: HOSTED_URL, external: true },
       { label: "Live demo", href: DEMO_URL, external: true },
     ],
   },

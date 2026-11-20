@@ -67,16 +67,13 @@ it at `127.0.0.1:3000`.
 
 The demo runs on seeded data and stores edits in the browser only.
 
-## Hosting beta
+## Hosting
 
-`/hosting/` is the managed-hosting beta page. It is deliberately not in the
-main navigation: it is linked from the footer, the self-hosted section and the
-install page, so self-hosters can ignore it until they need it.
-
-The Beta plan is the only active plan. Standard and Team are placeholders and
-the page says so; pricing is not published yet. The interest CTA is a `mailto:`
-link (`HOSTING_BETA_MAILTO` in `lib/site.ts`). Update the plan copy, pricing and
-contact when the hosted product is defined.
+The public site no longer contains the paid hosting plans, signup or account
+pages. The managed service lives in the private `opd-cloud` repository and is
+linked through `NEXT_PUBLIC_HOSTED_URL` (default
+`https://cloud.openprintdash.app`). This repository stays the front door for the
+free self-hosted product.
 
 Hosting is framed as a convenience for people who cannot run a server, not the
 business model or a feature gate. Self-hosting stays free.

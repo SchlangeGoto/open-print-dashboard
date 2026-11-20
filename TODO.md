@@ -275,7 +275,49 @@ These open issues should be solved as part of the epic, not separately:
 
 ---
 
-## 4. Done (for reference)
+## 4. Dashboard motion and polish (idea)
+
+**Goal:** the dashboard should feel alive without becoming noisy. Animate on
+first load and meaningful state changes, never on background polling.
+
+**Library:** start with CSS transitions/keyframes and the View Transition API
+where it fits. Add `motion` (Framer Motion successor) only if shared layout
+animations justify the dependency.
+
+#### A-01 — Motion primitives
+- Shared duration/easing tokens (fast 120 ms, normal 200 ms, slow 350 ms).
+- A `useReducedMotion` hook and a global `prefers-reduced-motion` fallback.
+- One rule: polled refreshes update values in place; only mount, navigation and
+  explicit actions animate.
+
+#### A-02 — Spools
+- Stagger spool cards on first load.
+- Animate the remaining-filament fill and spool ring from 0 to the real value.
+- Animate load/unload transitions and the active-spool indicator.
+- Keep the animation short so a poll does not replay it.
+
+#### A-03 — Dashboard and analytics
+- Count up the stat cards on first mount.
+- Grow chart bars/lines from the baseline when the range or data changes.
+- Crossfade skeleton → content instead of a hard swap.
+
+#### A-04 — Navigation and overlays
+- Subtle page-enter transition on dashboard routes.
+- Animate the sidebar active pill, dropdowns, dialogs and sheets.
+- Animate the tenant switcher and member role changes.
+
+#### A-05 — Feedback
+- Spool scan success, activate/unload and invite acceptance get a short visual
+  confirmation instead of only a toast.
+- Error states shake/fade once; never loop.
+
+**Acceptance:** animates only transform/opacity, no layout shift, 60 fps on a
+mid-range laptop, full `prefers-reduced-motion` support, and a Playwright check
+that the spool page renders the final values after the animation.
+
+---
+
+## 5. Done (for reference)
 
 These were found and fixed while consolidating PR #20. Kept here so they are not
 re-opened.

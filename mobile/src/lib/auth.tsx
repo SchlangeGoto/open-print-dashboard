@@ -35,6 +35,7 @@ let sessionServerUrl: string | null = null;
 let sessionTokens: AuthTokens | null = null;
 let sessionTenantId: string | null = null;
 let sessionExpiredHandler: (() => void) | null = null;
+let tenantInvalidHandler: (() => void) | null = null;
 
 const apiClient = new ApiClient({
   getServerUrl: () => sessionServerUrl,
@@ -50,6 +51,9 @@ const apiClient = new ApiClient({
   },
   onSessionExpired: () => {
     sessionExpiredHandler?.();
+  },
+  onTenantInvalid: () => {
+    tenantInvalidHandler?.();
   },
 });
 
@@ -125,10 +129,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setNeedsTenantSelection(false);
       setStatus("logged-out");
     };
+    tenantInvalidHandler = () => {
+      // The active membership was removed or the tenant was deactivated.
+      // Drop the selection and show the picker with the current memberships.
+      sessionTenantId = null;
+      setActiveTenantId(null);
+      setNeedsTenantSelection(true);
+      void clearStoredTenantId();
+      void apiClient
+        .getMeTenants()
+        .then(applyTenants)
+        .catch(() => {
+          // A network failure still leaves the picker state in place; retry
+          // from the picker or the connection screen.
+        });
+    };
     return () => {
       sessionExpiredHandler = null;
+      tenantInvalidHandler = null;
     };
-  }, []);
+  }, [applyTenants]);
 
   const restore = useCallback(async () => {
     const epoch = ++restoreEpoch.current;

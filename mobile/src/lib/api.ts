@@ -33,6 +33,7 @@ interface ApiClientOptions {
   setTokens: (tokens: AuthTokens) => Promise<void>;
   clearTokens: () => Promise<void>;
   onSessionExpired: () => void;
+  onTenantInvalid: () => void;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -189,6 +190,18 @@ export class ApiClient {
       const detail = Array.isArray(body?.detail)
         ? (body.detail[0] as { msg?: string } | undefined)?.msg
         : body?.detail;
+      const code =
+        detail && typeof detail === "object" && "code" in detail
+          ? (detail as { code?: string }).code
+          : undefined;
+      if (
+        (res.status === 404 && detail === "Tenant not found") ||
+        (res.status === 403 &&
+          detail === "The user is not a member of an active tenant") ||
+        (res.status === 400 && code === "tenant_required")
+      ) {
+        this.options.onTenantInvalid();
+      }
       throw new ApiError(
         res.status,
         typeof detail === "string"

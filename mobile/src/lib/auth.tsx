@@ -68,6 +68,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   switchTenant: (tenantId: string) => Promise<void>;
+  refreshTenants: () => Promise<void>;
   setServerUrl: (url: string) => Promise<void>;
   retry: () => Promise<void>;
 }
@@ -303,6 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       switchTenant,
+      refreshTenants: loadTenants,
       setServerUrl,
       retry: restore,
     }),
@@ -316,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       switchTenant,
+      loadTenants,
       setServerUrl,
       restore,
     ],

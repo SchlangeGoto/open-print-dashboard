@@ -15,6 +15,37 @@ export interface TenantMembership {
   role: string;
 }
 
+export interface TenantSummary {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  created_at: string | null;
+}
+
+export interface TenantMember {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  role: string;
+  created_at: string | null;
+}
+
+export interface TenantInvite {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  created_at: string | null;
+  invited_by: string | null;
+}
+
+export interface TenantInviteCreated extends TenantInvite {
+  token: string | null;
+  accept_url: string | null;
+}
+
 export interface Filament {
   id: string;
   brand: string;

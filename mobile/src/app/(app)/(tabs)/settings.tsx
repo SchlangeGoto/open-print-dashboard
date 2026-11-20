@@ -39,6 +39,9 @@ export default function SettingsScreen() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const activeTenant = tenants.find((tenant) => tenant.id === activeTenantId);
+  const canManageMembers =
+    activeTenant?.role === "owner" || activeTenant?.role === "admin";
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<
     { ok: boolean; message: string } | null
@@ -193,6 +196,67 @@ export default function SettingsScreen() {
             ))}
           </Card>
         ) : null}
+
+        <Card style={styles.section}>
+          <View style={styles.sectionTitle}>
+            <View
+              style={[
+                styles.iconWrap,
+                { backgroundColor: `${theme.colors.info}18` },
+              ]}
+            >
+              <Ionicons
+                name="analytics-outline"
+                size={18}
+                color={theme.colors.info}
+              />
+            </View>
+            <AppText variant="heading">Workspace</AppText>
+          </View>
+          <AppButton
+            title="Analytics"
+            variant="secondary"
+            size="sm"
+            onPress={() => router.push("/analytics")}
+            icon={
+              <Ionicons
+                name="stats-chart-outline"
+                size={16}
+                color={theme.colors.text}
+              />
+            }
+          />
+          {canManageMembers ? (
+            <AppButton
+              title="Members"
+              variant="secondary"
+              size="sm"
+              onPress={() => router.push("/members")}
+              icon={
+                <Ionicons
+                  name="people-outline"
+                  size={16}
+                  color={theme.colors.text}
+                />
+              }
+            />
+          ) : null}
+          {user?.is_superuser ? (
+            <AppButton
+              title="Tenants"
+              variant="secondary"
+              size="sm"
+              onPress={() => router.push("/tenants")}
+              icon={
+                <Ionicons
+                  name="business-outline"
+                  size={16}
+                  color={theme.colors.text}
+                />
+              }
+            />
+          ) : null}
+        </Card>
 
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>

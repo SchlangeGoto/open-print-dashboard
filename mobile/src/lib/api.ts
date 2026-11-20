@@ -6,7 +6,11 @@ import type {
   Printer,
   PrintJob,
   Spool,
+  TenantInvite,
+  TenantInviteCreated,
+  TenantMember,
   TenantMembership,
+  TenantSummary,
   TokenResponse,
   UserPublic,
 } from "./types";
@@ -407,6 +411,88 @@ export class ApiClient {
       "/me/tenants",
     );
     return data.data;
+  }
+
+  async getTenantMembers(): Promise<TenantMember[]> {
+    const data = await this.request<ListResponse<TenantMember>>(
+      "/tenants/current/members",
+    );
+    return data.data;
+  }
+
+  updateTenantMember(userId: string, role: string): Promise<TenantMember> {
+    return this.request<TenantMember>(
+      `/tenants/current/members/${userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      },
+    );
+  }
+
+  removeTenantMember(userId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/tenants/current/members/${userId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async getTenantInvites(): Promise<TenantInvite[]> {
+    const data = await this.request<ListResponse<TenantInvite>>(
+      "/tenants/current/invites",
+    );
+    return data.data;
+  }
+
+  createTenantInvite(
+    email: string,
+    role: string,
+  ): Promise<TenantInviteCreated> {
+    return this.request<TenantInviteCreated>(
+      "/tenants/current/invites",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
+      },
+    );
+  }
+
+  revokeTenantInvite(inviteId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/tenants/current/invites/${inviteId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async getTenants(): Promise<TenantSummary[]> {
+    return this.request<TenantSummary[]>("/tenants");
+  }
+
+  createTenant(name: string, slug: string): Promise<TenantSummary> {
+    return this.request<TenantSummary>("/tenants", {
+      method: "POST",
+      body: JSON.stringify({ name, slug }),
+    });
+  }
+
+  updateTenant(
+    tenantId: string,
+    data: { name?: string; slug?: string; is_active?: boolean },
+  ): Promise<TenantSummary> {
+    return this.request<TenantSummary>(`/tenants/${tenantId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteTenant(
+    tenantId: string,
+    slug: string,
+  ): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/tenants/${tenantId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ slug }),
+    });
   }
 
   async getSpools(): Promise<Spool[]> {

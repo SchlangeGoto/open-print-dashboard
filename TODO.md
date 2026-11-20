@@ -272,6 +272,8 @@ These open issues should be solved as part of the epic, not separately:
 | D-14 | Scan and confirm accept a client-generated `request_id` for retry idempotency. This is not content dedupe (D-06): two different requests still add two spools. | Barcode scan/confirm |
 | D-15 | `:latest` moves only when the tag is plain `vX.Y.Z`, the newest semver on `main`, and the `main` tip at guard time. Version tags still publish from any main commit. Pin `IMAGE_TAG` in production. | Release containers |
 | D-13 | AMS adoption is weight-aware: a partial tray never adopts a full spool; only untagged spools on no printer whose remaining weight is within max(50 g, 15 %) are candidates, FIFO breaks ties. A tray with no percentage creates a `remaining_unknown` spool (nominal capacity as placeholder), never 0 g or a fake full weight. Entering the remaining grams clears the flag. | AMS sync, spool UI |
+| D-16 | Future dashboard versions use `FSL-1.1-ALv2`: free self-hosting and internal business use, no competing hosted service, Apache-2.0 after two years. Releases before the change remain AGPL-3.0. The hosted control plane stays in the private `opd-cloud` repo. | License PR #82, `opd-cloud` |
+| D-17 | The Tenants page is a platform-operator surface only: it is hidden for normal users and unnecessary for a single-tenant home install. The public dashboard keeps tenant support; the paid control plane is separate. | T-08, hosting |
 
 ---
 
@@ -333,22 +335,50 @@ reachable in one or two taps.
   clipped tables, phone-safe filament cards, and a chart that drops X-axis
   labels on narrow screens.
 
+**Implemented on `feat/mobile-admin`:**
+
+- Mobile **Members** screen: list, role changes, removal and invites.
+- Mobile **Tenants** screen for platform admins: list, create, open and
+  activate/deactivate.
+- Mobile **Analytics** screen: totals, success rate, print time, material,
+  cost, seven-day bars and top filaments.
+- Settings links to Analytics, Members and Tenants based on role.
+
 **Still open:**
 
-- M-01: Mobile Members/Tenants administration for owners and platform admins.
-- M-02: Mobile analytics (job counts, success rate, filament used, cost).
-- M-03: Safe printer actions from the phone (pause/cancel only with explicit
+- M-01: Safe printer actions from the phone (pause/cancel only with explicit
   confirmation) and active-job detail.
-- M-04: Mobile filament/spool editing where the web can already do it.
-- M-05: Push notifications for print finished/failed and spool loaded.
-- M-06: A full responsive pass over every remaining table, chart and dialog.
+- M-02: Mobile filament/spool editing where the web can already do it.
+- M-03: Push notifications for print finished/failed and spool loaded.
+- M-04: A full responsive pass over every remaining table, chart and dialog.
 
 **Acceptance:** every dashboard data view has a phone layout with no horizontal
 page scroll, no clipped actions, and at least one Playwright/mobile smoke test.
 
 ---
 
-## 6. Done (for reference)
+## 6. Filament pricing defaults
+
+**Goal:** a filament type carries its usual price per kilogram, so adding or
+scanning a spool does not require typing the price every time.
+
+- F-01: add `default_price_per_kg` to `Filament` (migration, create/update
+  forms, filament detail).
+- F-02: new and scanned spools inherit the filament default when
+  `price_per_kg` is omitted.
+- F-03: after a scan, show the inherited price in the confirm/edit step and let
+  the user override it for that spool.
+- F-04: mobile scan-confirm and spool detail expose the same field.
+- F-05: price edits only affect new spools; existing spools keep their recorded
+  purchase price.
+
+**Acceptance:** scanning a known filament creates a spool with the default
+price, and the user can change that spool's price immediately without opening
+the full filament editor.
+
+---
+
+## 7. Done (for reference)
 
 These were found and fixed while consolidating PR #20. Kept here so they are not
 re-opened.

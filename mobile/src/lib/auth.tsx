@@ -59,6 +59,7 @@ interface AuthContextValue {
   serverUrl: string | null;
   tenants: TenantMembership[];
   activeTenantId: string | null;
+  needsTenantSelection: boolean;
   api: ApiClient;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -75,24 +76,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [serverUrl, setServerUrlState] = useState<string | null>(null);
   const [tenants, setTenants] = useState<TenantMembership[]>([]);
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
+  const [needsTenantSelection, setNeedsTenantSelection] = useState(false);
   const restoreEpoch = useRef(0);
 
   const applyTenants = useCallback(async (list: TenantMembership[]) => {
     setTenants(list);
-    const active =
-      list.find(
-        (tenant) => tenant.id === sessionTenantId && tenant.is_active,
-      ) ??
-      list.find((tenant) => tenant.is_active) ??
-      list[0] ??
-      null;
-    sessionTenantId = active?.id ?? null;
-    setActiveTenantId(sessionTenantId);
-    if (sessionTenantId) {
-      await saveStoredTenantId(sessionTenantId);
-    } else {
-      await clearStoredTenantId();
+    const stored = list.find(
+      (tenant) => tenant.id === sessionTenantId && tenant.is_active,
+    );
+    if (stored) {
+      setActiveTenantId(stored.id);
+      setNeedsTenantSelection(false);
+      return;
     }
+    const only = list.filter((tenant) => tenant.is_active);
+    if (only.length === 1) {
+      sessionTenantId = only[0].id;
+      setActiveTenantId(only[0].id);
+      setNeedsTenantSelection(false);
+      await saveStoredTenantId(only[0].id);
+      return;
+    }
+    sessionTenantId = null;
+    setActiveTenantId(null);
+    setNeedsTenantSelection(only.length > 1);
+    await clearStoredTenantId();
   }, []);
 
   const loadTenants = useCallback(async () => {
@@ -114,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setTenants([]);
       setActiveTenantId(null);
+      setNeedsTenantSelection(false);
       setStatus("logged-out");
     };
     return () => {
@@ -224,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setTenants([]);
       setActiveTenantId(null);
+      setNeedsTenantSelection(false);
       setStatus("logged-out");
     }
   }, []);
@@ -231,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchTenant = useCallback(async (tenantId: string) => {
     sessionTenantId = tenantId;
     setActiveTenantId(tenantId);
+    setNeedsTenantSelection(false);
     await saveStoredTenantId(tenantId);
   }, []);
 
@@ -253,6 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setTenants([]);
     setActiveTenantId(null);
+    setNeedsTenantSelection(false);
     setStatus("logged-out");
     await clearStoredSession();
     await clearStoredTenantId();
@@ -266,6 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       serverUrl,
       tenants,
       activeTenantId,
+      needsTenantSelection,
       api: apiClient,
       login,
       logout,
@@ -279,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       serverUrl,
       tenants,
       activeTenantId,
+      needsTenantSelection,
       login,
       logout,
       switchTenant,

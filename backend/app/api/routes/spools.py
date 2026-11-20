@@ -5,9 +5,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import col, select
+from sqlmodel import Session, col, select
 
-from app.api.deps import SessionDep, get_current_user
+from app.api.deps import TenantContextDep, require_permission
+from app.core.tenancy import DEFAULT_TENANT_ID
 from app.models import (
     BarcodeConfirmRequest,
     BarcodeScanRequest,
@@ -33,15 +34,35 @@ from app.services.bambu_catalog import (
 router = APIRouter(
     prefix="/spools",
     tags=["spools"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_permission("spools.read"))],
 )
 
 
+def _get_spool(context: TenantContextDep, spool_id: uuid.UUID) -> Spool:
+    spool = context.session.exec(
+        select(Spool).where(
+            Spool.id == spool_id,
+            Spool.tenant_id == context.tenant.id,
+        )
+    ).first()
+    if not spool:
+        raise HTTPException(status_code=404, detail="Spool not found")
+    return spool
+
+
 def _unload_other_spools(
-    *, session: SessionDep, printer_id: uuid.UUID, keep_id: uuid.UUID
+    *,
+    session: Session,
+    printer_id: uuid.UUID,
+    keep_id: uuid.UUID,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
 ) -> None:
     others = session.exec(
-        select(Spool).where(Spool.printer_id == printer_id, col(Spool.id) != keep_id)
+        select(Spool).where(
+            Spool.tenant_id == tenant_id,
+            Spool.printer_id == printer_id,
+            col(Spool.id) != keep_id,
+        )
     ).all()
     for spool in others:
         spool.active = False
@@ -65,7 +86,10 @@ def _reconcile_filament_weight(filament: Filament, data: dict[str, Any]) -> bool
 
 
 def _find_or_create_catalog_filament(
-    *, session: SessionDep, data: dict[str, Any]
+    *,
+    session: Session,
+    data: dict[str, Any],
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
 ) -> Filament:
     info_idx = data.get("bambu_info_idx")
     weight = data.get("spool_weight_g")
@@ -76,6 +100,7 @@ def _find_or_create_catalog_filament(
         # and collapse unrelated products that share a colour. Prefer the
         # same package weight before falling back to the oldest row.
         query = select(Filament).where(
+            Filament.tenant_id == tenant_id,
             Filament.bambu_info_idx == info_idx,
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
         )
@@ -97,6 +122,7 @@ def _find_or_create_catalog_filament(
         # Support W/G/ABS all share brand/material/colour, so series is what
         # keeps them apart.
         base = select(Filament).where(
+            Filament.tenant_id == tenant_id,
             func.lower(Filament.color_hex) == data["color_hex"].lower(),
             func.lower(Filament.material) == data["material"].lower(),
             func.lower(Filament.brand) == data["brand"].lower(),
@@ -156,6 +182,7 @@ def _find_or_create_catalog_filament(
         return filament
 
     filament = Filament(
+        tenant_id=tenant_id,
         brand=data["brand"],
         material=data["material"],
         series=data.get("series") or None,
@@ -173,32 +200,51 @@ def _find_or_create_catalog_filament(
     return filament
 
 
-def _existing_barcode_spools(*, session: SessionDep, code: str) -> list[Spool]:
+def _existing_barcode_spools(
+    *,
+    session: Session,
+    code: str,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> list[Spool]:
     return list(
         session.exec(
             select(Spool)
-            .where(Spool.barcode == code)
+            .where(
+                Spool.tenant_id == tenant_id,
+                Spool.barcode == code,
+            )
             .order_by(col(Spool.created_at).desc())
         ).all()
     )
 
 
-def _link_barcode(*, session: SessionDep, code: str, filament: Filament) -> Filament:
+def _link_barcode(
+    *,
+    session: Session,
+    code: str,
+    filament: Filament,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> Filament:
     """Persist a barcode→filament mapping, tolerating a concurrent insert.
 
     Two requests can both miss the mapping and each create a filament. The
-    unique index on FilamentBarcode.code decides the winner; the loser rolls
+    unique index on (tenant_id, code) decides the winner; the loser rolls
     back its own filament and continues with the committed one instead of
     returning a 500.
     """
-    session.add(FilamentBarcode(code=code, filament_id=filament.id))
+    session.add(
+        FilamentBarcode(tenant_id=tenant_id, code=code, filament_id=filament.id)
+    )
     try:
         session.flush()
         return filament
     except IntegrityError:
         session.rollback()
         mapping = session.exec(
-            select(FilamentBarcode).where(FilamentBarcode.code == code)
+            select(FilamentBarcode).where(
+                FilamentBarcode.tenant_id == tenant_id,
+                FilamentBarcode.code == code,
+            )
         ).first()
         existing = session.get(Filament, mapping.filament_id) if mapping else None
         if not existing:
@@ -207,7 +253,11 @@ def _link_barcode(*, session: SessionDep, code: str, filament: Filament) -> Fila
 
 
 def _replay_barcode_spool(
-    *, session: SessionDep, request_id: str | None, code: str
+    *,
+    session: Session,
+    request_id: str | None,
+    code: str,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
 ) -> BarcodeScanResult | None:
     """Return the spool created for an idempotency key, or None.
 
@@ -216,7 +266,12 @@ def _replay_barcode_spool(
     """
     if not request_id:
         return None
-    spool = session.exec(select(Spool).where(Spool.request_id == request_id)).first()
+    spool = session.exec(
+        select(Spool).where(
+            Spool.tenant_id == tenant_id,
+            Spool.request_id == request_id,
+        )
+    ).first()
     if not spool:
         return None
     if (spool.barcode or "") != code:
@@ -237,15 +292,17 @@ def _replay_barcode_spool(
 
 def _create_barcode_spool(
     *,
-    session: SessionDep,
+    session: Session,
     filament: Filament,
     code: str,
     total_weight_g: float | None = None,
     price_per_kg: float | None = None,
     request_id: str | None = None,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
 ) -> Spool:
     weight = total_weight_g or filament.spool_weight_g or 1000
     spool = Spool(
+        tenant_id=tenant_id,
         filament_id=filament.id,
         total_weight_g=weight,
         remaining_g=weight,
@@ -261,52 +318,75 @@ def _create_barcode_spool(
 
 
 @router.get("/", response_model=SpoolsPublic)
-def read_spools(session: SessionDep, filament_id: uuid.UUID | None = None) -> Any:
+def read_spools(context: TenantContextDep, filament_id: uuid.UUID | None = None) -> Any:
     """Retrieve spools, optionally filtered by filament."""
-    query = select(Spool)
+    query = select(Spool).where(Spool.tenant_id == context.tenant.id)
     if filament_id:
         query = query.where(Spool.filament_id == filament_id)
-    spools = session.exec(query.order_by(col(Spool.created_at).desc())).all()
+    spools = context.session.exec(query.order_by(col(Spool.created_at).desc())).all()
     return SpoolsPublic(
         data=[SpoolPublic.model_validate(s) for s in spools], count=len(spools)
     )
 
 
 @router.get("/active", response_model=SpoolPublic)
-def read_active_spool(session: SessionDep, printer_id: uuid.UUID | None = None) -> Any:
+def read_active_spool(
+    context: TenantContextDep, printer_id: uuid.UUID | None = None
+) -> Any:
     """Return a loaded spool, optionally scoped to one printer."""
     query = (
         select(Spool)
+        .where(Spool.tenant_id == context.tenant.id)
         .where(col(Spool.active).is_(True))
         .where(col(Spool.printer_id).is_not(None))
         .order_by(col(Spool.created_at).desc(), col(Spool.id).desc())
     )
     if printer_id:
         query = query.where(Spool.printer_id == printer_id)
-    spool = session.exec(query).first()
+    spool = context.session.exec(query).first()
     if not spool:
         raise HTTPException(status_code=404, detail="No active spool")
     return spool
 
 
-@router.post("/scan/barcode", response_model=BarcodeScanResult)
-def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
+@router.post(
+    "/scan/barcode",
+    response_model=BarcodeScanResult,
+    dependencies=[Depends(require_permission("spools.write"))],
+)
+def scan_barcode(payload: BarcodeScanRequest, context: TenantContextDep) -> Any:
     """Look up a packaging barcode and create a spool when it is known."""
+    session = context.session
     code = payload.code.strip()
     replay = _replay_barcode_spool(
-        session=session, request_id=payload.request_id, code=code
+        session=session,
+        tenant_id=context.tenant.id,
+        request_id=payload.request_id,
+        code=code,
     )
     if replay:
         return replay
     mapping = session.exec(
-        select(FilamentBarcode).where(FilamentBarcode.code == code)
+        select(FilamentBarcode).where(
+            FilamentBarcode.tenant_id == context.tenant.id,
+            FilamentBarcode.code == code,
+        )
     ).first()
     filament = session.get(Filament, mapping.filament_id) if mapping else None
+    if filament is not None and filament.tenant_id != context.tenant.id:
+        filament = None
     catalog = lookup_barcode(code)
 
     if not filament and catalog and payload.create:
-        candidate = _find_or_create_catalog_filament(session=session, data=catalog)
-        filament = _link_barcode(session=session, code=code, filament=candidate)
+        candidate = _find_or_create_catalog_filament(
+            session=session, data=catalog, tenant_id=context.tenant.id
+        )
+        filament = _link_barcode(
+            session=session,
+            code=code,
+            filament=candidate,
+            tenant_id=context.tenant.id,
+        )
 
     if not filament:
         if catalog and not payload.create:
@@ -327,7 +407,9 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
         session.add(filament)
         session.flush()
 
-    existing = _existing_barcode_spools(session=session, code=code)
+    existing = _existing_barcode_spools(
+        session=session, code=code, tenant_id=context.tenant.id
+    )
     if not payload.create:
         # Persist the weight reconciled for an already mapped product.
         session.commit()
@@ -343,6 +425,7 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     try:
         spool = _create_barcode_spool(
             session=session,
+            tenant_id=context.tenant.id,
             filament=filament,
             code=code,
             total_weight_g=catalog.get("spool_weight_g") if catalog else None,
@@ -353,7 +436,10 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
         # the same replay helper so the barcode comparison still applies.
         session.rollback()
         replay = _replay_barcode_spool(
-            session=session, request_id=payload.request_id, code=code
+            session=session,
+            tenant_id=context.tenant.id,
+            request_id=payload.request_id,
+            code=code,
         )
         if replay is None:
             raise
@@ -368,29 +454,50 @@ def scan_barcode(payload: BarcodeScanRequest, session: SessionDep) -> Any:
     )
 
 
-@router.post("/scan/barcode/confirm", response_model=BarcodeScanResult)
-def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
+@router.post(
+    "/scan/barcode/confirm",
+    response_model=BarcodeScanResult,
+    dependencies=[Depends(require_permission("spools.write"))],
+)
+def confirm_barcode(payload: BarcodeConfirmRequest, context: TenantContextDep) -> Any:
     """Create a new filament from a scanned barcode and add its first spool."""
+    session = context.session
     code = payload.code.strip()
     replay = _replay_barcode_spool(
-        session=session, request_id=payload.request_id, code=code
+        session=session,
+        tenant_id=context.tenant.id,
+        request_id=payload.request_id,
+        code=code,
     )
     if replay:
         return replay
     mapping = session.exec(
-        select(FilamentBarcode).where(FilamentBarcode.code == code)
+        select(FilamentBarcode).where(
+            FilamentBarcode.tenant_id == context.tenant.id,
+            FilamentBarcode.code == code,
+        )
     ).first()
     filament = session.get(Filament, mapping.filament_id) if mapping else None
+    if filament is not None and filament.tenant_id != context.tenant.id:
+        filament = None
 
     if not filament:
-        candidate = Filament(**payload.filament.model_dump())
+        candidate = Filament(
+            **payload.filament.model_dump(), tenant_id=context.tenant.id
+        )
         session.add(candidate)
         session.flush()
-        filament = _link_barcode(session=session, code=code, filament=candidate)
+        filament = _link_barcode(
+            session=session,
+            code=code,
+            filament=candidate,
+            tenant_id=context.tenant.id,
+        )
 
     try:
         spool = _create_barcode_spool(
             session=session,
+            tenant_id=context.tenant.id,
             filament=filament,
             code=code,
             total_weight_g=payload.total_weight_g,
@@ -402,7 +509,10 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
         # the same replay helper so the barcode comparison still applies.
         session.rollback()
         replay = _replay_barcode_spool(
-            session=session, request_id=payload.request_id, code=code
+            session=session,
+            tenant_id=context.tenant.id,
+            request_id=payload.request_id,
+            code=code,
         )
         if replay is None:
             raise
@@ -417,20 +527,27 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
 
 
 @router.get("/{spool_id}", response_model=SpoolPublic)
-def read_spool(spool_id: uuid.UUID, session: SessionDep) -> Any:
-    spool = session.get(Spool, spool_id)
-    if not spool:
-        raise HTTPException(status_code=404, detail="Spool not found")
-    return spool
+def read_spool(spool_id: uuid.UUID, context: TenantContextDep) -> Any:
+    return _get_spool(context, spool_id)
 
 
-@router.post("/", response_model=SpoolPublic)
-def create_spool(*, session: SessionDep, spool_in: SpoolCreate) -> Any:
+@router.post(
+    "/",
+    response_model=SpoolPublic,
+    dependencies=[Depends(require_permission("spools.write"))],
+)
+def create_spool(*, context: TenantContextDep, spool_in: SpoolCreate) -> Any:
+    session = context.session
     if spool_in.filament_id:
-        filament = session.get(Filament, spool_in.filament_id)
+        filament = session.exec(
+            select(Filament).where(
+                Filament.id == spool_in.filament_id,
+                Filament.tenant_id == context.tenant.id,
+            )
+        ).first()
         if not filament:
             raise HTTPException(status_code=404, detail="Filament not found")
-    spool = Spool.model_validate(spool_in)
+    spool = Spool.model_validate(spool_in, update={"tenant_id": context.tenant.id})
     # A new spool has no printer yet, so it cannot be active. Loading goes
     # through /spools/{id}/activate.
     spool.active = False
@@ -447,19 +564,28 @@ def create_spool(*, session: SessionDep, spool_in: SpoolCreate) -> Any:
     return spool
 
 
-@router.put("/{spool_id}", response_model=SpoolPublic)
+@router.put(
+    "/{spool_id}",
+    response_model=SpoolPublic,
+    dependencies=[Depends(require_permission("spools.write"))],
+)
 def update_spool(
     *,
-    session: SessionDep,
+    context: TenantContextDep,
     spool_id: uuid.UUID,
     spool_in: SpoolUpdate,
 ) -> Any:
-    spool = session.get(Spool, spool_id)
-    if not spool:
-        raise HTTPException(status_code=404, detail="Spool not found")
+    session = context.session
+    spool = _get_spool(context, spool_id)
     update_dict = spool_in.model_dump(exclude_unset=True)
     if "filament_id" in update_dict and update_dict["filament_id"]:
-        if not session.get(Filament, update_dict["filament_id"]):
+        filament = session.exec(
+            select(Filament).where(
+                Filament.id == update_dict["filament_id"],
+                Filament.tenant_id == context.tenant.id,
+            )
+        ).first()
+        if not filament:
             raise HTTPException(status_code=404, detail="Filament not found")
     if update_dict.get("active") and spool.printer_id is None:
         raise HTTPException(
@@ -472,7 +598,10 @@ def update_spool(
     will_be_active = update_dict.get("active", spool.active)
     if will_be_active and target_printer is not None:
         _unload_other_spools(
-            session=session, printer_id=target_printer, keep_id=spool.id
+            session=session,
+            printer_id=target_printer,
+            keep_id=spool.id,
+            tenant_id=context.tenant.id,
         )
     spool.sqlmodel_update(update_dict)
     if "remaining_g" in update_dict:
@@ -513,31 +642,44 @@ def update_spool(
     return spool
 
 
-@router.delete("/{spool_id}", response_model=Message)
-def delete_spool(spool_id: uuid.UUID, session: SessionDep) -> Any:
-    spool = session.get(Spool, spool_id)
-    if not spool:
-        raise HTTPException(status_code=404, detail="Spool not found")
-    session.delete(spool)
-    session.commit()
+@router.delete(
+    "/{spool_id}",
+    response_model=Message,
+    dependencies=[Depends(require_permission("spools.write"))],
+)
+def delete_spool(spool_id: uuid.UUID, context: TenantContextDep) -> Any:
+    spool = _get_spool(context, spool_id)
+    context.session.delete(spool)
+    context.session.commit()
     return Message(message="Spool deleted")
 
 
-@router.put("/{spool_id}/activate", response_model=SpoolPublic)
+@router.put(
+    "/{spool_id}/activate",
+    response_model=SpoolPublic,
+    dependencies=[Depends(require_permission("spools.write"))],
+)
 def activate_spool(
     spool_id: uuid.UUID,
     payload: SpoolActivateRequest,
-    session: SessionDep,
+    context: TenantContextDep,
 ) -> Any:
-    spool = session.get(Spool, spool_id)
-    if not spool:
-        raise HTTPException(status_code=404, detail="Spool not found")
-    printer = session.get(Printer, payload.printer_id)
+    session = context.session
+    spool = _get_spool(context, spool_id)
+    printer = session.exec(
+        select(Printer).where(
+            Printer.id == payload.printer_id,
+            Printer.tenant_id == context.tenant.id,
+        )
+    ).first()
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
 
     _unload_other_spools(
-        session=session, printer_id=payload.printer_id, keep_id=spool.id
+        session=session,
+        printer_id=payload.printer_id,
+        keep_id=spool.id,
+        tenant_id=context.tenant.id,
     )
     spool.printer_id = payload.printer_id
     spool.active = True

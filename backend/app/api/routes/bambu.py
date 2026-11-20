@@ -1,11 +1,12 @@
 import logging
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import SQLModel
 
 from app import crud
-from app.api.deps import SessionDep, get_current_active_superuser
+from app.api.deps import TenantContextDep, require_permission
 from app.core.bambu_exceptions import (
     CloudflareError,
     CodeExpiredError,
@@ -21,7 +22,7 @@ logger = logging.getLogger("uvicorn.error")
 router = APIRouter(
     prefix="/bambu",
     tags=["bambu"],
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_permission("bambu.manage"))],
 )
 
 
@@ -34,26 +35,29 @@ class BambuVerifyRequest(SQLModel):
     code: str
 
 
-_pending_login = False
+_pending_logins: set[uuid.UUID] = set()
 
 
 @router.post("/login/start")
-def login_start(payload: BambuLoginRequest) -> Any:
+def login_start(context: TenantContextDep, payload: BambuLoginRequest) -> Any:
     """
-    Start a Bambu Lab cloud login. Some accounts require an email code before
-    the login completes; in that case ``requireCode`` is returned.
+    Start a Bambu Lab cloud login for the current tenant. Some accounts require
+    an email code before the login completes; in that case ``requireCode`` is
+    returned.
     """
-    if get_cloud_token() and printer_service.cloud_client.is_token_valid():
+    tenant_id = context.tenant.id
+    client = printer_service.get_cloud_client(tenant_id)
+    if get_cloud_token(tenant_id) and client.is_token_valid():
         raise HTTPException(status_code=400, detail="Already logged in")
 
-    global _pending_login
-    printer_service.cloud_client.email = payload.email
-    printer_service.cloud_client.password = payload.password
+    client.email = payload.email
+    client.password = payload.password
     try:
-        printer_service.login()
+        printer_service.login(tenant_id)
+        _pending_logins.discard(tenant_id)
         return {"message": "Login successful"}
     except CodeRequiredError:
-        _pending_login = True
+        _pending_logins.add(tenant_id)
         return {"requireCode": True, "message": "Check your email for a code"}
     except CloudflareError:
         raise HTTPException(
@@ -66,17 +70,17 @@ def login_start(payload: BambuLoginRequest) -> Any:
 
 
 @router.post("/login/verify")
-def login_verify(payload: BambuVerifyRequest) -> Any:
+def login_verify(context: TenantContextDep, payload: BambuVerifyRequest) -> Any:
     """
     Complete a Bambu Lab cloud login with the emailed verification code.
     """
-    global _pending_login
-    if not _pending_login:
+    tenant_id = context.tenant.id
+    if tenant_id not in _pending_logins:
         raise HTTPException(status_code=400, detail="No pending login session")
 
     try:
-        printer_service.login(payload.code)
-        _pending_login = False
+        printer_service.login(tenant_id, payload.code)
+        _pending_logins.discard(tenant_id)
         return {"message": "Login successful"}
     except CodeExpiredError:
         return {
@@ -93,19 +97,19 @@ def login_verify(payload: BambuVerifyRequest) -> Any:
 
 
 @router.get("/profile")
-def get_profile() -> Any:
+def get_profile(context: TenantContextDep) -> Any:
     """
-    Return the Bambu Lab account profile. Also validates the stored token.
+    Return the tenant's Bambu Lab account profile. Also validates the token.
     """
-    return printer_service.cloud_client.get_user_profile()
+    return printer_service.get_cloud_client(context.tenant.id).get_user_profile()
 
 
 @router.delete("/session", response_model=Message)
-def delete_session(session: SessionDep) -> Any:
-    """Sign out of Bambu Cloud and forget the stored account credentials."""
-    global _pending_login
-    _pending_login = False
-    crud.clear_cloud_credentials(session=session)
-    printer_service.disconnect()
-    printer_service.cloud_client.reset_session()
+def delete_session(context: TenantContextDep) -> Any:
+    """Sign out of the tenant's Bambu Cloud account and forget its credentials."""
+    tenant_id = context.tenant.id
+    _pending_logins.discard(tenant_id)
+    crud.clear_cloud_credentials(session=context.session, tenant_id=tenant_id)
+    printer_service.disconnect_tenant(tenant_id)
+    printer_service.get_cloud_client(tenant_id).reset_session()
     return Message(message="Bambu Lab session cleared")

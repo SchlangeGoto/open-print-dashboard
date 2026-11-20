@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlmodel import select
 
-from app.api.deps import SessionDep, get_current_user
+from app.api.deps import TenantContextDep, require_permission
 from app.core.security import decrypt_secret, is_encrypted
 from app.models import (
     AppSetting,
@@ -13,7 +13,7 @@ from app.models import (
 router = APIRouter(
     prefix="/settings",
     tags=["settings"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_permission("settings.read"))],
 )
 
 # Keys whose values should never be returned in plain text.
@@ -22,9 +22,11 @@ MASK = "••••••••"
 
 
 @router.get("/", response_model=list[SettingPublic])
-def read_settings(session: SessionDep) -> Any:
-    """Return all stored settings, masking sensitive values."""
-    settings = session.exec(select(AppSetting)).all()
+def read_settings(context: TenantContextDep) -> Any:
+    """Return the current tenant's settings, masking sensitive values."""
+    settings = context.session.exec(
+        select(AppSetting).where(AppSetting.tenant_id == context.tenant.id)
+    ).all()
     result: list[SettingPublic] = []
     for setting in settings:
         if setting.key == "bambu_cloud_token":

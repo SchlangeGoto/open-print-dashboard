@@ -10,21 +10,133 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
+from app.core.tenancy import DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_TENANT_SLUG
 from app.models import (
     AppSetting,
     Filament,
     FilamentStats,
+    Membership,
     Printer,
     PrinterCreate,
     PrinterUpdate,
     PrintJobFilamentUsage,
     RefreshToken,
     Spool,
+    Tenant,
+    TenantCreate,
     User,
     UserCreate,
     UserUpdate,
     get_datetime_utc,
 )
+
+
+# ────────────────────────────────────────────────────────────
+# Tenants and memberships
+# ────────────────────────────────────────────────────────────
+def ensure_default_tenant(*, session: Session) -> Tenant:
+    """Return the Default tenant, creating it on a database without one.
+
+    Migrations create it for existing installs; this keeps tests and the
+    setup wizard safe when they run against a cleaned database.
+    """
+    tenant = session.get(Tenant, DEFAULT_TENANT_ID)
+    if tenant is None:
+        tenant = Tenant(
+            id=DEFAULT_TENANT_ID,
+            name=DEFAULT_TENANT_NAME,
+            slug=DEFAULT_TENANT_SLUG,
+        )
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+    return tenant
+
+
+def get_tenant(*, session: Session, tenant_id: uuid.UUID) -> Tenant | None:
+    return session.get(Tenant, tenant_id)
+
+
+def get_tenant_by_slug(*, session: Session, slug: str) -> Tenant | None:
+    return session.exec(select(Tenant).where(Tenant.slug == slug)).first()
+
+
+def get_tenants(*, session: Session, active_only: bool = False) -> list[Tenant]:
+    statement = select(Tenant).order_by(col(Tenant.created_at), col(Tenant.id))
+    if active_only:
+        statement = statement.where(col(Tenant.is_active).is_(True))
+    return list(session.exec(statement).all())
+
+
+def create_tenant(*, session: Session, tenant_in: TenantCreate) -> Tenant:
+    tenant = Tenant.model_validate(tenant_in)
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+    return tenant
+
+
+def get_membership(
+    *, session: Session, tenant_id: uuid.UUID, user_id: uuid.UUID
+) -> Membership | None:
+    return session.exec(
+        select(Membership).where(
+            Membership.tenant_id == tenant_id,
+            Membership.user_id == user_id,
+        )
+    ).first()
+
+
+def list_user_memberships(*, session: Session, user_id: uuid.UUID) -> list[Membership]:
+    return list(
+        session.exec(
+            select(Membership)
+            .where(Membership.user_id == user_id)
+            .order_by(col(Membership.created_at))
+        ).all()
+    )
+
+
+def list_tenant_memberships(
+    *, session: Session, tenant_id: uuid.UUID
+) -> list[Membership]:
+    return list(
+        session.exec(
+            select(Membership)
+            .where(Membership.tenant_id == tenant_id)
+            .order_by(col(Membership.created_at))
+        ).all()
+    )
+
+
+def ensure_membership(
+    *,
+    session: Session,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    role: str,
+) -> Membership:
+    membership = get_membership(session=session, tenant_id=tenant_id, user_id=user_id)
+    if membership is None:
+        membership = Membership(tenant_id=tenant_id, user_id=user_id, role=role)
+    else:
+        membership.role = role
+    if role == "owner":
+        # The partial unique index allows one owner. Demote the previous one
+        # in the same transaction instead of failing the promotion.
+        for other in session.exec(
+            select(Membership).where(
+                Membership.tenant_id == tenant_id,
+                Membership.role == "owner",
+                Membership.user_id != user_id,
+            )
+        ).all():
+            other.role = "admin"
+            session.add(other)
+    session.add(membership)
+    session.commit()
+    session.refresh(membership)
+    return membership
 
 
 # ────────────────────────────────────────────────────────────
@@ -43,6 +155,7 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
     user_data = user_in.model_dump(exclude_unset=True)
     password_changed = "password" in user_data
+    deactivated = user_data.get("is_active") is False and db_user.is_active
     extra_data = {}
     if password_changed:
         password = user_data["password"]
@@ -50,11 +163,13 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
         extra_data["hashed_password"] = hashed_password
     db_user.sqlmodel_update(user_data, update=extra_data)
     session.add(db_user)
-    if password_changed:
+    if password_changed or deactivated:
         # A password change must invalidate every existing session, including
-        # when an admin resets another user's password. Do it in the same
-        # transaction so a failure cannot leave the password changed with live
-        # refresh tokens.
+        # when an admin resets another user's password. Deactivation must also
+        # revoke now: otherwise re-activating the account resurrects every
+        # refresh token that was issued before it was disabled.
+        # Do it in the same transaction so a failure cannot leave the password
+        # changed with live refresh tokens.
         revoke_user_refresh_tokens(session=session, user_id=db_user.id)
     session.commit()
     session.refresh(db_user)
@@ -117,27 +232,45 @@ def revoke_user_refresh_tokens(*, session: Session, user_id: uuid.UUID) -> None:
 # ────────────────────────────────────────────────────────────
 # Application settings (key/value store)
 # ────────────────────────────────────────────────────────────
-def get_setting(*, session: Session, key: str) -> AppSetting | None:
-    return session.get(AppSetting, key)
+def get_setting(
+    *, session: Session, key: str, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> AppSetting | None:
+    return session.exec(
+        select(AppSetting).where(
+            AppSetting.tenant_id == tenant_id, AppSetting.key == key
+        )
+    ).first()
 
 
-def get_setting_value(*, session: Session, key: str) -> str | None:
-    setting = session.get(AppSetting, key)
+def get_setting_value(
+    *, session: Session, key: str, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> str | None:
+    setting = get_setting(session=session, key=key, tenant_id=tenant_id)
     return setting.value if setting else None
 
 
-def _upsert_setting(*, session: Session, key: str, value: str) -> None:
+def _upsert_setting(
+    *, session: Session, tenant_id: uuid.UUID, key: str, value: str
+) -> None:
     session.execute(
         pg_insert(AppSetting)
-        .values(key=key, value=value)
-        .on_conflict_do_update(index_elements=["key"], set_={"value": value})
+        .values(tenant_id=tenant_id, key=key, value=value)
+        .on_conflict_do_update(
+            index_elements=["tenant_id", "key"], set_={"value": value}
+        )
     )
 
 
-def set_setting(*, session: Session, key: str, value: str) -> AppSetting:
-    _upsert_setting(session=session, key=key, value=value)
+def set_setting(
+    *,
+    session: Session,
+    key: str,
+    value: str,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> AppSetting:
+    _upsert_setting(session=session, tenant_id=tenant_id, key=key, value=value)
     session.commit()
-    setting = session.get(AppSetting, key)
+    setting = get_setting(session=session, key=key, tenant_id=tenant_id)
     if setting is None:
         raise RuntimeError(f"Setting {key} was not persisted")
     return setting
@@ -146,24 +279,55 @@ def set_setting(*, session: Session, key: str, value: str) -> AppSetting:
 # ────────────────────────────────────────────────────────────
 # Printers
 # ────────────────────────────────────────────────────────────
-def get_printers(*, session: Session) -> list[Printer]:
-    return list(session.exec(select(Printer).order_by(col(Printer.created_at))).all())
+def get_printers(
+    *, session: Session, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> list[Printer]:
+    return list(
+        session.exec(
+            select(Printer)
+            .where(Printer.tenant_id == tenant_id)
+            .order_by(col(Printer.created_at))
+        ).all()
+    )
 
 
-def get_printer(*, session: Session, printer_id: uuid.UUID) -> Printer | None:
-    return session.get(Printer, printer_id)
+def get_printer(
+    *,
+    session: Session,
+    printer_id: uuid.UUID,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> Printer | None:
+    return session.exec(
+        select(Printer).where(Printer.id == printer_id, Printer.tenant_id == tenant_id)
+    ).first()
 
 
-def get_printer_by_serial(*, session: Session, serial: str) -> Printer | None:
-    return session.exec(select(Printer).where(Printer.serial == serial)).first()
+def get_printer_by_serial(
+    *,
+    session: Session,
+    serial: str,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> Printer | None:
+    return session.exec(
+        select(Printer).where(Printer.serial == serial, Printer.tenant_id == tenant_id)
+    ).first()
 
 
-def count_printers(*, session: Session) -> int:
-    return session.exec(select(func.count()).select_from(Printer)).one()
+def count_printers(
+    *, session: Session, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> int:
+    return session.exec(
+        select(func.count()).select_from(Printer).where(Printer.tenant_id == tenant_id)
+    ).one()
 
 
-def create_printer(*, session: Session, printer_in: PrinterCreate) -> Printer:
-    printer = Printer.model_validate(printer_in)
+def create_printer(
+    *,
+    session: Session,
+    printer_in: PrinterCreate,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> Printer:
+    printer = Printer.model_validate(printer_in, update={"tenant_id": tenant_id})
     session.add(printer)
     session.commit()
     session.refresh(printer)
@@ -204,20 +368,37 @@ CLOUD_SETTING_KEYS = (
 )
 
 
-def get_cloud_token(*, session: Session) -> str | None:
-    value = get_setting_value(session=session, key="bambu_cloud_token")
+def get_cloud_token(
+    *, session: Session, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> str | None:
+    value = get_setting_value(
+        session=session, key="bambu_cloud_token", tenant_id=tenant_id
+    )
     if not value:
         return None
     return decrypt_secret(value)
 
 
-def save_cloud_token(*, session: Session, token: str) -> None:
-    set_setting(session=session, key="bambu_cloud_token", value=encrypt_secret(token))
+def save_cloud_token(
+    *, session: Session, token: str, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> None:
+    set_setting(
+        session=session,
+        key="bambu_cloud_token",
+        value=encrypt_secret(token),
+        tenant_id=tenant_id,
+    )
 
 
-def get_cloud_credentials(*, session: Session) -> dict[str, str | None]:
-    email = get_setting_value(session=session, key="bambu_cloud_email")
-    password = get_setting_value(session=session, key="bambu_cloud_password")
+def get_cloud_credentials(
+    *, session: Session, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> dict[str, str | None]:
+    email = get_setting_value(
+        session=session, key="bambu_cloud_email", tenant_id=tenant_id
+    )
+    password = get_setting_value(
+        session=session, key="bambu_cloud_password", tenant_id=tenant_id
+    )
     if not email or not password:
         return {"email": None, "password": None}
     decrypted_email = decrypt_secret(email)
@@ -227,23 +408,41 @@ def get_cloud_credentials(*, session: Session) -> dict[str, str | None]:
     return {"email": decrypted_email, "password": decrypted_password}
 
 
-def save_cloud_credentials(*, session: Session, email: str, password: str) -> None:
+def save_cloud_credentials(
+    *,
+    session: Session,
+    email: str,
+    password: str,
+    tenant_id: uuid.UUID = DEFAULT_TENANT_ID,
+) -> None:
     # One transaction: never store an email without its password.
     _upsert_setting(
-        session=session, key="bambu_cloud_email", value=encrypt_secret(email)
+        session=session,
+        tenant_id=tenant_id,
+        key="bambu_cloud_email",
+        value=encrypt_secret(email),
     )
     _upsert_setting(
-        session=session, key="bambu_cloud_password", value=encrypt_secret(password)
+        session=session,
+        tenant_id=tenant_id,
+        key="bambu_cloud_password",
+        value=encrypt_secret(password),
     )
     session.commit()
 
 
-def clear_cloud_credentials(*, session: Session) -> None:
+def clear_cloud_credentials(
+    *, session: Session, tenant_id: uuid.UUID = DEFAULT_TENANT_ID
+) -> None:
     """Forget the Bambu Cloud session and the stored account credentials."""
-    for key in CLOUD_SETTING_KEYS:
-        setting = session.get(AppSetting, key)
-        if setting:
-            session.delete(setting)
+    settings = session.exec(
+        select(AppSetting).where(
+            AppSetting.tenant_id == tenant_id,
+            col(AppSetting.key).in_(CLOUD_SETTING_KEYS),
+        )
+    ).all()
+    for setting in settings:
+        session.delete(setting)
     session.commit()
 
 

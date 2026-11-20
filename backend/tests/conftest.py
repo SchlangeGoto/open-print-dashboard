@@ -11,10 +11,14 @@ from app.main import app
 from app.models import (
     AppSetting,
     Filament,
+    FilamentBarcode,
+    Membership,
     Printer,
     PrintJob,
     RefreshToken,
     Spool,
+    Tenant,
+    TenantInvite,
     User,
     UserCreate,
 )
@@ -29,9 +33,13 @@ CLEANUP_MODELS = (
     PrintJob,
     Spool,
     Printer,
+    FilamentBarcode,
     Filament,
     AppSetting,
     RefreshToken,
+    Membership,
+    TenantInvite,
+    Tenant,
     User,
 )
 
@@ -44,13 +52,20 @@ def _clear(session: Session) -> None:
 
 def _ensure_superuser(session: Session) -> None:
     if not crud.get_user_by_email(session=session, email=TEST_SUPERUSER_EMAIL):
-        crud.create_user(
+        user = crud.create_user(
             session=session,
             user_create=UserCreate(
                 email=TEST_SUPERUSER_EMAIL,
                 password=TEST_SUPERUSER_PASSWORD,
                 is_superuser=True,
             ),
+        )
+        tenant = crud.ensure_default_tenant(session=session)
+        crud.ensure_membership(
+            session=session,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role="owner",
         )
 
 

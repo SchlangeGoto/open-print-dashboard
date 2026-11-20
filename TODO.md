@@ -35,6 +35,11 @@ customers on one instance would see and control each other's printers.
 **Out of scope for the first cut:** billing, per-tenant custom domains,
 per-tenant themes.
 
+**Status:** T-01–T-06 are implemented on `feat/multi-tenancy` (schema,
+permissions, scoping, resolution, per-tenant settings/credentials, per-tenant
+MQTT clients) together with `X-Tenant-ID` client plumbing and a web switcher.
+T-07–T-12 remain.
+
 ### Phases and tasks
 
 #### T-01 — Tenant and membership schema

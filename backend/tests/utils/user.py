@@ -41,4 +41,12 @@ def authentication_token_from_email(
         user_in_update = UserUpdate(password=password)
         user = crud.update_user(session=db, db_user=user, user_in=user_in_update)
 
+    tenant = crud.ensure_default_tenant(session=db)
+    crud.ensure_membership(
+        session=db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        role="operator",
+    )
+
     return user_authentication_headers(client=client, email=email, password=password)

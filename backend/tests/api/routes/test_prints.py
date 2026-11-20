@@ -134,7 +134,7 @@ def test_deleting_a_print_forgets_the_started_task(
     monkeypatch.setattr(
         printer_service,
         "get_client",
-        lambda serial: FakeClient() if serial == "hook-serial" else None,
+        lambda tenant_id, serial: FakeClient() if serial == "hook-serial" else None,
     )
 
     r = client.delete(

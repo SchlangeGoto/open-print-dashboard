@@ -68,6 +68,16 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
             detail="The user with this email already exists in the system.",
         )
     user = crud.create_user(session=session, user_create=user_in)
+    # The platform admin route predates tenant user management. Keep the new
+    # account usable in the Default tenant until invites and tenant-scoped
+    # user management land.
+    default_tenant = crud.ensure_default_tenant(session=session)
+    crud.ensure_membership(
+        session=session,
+        tenant_id=default_tenant.id,
+        user_id=user.id,
+        role="operator",
+    )
     if settings.emails_enabled and user_in.email:
         # Send a setup link instead of the password the admin chose. Anyone
         # with access to the message should not receive a working credential.
@@ -107,6 +117,13 @@ def register_user(session: SessionDep, user_in: UserRegister) -> Any:
         )
     user_create = UserCreate.model_validate(user_in, update={"is_superuser": True})
     user = crud.create_user(session=session, user_create=user_create)
+    default_tenant = crud.ensure_default_tenant(session=session)
+    crud.ensure_membership(
+        session=session,
+        tenant_id=default_tenant.id,
+        user_id=user.id,
+        role="owner",
+    )
     if settings.emails_enabled:
         email_data = generate_new_account_email(
             email_to=user_in.email, username=user_in.email

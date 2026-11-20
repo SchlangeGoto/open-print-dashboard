@@ -7,10 +7,129 @@ from sqlalchemy import Index, UniqueConstraint, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.barcodes import is_valid_ean13, normalize_barcode
+from app.core.tenancy import DEFAULT_TENANT_ID
 
 
 def get_datetime_utc() -> datetime:
     return datetime.now(UTC)
+
+
+# ────────────────────────────────────────────────────────────
+# Tenants
+# ────────────────────────────────────────────────────────────
+class TenantBase(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    slug: str = Field(unique=True, index=True, max_length=50)
+
+
+class TenantCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    slug: str = Field(min_length=1, max_length=50)
+
+    @field_validator("slug")
+    @classmethod
+    def _normalize_slug(cls, value: str) -> str:
+        slug = value.strip().lower()
+        if not slug or any(not (char.isalnum() or char == "-") for char in slug):
+            raise ValueError("slug may only contain letters, numbers and dashes")
+        return slug
+
+
+class TenantUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    slug: str | None = Field(default=None, min_length=1, max_length=50)
+
+    @field_validator("slug")
+    @classmethod
+    def _normalize_slug(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return TenantCreate._normalize_slug(value)
+
+
+class Tenant(TenantBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    is_active: bool = True
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    updated_at: datetime | None = Field(default_factory=get_datetime_utc)
+
+
+class TenantPublic(TenantBase):
+    id: uuid.UUID
+    is_active: bool
+    created_at: datetime | None = None
+
+
+class TenantMembershipPublic(SQLModel):
+    """A tenant from the caller's perspective, with their role in it."""
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    is_active: bool
+    role: str
+
+
+class TenantsPublic(SQLModel):
+    data: list[TenantMembershipPublic]
+    count: int
+
+
+class Membership(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", name="uq_membership_tenant_user"),
+        # An owner is unique per tenant. Promoting a new owner must demote the
+        # previous one in the same transaction.
+        Index(
+            "uq_membership_tenant_owner",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("role = 'owner'"),
+        ),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: uuid.UUID = Field(
+        foreign_key="tenant.id", ondelete="CASCADE", index=True
+    )
+    user_id: uuid.UUID = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    role: str = Field(default="viewer", max_length=20)
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+
+
+class MembershipPublic(SQLModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    user_id: uuid.UUID
+    role: str
+    created_at: datetime | None = None
+
+
+class TenantInvite(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "uq_tenant_invite_pending",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+        ),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: uuid.UUID = Field(
+        foreign_key="tenant.id", ondelete="CASCADE", index=True
+    )
+    email: EmailStr = Field(index=True, max_length=255)
+    role: str = Field(default="viewer", max_length=20)
+    token_hash: str = Field(unique=True, index=True, max_length=64)
+    expires_at: datetime
+    invited_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
 
 
 # Formats whose payload is a GTIN. Code128, Code39, Code93 and Codabar are
@@ -156,6 +275,12 @@ class FilamentUpdate(SQLModel):
 
 class Filament(FilamentBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: uuid.UUID = Field(
+        default=DEFAULT_TENANT_ID,
+        foreign_key="tenant.id",
+        ondelete="CASCADE",
+        index=True,
+    )
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     spools: list["Spool"] = Relationship(back_populates="filament", cascade_delete=True)
 
@@ -187,8 +312,18 @@ class FilamentStats(SQLModel):
 
 
 class FilamentBarcode(SQLModel, table=True):
+    __table_args__ = (
+        Index("uq_filamentbarcode_tenant_code", "tenant_id", "code", unique=True),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    code: str = Field(unique=True, index=True, max_length=100)
+    tenant_id: uuid.UUID = Field(
+        default=DEFAULT_TENANT_ID,
+        foreign_key="tenant.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    code: str = Field(max_length=100)
     filament_id: uuid.UUID = Field(
         foreign_key="filament.id", ondelete="CASCADE", index=True
     )
@@ -205,7 +340,7 @@ class SpoolBase(SQLModel):
     # remaining_g then holds the nominal capacity and must not be shown as a
     # real measurement or used for deduction.
     remaining_unknown: bool = False
-    tag_uid: str | None = Field(default=None, max_length=100, index=True, unique=True)
+    tag_uid: str | None = Field(default=None, max_length=100)
     barcode: str | None = Field(default=None, max_length=100, index=True)
     source: str | None = Field(default=None, max_length=20)
     active: bool = False
@@ -264,11 +399,19 @@ class Spool(SpoolBase, table=True):
             unique=True,
             postgresql_where=text("active"),
         ),
-        Index("uq_spool_request_id", "request_id", unique=True),
+        Index("uq_spool_tenant_request_id", "tenant_id", "request_id", unique=True),
+        Index("uq_spool_tenant_tag_uid", "tenant_id", "tag_uid", unique=True),
+        Index("ix_spool_tenant_barcode", "tenant_id", "barcode"),
         Index("ix_spool_filament_created", "filament_id", "created_at"),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: uuid.UUID = Field(
+        default=DEFAULT_TENANT_ID,
+        foreign_key="tenant.id",
+        ondelete="CASCADE",
+        index=True,
+    )
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     filament_id: uuid.UUID | None = Field(
         default=None, foreign_key="filament.id", ondelete="CASCADE"
@@ -377,11 +520,23 @@ class PrintJobBase(SQLModel):
 class PrintJob(PrintJobBase, table=True):
     # One cloud task maps to one row per printer. This is what makes the
     # filament deduction claim atomic across overlapping finish/init threads.
+    # Serial numbers are only unique within a tenant.
     __table_args__ = (
-        UniqueConstraint("device_id", "bambu_task_id", name="uq_printjob_device_task"),
+        UniqueConstraint(
+            "tenant_id",
+            "device_id",
+            "bambu_task_id",
+            name="uq_printjob_tenant_device_task",
+        ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: uuid.UUID = Field(
+        default=DEFAULT_TENANT_ID,
+        foreign_key="tenant.id",
+        ondelete="CASCADE",
+        index=True,
+    )
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     # Set when filament was subtracted for this job, so a repeated finish
     # event cannot deduct the same print twice.
@@ -442,6 +597,12 @@ class PrintJobFilamentUsage(SQLModel, table=True):
 # Application settings (key/value store)
 # ────────────────────────────────────────────────────────────
 class AppSetting(SQLModel, table=True):
+    tenant_id: uuid.UUID = Field(
+        default=DEFAULT_TENANT_ID,
+        foreign_key="tenant.id",
+        ondelete="CASCADE",
+        primary_key=True,
+    )
     key: str = Field(primary_key=True, max_length=100)
     value: str
 
@@ -479,8 +640,18 @@ class PrinterUpdate(SQLModel):
 
 
 class Printer(PrinterBase, table=True):
+    __table_args__ = (
+        Index("uq_printer_tenant_serial", "tenant_id", "serial", unique=True),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    serial: str = Field(unique=True, index=True, max_length=100)
+    tenant_id: uuid.UUID = Field(
+        default=DEFAULT_TENANT_ID,
+        foreign_key="tenant.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    serial: str = Field(max_length=100)
     # Deprecated LAN columns, kept for one release. Local MQTT is retired and
     # every printer connects through Bambu Cloud. A follow-up migration drops
     # these; nothing reads or writes them anymore.

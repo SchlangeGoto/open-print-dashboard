@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import col, func, select
 
 from app import crud
-from app.api.deps import SessionDep, get_current_user
+from app.api.deps import TenantContextDep, require_permission
 from app.models import (
     Filament,
     FilamentCreate,
@@ -23,17 +23,34 @@ from app.models import (
 router = APIRouter(
     prefix="/filaments",
     tags=["filaments"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_permission("filaments.read"))],
 )
 
 
+def _get_filament(context: TenantContextDep, filament_id: uuid.UUID) -> Filament:
+    filament = context.session.exec(
+        select(Filament).where(
+            Filament.id == filament_id,
+            Filament.tenant_id == context.tenant.id,
+        )
+    ).first()
+    if not filament:
+        raise HTTPException(status_code=404, detail="Filament not found")
+    return filament
+
+
 @router.get("/", response_model=FilamentsPublic)
-def read_filaments(session: SessionDep) -> Any:
+def read_filaments(context: TenantContextDep) -> Any:
     """Retrieve all filaments, including remaining stock and average price."""
-    filaments = session.exec(select(Filament)).all()
+    session = context.session
+    tenant_id = context.tenant.id
+    filaments = session.exec(
+        select(Filament).where(Filament.tenant_id == tenant_id)
+    ).all()
 
     remaining_rows = session.exec(
         select(Spool.filament_id, func.sum(Spool.remaining_g))
+        .where(Spool.tenant_id == tenant_id)
         .where(col(Spool.remaining_unknown).is_(False))
         .group_by(col(Spool.filament_id))
     ).all()
@@ -52,6 +69,7 @@ def read_filaments(session: SessionDep) -> Any:
             )
             .label("rn"),
         )
+        .where(Spool.tenant_id == tenant_id)
         .where(col(Spool.price_per_kg) > 0)
         .subquery()
     )
@@ -82,62 +100,71 @@ def read_filaments(session: SessionDep) -> Any:
 
 
 @router.get("/stats/{filament_id}", response_model=FilamentStats)
-def read_filament_stats(filament_id: uuid.UUID, session: SessionDep) -> Any:
-    if not session.get(Filament, filament_id):
-        raise HTTPException(status_code=404, detail="Filament not found")
-    return crud.get_filament_stats(session=session, filament_id=filament_id)
+def read_filament_stats(filament_id: uuid.UUID, context: TenantContextDep) -> Any:
+    _get_filament(context, filament_id)
+    return crud.get_filament_stats(session=context.session, filament_id=filament_id)
 
 
 @router.get("/{filament_id}/spools", response_model=SpoolsPublic)
-def read_filament_spools(filament_id: uuid.UUID, session: SessionDep) -> Any:
-    if not session.get(Filament, filament_id):
-        raise HTTPException(status_code=404, detail="Filament not found")
-    spools = session.exec(select(Spool).where(Spool.filament_id == filament_id)).all()
+def read_filament_spools(filament_id: uuid.UUID, context: TenantContextDep) -> Any:
+    _get_filament(context, filament_id)
+    spools = context.session.exec(
+        select(Spool).where(
+            Spool.filament_id == filament_id,
+            Spool.tenant_id == context.tenant.id,
+        )
+    ).all()
     return SpoolsPublic(
         data=[SpoolPublic.model_validate(s) for s in spools], count=len(spools)
     )
 
 
 @router.get("/{filament_id}", response_model=FilamentPublic)
-def read_filament(filament_id: uuid.UUID, session: SessionDep) -> Any:
-    filament = session.get(Filament, filament_id)
-    if not filament:
-        raise HTTPException(status_code=404, detail="Filament not found")
+def read_filament(filament_id: uuid.UUID, context: TenantContextDep) -> Any:
+    return _get_filament(context, filament_id)
+
+
+@router.post(
+    "/",
+    response_model=FilamentPublic,
+    dependencies=[Depends(require_permission("filaments.write"))],
+)
+def create_filament(*, context: TenantContextDep, filament_in: FilamentCreate) -> Any:
+    filament = Filament.model_validate(
+        filament_in, update={"tenant_id": context.tenant.id}
+    )
+    context.session.add(filament)
+    context.session.commit()
+    context.session.refresh(filament)
     return filament
 
 
-@router.post("/", response_model=FilamentPublic)
-def create_filament(*, session: SessionDep, filament_in: FilamentCreate) -> Any:
-    filament = Filament.model_validate(filament_in)
-    session.add(filament)
-    session.commit()
-    session.refresh(filament)
-    return filament
-
-
-@router.put("/{filament_id}", response_model=FilamentPublic)
+@router.put(
+    "/{filament_id}",
+    response_model=FilamentPublic,
+    dependencies=[Depends(require_permission("filaments.write"))],
+)
 def update_filament(
     *,
-    session: SessionDep,
+    context: TenantContextDep,
     filament_id: uuid.UUID,
     filament_in: FilamentUpdate,
 ) -> Any:
-    filament = session.get(Filament, filament_id)
-    if not filament:
-        raise HTTPException(status_code=404, detail="Filament not found")
-    update_dict = filament_in.model_dump(exclude_unset=True)
-    filament.sqlmodel_update(update_dict)
-    session.add(filament)
-    session.commit()
-    session.refresh(filament)
+    filament = _get_filament(context, filament_id)
+    filament.sqlmodel_update(filament_in.model_dump(exclude_unset=True))
+    context.session.add(filament)
+    context.session.commit()
+    context.session.refresh(filament)
     return filament
 
 
-@router.delete("/{filament_id}", response_model=Message)
-def delete_filament(filament_id: uuid.UUID, session: SessionDep) -> Any:
-    filament = session.get(Filament, filament_id)
-    if not filament:
-        raise HTTPException(status_code=404, detail="Filament not found")
-    session.delete(filament)
-    session.commit()
+@router.delete(
+    "/{filament_id}",
+    response_model=Message,
+    dependencies=[Depends(require_permission("filaments.write"))],
+)
+def delete_filament(filament_id: uuid.UUID, context: TenantContextDep) -> Any:
+    filament = _get_filament(context, filament_id)
+    context.session.delete(filament)
+    context.session.commit()
     return Message(message="Filament deleted")

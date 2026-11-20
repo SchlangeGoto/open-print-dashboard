@@ -14,6 +14,7 @@ from sqlmodel import Session, col, desc, select
 
 from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
 from app.core.db import engine
+from app.core.tenancy import DEFAULT_TENANT_ID
 from app.models import (
     Filament,
     Printer,
@@ -181,7 +182,8 @@ class MqttThread(threading.Thread):
 
 
 class BambuClient:
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: uuid.UUID = DEFAULT_TENANT_ID) -> None:
+        self.tenant_id = tenant_id
         self.host: str | None = None
         self.port = 8883
         self.serial: str | None = None
@@ -351,7 +353,7 @@ class BambuClient:
     def _reauth(self) -> None:
         from app.services.printer_service import printer_service
 
-        if not printer_service.reauthenticate():
+        if not printer_service.reauthenticate(self.tenant_id):
             self._reauth_required = True
             logger.error("Bambu Cloud re-login failed; sign in again from Settings")
 
@@ -532,6 +534,7 @@ class BambuClient:
             with Session(engine) as session:
                 job = session.exec(
                     select(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == str(task_id))
                 ).first()
@@ -558,6 +561,7 @@ class BambuClient:
             with Session(engine) as session:
                 existing = session.exec(
                     select(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == str(task_id))
                 ).first()
@@ -567,13 +571,18 @@ class BambuClient:
                     pg_insert(PrintJob)
                     .values(
                         id=uuid.uuid4(),
+                        tenant_id=self.tenant_id,
                         title="Unknown",
                         status=4,
                         bambu_task_id=str(task_id),
                         device_id=self.serial,
                     )
                     .on_conflict_do_nothing(
-                        index_elements=["device_id", "bambu_task_id"]
+                        index_elements=[
+                            "tenant_id",
+                            "device_id",
+                            "bambu_task_id",
+                        ]
                     )
                 )
                 session.commit()
@@ -589,6 +598,7 @@ class BambuClient:
             with Session(engine) as session:
                 job = session.exec(
                     select(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == str(task_id))
                 ).first()
@@ -637,6 +647,7 @@ class BambuClient:
             with Session(engine) as session:
                 job = session.exec(
                     select(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == task_id)
                 ).first()
@@ -701,6 +712,7 @@ class BambuClient:
             with Session(engine) as session:
                 job = session.exec(
                     select(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == task_id)
                 ).first()
@@ -875,6 +887,7 @@ class BambuClient:
                         PrintJob.start_time,
                         PrintJob.created_at,
                     )
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.status == 4)
                     .where(col(PrintJob.bambu_task_id).is_not(None))
@@ -886,6 +899,7 @@ class BambuClient:
                 }
                 pending_ids = session.exec(
                     select(PrintJob.bambu_task_id)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.status != 4)
                     .where(col(PrintJob.status).is_not(None))
@@ -949,12 +963,16 @@ class BambuClient:
         if not self.serial:
             return None
         printer = session.exec(
-            select(Printer).where(Printer.serial == self.serial)
+            select(Printer).where(
+                Printer.tenant_id == self.tenant_id,
+                Printer.serial == self.serial,
+            )
         ).first()
         if not printer:
             return None
         return session.exec(
             select(Spool)
+            .where(Spool.tenant_id == self.tenant_id)
             .where(Spool.printer_id == printer.id)
             .where(col(Spool.active).is_(True))
             .order_by(col(Spool.created_at).asc(), col(Spool.id).asc())
@@ -1025,6 +1043,7 @@ class BambuClient:
         filament = None
         if info_idx:
             query = select(Filament).where(
+                Filament.tenant_id == self.tenant_id,
                 Filament.bambu_info_idx == info_idx,
                 func.lower(Filament.color_hex) == (color or "").lower(),
             )
@@ -1046,6 +1065,7 @@ class BambuClient:
             # the tray names one) so a tray does not attach to another brand's
             # filament or collapse the white Support SKUs.
             base = select(Filament).where(
+                Filament.tenant_id == self.tenant_id,
                 func.lower(Filament.color_hex) == color.lower(),
                 func.lower(Filament.material) == material.lower(),
                 func.lower(Filament.brand) == brand.lower(),
@@ -1106,6 +1126,7 @@ class BambuClient:
             return value or None
 
         filament = Filament(
+            tenant_id=self.tenant_id,
             brand=brand,
             material=material,
             series=series or None,
@@ -1144,6 +1165,7 @@ class BambuClient:
         candidates = session.exec(
             select(Spool)
             .where(
+                Spool.tenant_id == self.tenant_id,
                 Spool.filament_id == filament_id,
                 col(Spool.tag_uid).is_(None),
                 # A spool already assigned to this printer is still a valid
@@ -1190,7 +1212,10 @@ class BambuClient:
         try:
             with Session(engine) as session:
                 printer = session.exec(
-                    select(Printer).where(Printer.serial == self.serial)
+                    select(Printer).where(
+                        Printer.tenant_id == self.tenant_id,
+                        Printer.serial == self.serial,
+                    )
                 ).first()
                 if not printer:
                     return True
@@ -1226,7 +1251,10 @@ class BambuClient:
                     remain_pct = self._tray_remain_percent(tray)
                     remaining = self._tray_remaining(tray, total)
                     spool = session.exec(
-                        select(Spool).where(Spool.tag_uid == tag)
+                        select(Spool).where(
+                            Spool.tenant_id == self.tenant_id,
+                            Spool.tag_uid == tag,
+                        )
                     ).first()
                     if not spool:
                         filament = self._ams_filament(session, tray)
@@ -1247,6 +1275,7 @@ class BambuClient:
                             session.add(spool)
                         else:
                             spool = Spool(
+                                tenant_id=self.tenant_id,
                                 filament_id=filament.id,
                                 total_weight_g=total,
                                 # Keep the nominal capacity as a placeholder;
@@ -1276,6 +1305,7 @@ class BambuClient:
                 if active_spool:
                     for other in session.exec(
                         select(Spool).where(
+                            Spool.tenant_id == self.tenant_id,
                             Spool.printer_id == printer.id,
                             col(Spool.id) != active_spool.id,
                         )
@@ -1304,9 +1334,10 @@ class BambuClient:
         """Fetch the task that the printer reported, not just the newest one."""
         from app.services.printer_service import printer_service
 
+        cloud_client = printer_service.get_cloud_client(self.tenant_id)
         if task_id:
-            return printer_service.cloud_client.get_task(task_id)
-        return printer_service.cloud_client.get_latest_task_for_printer(self.serial)
+            return cloud_client.get_task(task_id)
+        return cloud_client.get_latest_task_for_printer(self.serial)
 
     def _save_print_job_init(self, task_id: str | None = None) -> None:
         """Fetch cloud data and save a PrintJob when a print starts."""
@@ -1361,6 +1392,7 @@ class BambuClient:
                     pg_insert(PrintJob)
                     .values(
                         id=uuid.uuid4(),
+                        tenant_id=self.tenant_id,
                         spool_id=active_spool.id if active_spool else None,
                         filament_id=(
                             active_spool.filament_id if active_spool else None
@@ -1376,7 +1408,11 @@ class BambuClient:
                         ams_detail_mapping=json.dumps(task.get("amsDetailMapping", [])),
                     )
                     .on_conflict_do_nothing(
-                        index_elements=["device_id", "bambu_task_id"]
+                        index_elements=[
+                            "tenant_id",
+                            "device_id",
+                            "bambu_task_id",
+                        ]
                     )
                 )
 
@@ -1384,6 +1420,7 @@ class BambuClient:
                 # inherit the previous finish countdown.
                 session.execute(
                     update(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == cloud_task_id)
                     .values(
@@ -1645,6 +1682,7 @@ class BambuClient:
 
                 job = session.exec(
                     select(PrintJob)
+                    .where(PrintJob.tenant_id == self.tenant_id)
                     .where(PrintJob.device_id == self.serial)
                     .where(PrintJob.bambu_task_id == cloud_task_id)
                 ).first()
@@ -1669,16 +1707,22 @@ class BambuClient:
                         pg_insert(PrintJob)
                         .values(
                             id=uuid.uuid4(),
+                            tenant_id=self.tenant_id,
                             title=task.get("title") or "Unknown",
                             bambu_task_id=cloud_task_id,
                             device_id=self.serial or "",
                         )
                         .on_conflict_do_nothing(
-                            index_elements=["device_id", "bambu_task_id"]
+                            index_elements=[
+                                "tenant_id",
+                                "device_id",
+                                "bambu_task_id",
+                            ]
                         )
                     )
                     job = session.exec(
                         select(PrintJob)
+                        .where(PrintJob.tenant_id == self.tenant_id)
                         .where(PrintJob.device_id == self.serial)
                         .where(PrintJob.bambu_task_id == cloud_task_id)
                     ).one()
@@ -1721,6 +1765,7 @@ class BambuClient:
                 if task.get("weight") and job.filament_id:
                     recent_spools = session.exec(
                         select(Spool)
+                        .where(Spool.tenant_id == self.tenant_id)
                         .where(Spool.filament_id == job.filament_id)
                         .where(Spool.price_per_kg > 0)
                         .order_by(desc(Spool.created_at))
@@ -1884,6 +1929,7 @@ class BambuClient:
             update(PrintJob)
             .where(
                 PrintJob.id == job_id,
+                PrintJob.tenant_id == self.tenant_id,
                 PrintJob.filament_deducted_at.is_(None),
             )
             .values(filament_deducted_at=datetime.now(UTC))
@@ -1932,7 +1978,10 @@ class BambuClient:
                     tag = self._real_tag(tray.get("tag_uid"))
                     if tag:
                         spool = session.exec(
-                            select(Spool).where(Spool.tag_uid == tag)
+                            select(Spool).where(
+                                Spool.tenant_id == self.tenant_id,
+                                Spool.tag_uid == tag,
+                            )
                         ).first()
                         if spool and spool.id not in used_spool_ids:
                             return spool
@@ -1946,6 +1995,7 @@ class BambuClient:
             query = (
                 select(Spool)
                 .join(Filament, Spool.filament_id == Filament.id)
+                .where(Spool.tenant_id == self.tenant_id)
                 .where(Spool.printer_id == printer_id)
                 .where(col(Spool.remaining_unknown).is_(False))
                 .where(col(Spool.tag_uid).is_(None))
@@ -1981,7 +2031,12 @@ class BambuClient:
             if not (filament_id or filament_type):
                 return active_spool
             filament = (
-                session.get(Filament, active_spool.filament_id)
+                session.exec(
+                    select(Filament).where(
+                        Filament.id == active_spool.filament_id,
+                        Filament.tenant_id == self.tenant_id,
+                    )
+                ).first()
                 if active_spool.filament_id
                 else None
             )
@@ -2024,7 +2079,10 @@ class BambuClient:
     ) -> dict[tuple[int, int], Spool]:
         """Resolve the mapped slots against the AMS state at finish time."""
         printer = session.exec(
-            select(Printer).where(Printer.serial == self.serial)
+            select(Printer).where(
+                Printer.tenant_id == self.tenant_id,
+                Printer.serial == self.serial,
+            )
         ).first()
         printer_id = printer.id if printer else None
         used_spool_ids: set[uuid.UUID] = set()

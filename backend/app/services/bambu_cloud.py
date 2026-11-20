@@ -1,4 +1,5 @@
 import logging
+import uuid
 from urllib.parse import urlparse
 
 import cloudscraper
@@ -12,6 +13,7 @@ from app.core.bambu_exceptions import (
     NotLoggedInError,
 )
 from app.core.store import get_cloud_credentials, get_cloud_token
+from app.core.tenancy import DEFAULT_TENANT_ID
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -50,11 +52,12 @@ class BambuCloudClient:
     - `login()` must be called before any request method.
     """
 
-    def __init__(self):
-        self.email = None
-        self.password = None
-        self.token = None
-        self.user_id = None
+    def __init__(self, tenant_id: uuid.UUID = DEFAULT_TENANT_ID):
+        self.tenant_id = tenant_id
+        self.email: str | None = None
+        self.password: str | None = None
+        self.token: str | None = None
+        self.user_id: str | None = None
 
     def set_credentials(self, email: str, password: str):
         self.email = email
@@ -63,14 +66,14 @@ class BambuCloudClient:
     def _load_credentials(self):
         """Load credentials from db only when needed."""
         if not self.email:
-            creds = get_cloud_credentials()
+            creds = get_cloud_credentials(self.tenant_id)
             self.email = creds.get("email")
             self.password = creds.get("password")
 
     def _load_token(self):
         """Load token from db only when needed."""
         if not self.token:
-            self.token = get_cloud_token()
+            self.token = get_cloud_token(self.tenant_id)
 
     def login(self, code: str | None = None):
         """Authenticate and store the access token.

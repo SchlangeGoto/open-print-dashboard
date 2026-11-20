@@ -21,6 +21,20 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
+    # The Expo SDK pins the exact versions of its own packages and of the
+    # native peers it ships with, and `npx expo install --check` in Test Mobile
+    # fails as soon as they drift. Dependabot cannot know the SDK's version
+    # map, so it opens PRs that are unmergeable by construction. These are
+    # bumped together with the SDK via `npx expo install --fix` instead.
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@types/react"
 
   - package-ecosystem: "npm"
     directory: "/site"

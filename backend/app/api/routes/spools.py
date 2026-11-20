@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
+from app import crud
 from app.api.deps import TenantContextDep, require_permission
 from app.core.tenancy import DEFAULT_TENANT_ID
 from app.models import (
@@ -561,6 +562,13 @@ def create_spool(*, context: TenantContextDep, spool_in: SpoolCreate) -> Any:
             detail="Spool tag or barcode is already in use",
         )
     session.refresh(spool)
+    crud.record_audit(
+        session=session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="spool.create",
+        target=str(spool.id),
+    )
     return spool
 
 
@@ -651,6 +659,13 @@ def delete_spool(spool_id: uuid.UUID, context: TenantContextDep) -> Any:
     spool = _get_spool(context, spool_id)
     context.session.delete(spool)
     context.session.commit()
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="spool.delete",
+        target=str(spool_id),
+    )
     return Message(message="Spool deleted")
 
 
@@ -696,4 +711,12 @@ def activate_spool(
             detail="Another spool is already loaded in that printer",
         )
     session.refresh(spool)
+    crud.record_audit(
+        session=session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="spool.activate",
+        target=str(spool.id),
+        details=printer.serial,
+    )
     return spool

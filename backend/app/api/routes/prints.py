@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import col, func, select
 
+from app import crud
 from app.api.deps import TenantContextDep, require_permission
 from app.models import (
     Message,
@@ -106,4 +107,11 @@ def delete_print(print_id: uuid.UUID, context: TenantContextDep) -> Any:
             client.forget_started_task(job.bambu_task_id)
     context.session.delete(job)
     context.session.commit()
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="print.delete",
+        target=str(print_id),
+    )
     return Message(message="Print job deleted")

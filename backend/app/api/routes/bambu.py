@@ -55,6 +55,12 @@ def login_start(context: TenantContextDep, payload: BambuLoginRequest) -> Any:
     try:
         printer_service.login(tenant_id)
         _pending_logins.discard(tenant_id)
+        crud.record_audit(
+            session=context.session,
+            tenant_id=tenant_id,
+            user_id=context.user.id,
+            action="bambu.login",
+        )
         return {"message": "Login successful"}
     except CodeRequiredError:
         _pending_logins.add(tenant_id)
@@ -81,6 +87,12 @@ def login_verify(context: TenantContextDep, payload: BambuVerifyRequest) -> Any:
     try:
         printer_service.login(tenant_id, payload.code)
         _pending_logins.discard(tenant_id)
+        crud.record_audit(
+            session=context.session,
+            tenant_id=tenant_id,
+            user_id=context.user.id,
+            action="bambu.login",
+        )
         return {"message": "Login successful"}
     except CodeExpiredError:
         return {
@@ -112,4 +124,10 @@ def delete_session(context: TenantContextDep) -> Any:
     crud.clear_cloud_credentials(session=context.session, tenant_id=tenant_id)
     printer_service.disconnect_tenant(tenant_id)
     printer_service.get_cloud_client(tenant_id).reset_session()
+    crud.record_audit(
+        session=context.session,
+        tenant_id=tenant_id,
+        user_id=context.user.id,
+        action="bambu.logout",
+    )
     return Message(message="Bambu Lab session cleared")

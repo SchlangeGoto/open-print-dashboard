@@ -17,12 +17,24 @@ from app.api.deps import (
 )
 from app.core import security
 from app.core.config import settings
-from app.core.tenancy import INVITABLE_ROLES, ROLES
+from app.core.tenancy import DEFAULT_TENANT_ID, INVITABLE_ROLES, ROLES
 from app.models import (
+    AppSetting,
+    AuditLogPublic,
+    AuditLogsPublic,
+    Filament,
+    FilamentPublic,
     Membership,
     Message,
+    PrintJob,
+    PrintJobPublic,
+    Spool,
+    SpoolPublic,
     Tenant,
     TenantCreate,
+    TenantDelete,
+    TenantHealth,
+    TenantHealthPrinter,
     TenantInvite,
     TenantInviteCreate,
     TenantInviteCreated,
@@ -37,6 +49,7 @@ from app.models import (
     TenantUpdate,
     User,
 )
+from app.services.printer_service import printer_service
 from app.utils import generate_invite_email, send_email
 
 router = APIRouter(tags=["tenants"])
@@ -130,6 +143,13 @@ def update_current_tenant(*, context: TenantContextDep, tenant_in: TenantUpdate)
         context.session.rollback()
         raise HTTPException(status_code=409, detail="Tenant slug already exists")
     context.session.refresh(tenant)
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="tenant.update",
+        target=tenant.slug,
+    )
     return tenant
 
 
@@ -155,6 +175,169 @@ def create_tenant(*, session: SessionDep, tenant_in: TenantCreate) -> Any:
     except IntegrityError:
         session.rollback()
         raise HTTPException(status_code=409, detail="Tenant slug already exists")
+
+
+@router.delete(
+    "/tenants/{tenant_id}",
+    response_model=Message,
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def delete_tenant(
+    *, session: SessionDep, tenant_id: uuid.UUID, body: TenantDelete
+) -> Any:
+    """Delete a tenant and every row that belongs to it.
+
+    The caller must repeat the slug. The Default tenant is kept because it is
+    the fallback for code that runs before a tenant is chosen and for model
+    defaults.
+    """
+    tenant = crud.get_tenant(session=session, tenant_id=tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    if tenant.id == DEFAULT_TENANT_ID:
+        raise HTTPException(
+            status_code=400, detail="The Default tenant cannot be deleted"
+        )
+    if body.slug != tenant.slug:
+        raise HTTPException(status_code=400, detail="Slug does not match the tenant")
+    session.delete(tenant)
+    session.commit()
+    return Message(message="Tenant deleted")
+
+
+# ────────────────────────────────────────────────────────────
+# Operations
+# ────────────────────────────────────────────────────────────
+@router.get(
+    "/tenants/current/health",
+    response_model=TenantHealth,
+)
+def tenant_health(context: TenantContextDep) -> Any:
+    """Report this tenant's cloud and MQTT connection state."""
+    printers = crud.get_printers(session=context.session, tenant_id=context.tenant.id)
+    statuses = printer_service.get_statuses(context.tenant.id)
+    health_printers = [
+        TenantHealthPrinter(
+            serial=printer.serial,
+            name=printer.name,
+            connected=bool((statuses.get(printer.serial) or {}).get("connected")),
+            last_report_seconds_ago=(statuses.get(printer.serial) or {}).get(
+                "last_report_seconds_ago"
+            ),
+        )
+        for printer in printers
+    ]
+    return TenantHealth(
+        tenant_id=context.tenant.id,
+        name=context.tenant.name,
+        is_active=context.tenant.is_active,
+        bambu_connected=crud.get_cloud_token(
+            session=context.session, tenant_id=context.tenant.id
+        )
+        is not None,
+        printers_configured=len(printers),
+        printers_connected=sum(1 for item in health_printers if item.connected),
+        printers=health_printers,
+    )
+
+
+@router.get(
+    "/tenants/current/audit",
+    response_model=AuditLogsPublic,
+    dependencies=[Depends(require_permission("tenant.manage"))],
+)
+def read_audit_log(context: TenantContextDep, limit: int = 100) -> Any:
+    logs = crud.list_audit_logs(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        limit=max(1, min(limit, 500)),
+    )
+    return AuditLogsPublic(
+        data=[AuditLogPublic.model_validate(log) for log in logs],
+        count=len(logs),
+    )
+
+
+@router.get(
+    "/tenants/current/export",
+    dependencies=[Depends(require_permission("tenant.manage"))],
+)
+def export_tenant(context: TenantContextDep) -> Any:
+    """Export this tenant's data as a JSON document.
+
+    Secrets (the Bambu token, password and email) are deliberately omitted.
+    """
+    session = context.session
+    tenant_id = context.tenant.id
+    memberships = crud.list_tenant_memberships(session=session, tenant_id=tenant_id)
+    users = {
+        user.id: user
+        for user in session.exec(
+            select(User).where(
+                col(User.id).in_([membership.user_id for membership in memberships])
+            )
+        ).all()
+    }
+    settings = session.exec(
+        select(AppSetting).where(AppSetting.tenant_id == tenant_id)
+    ).all()
+    hidden = {
+        "bambu_cloud_email",
+        "bambu_cloud_password",
+        "bambu_cloud_token",
+        "printer_access_code",
+    }
+    data = {
+        "tenant": TenantPublic.model_validate(context.tenant).model_dump(mode="json"),
+        "members": [
+            _member_public(users[membership.user_id], membership).model_dump(
+                mode="json"
+            )
+            for membership in memberships
+            if membership.user_id in users
+        ],
+        "printers": [
+            {
+                "id": str(printer.id),
+                "name": printer.name,
+                "serial": printer.serial,
+                "created_at": printer.created_at.isoformat()
+                if printer.created_at
+                else None,
+            }
+            for printer in crud.get_printers(session=session, tenant_id=tenant_id)
+        ],
+        "filaments": [
+            FilamentPublic.model_validate(filament).model_dump(mode="json")
+            for filament in session.exec(
+                select(Filament).where(Filament.tenant_id == tenant_id)
+            ).all()
+        ],
+        "spools": [
+            SpoolPublic.model_validate(spool).model_dump(mode="json")
+            for spool in session.exec(
+                select(Spool).where(Spool.tenant_id == tenant_id)
+            ).all()
+        ],
+        "print_jobs": [
+            PrintJobPublic.model_validate(job).model_dump(mode="json")
+            for job in session.exec(
+                select(PrintJob).where(PrintJob.tenant_id == tenant_id)
+            ).all()
+        ],
+        "settings": [
+            {"key": setting.key, "value": setting.value}
+            for setting in settings
+            if setting.key not in hidden
+        ],
+    }
+    crud.record_audit(
+        session=session,
+        tenant_id=tenant_id,
+        user_id=context.user.id,
+        action="tenant.export",
+    )
+    return data
 
 
 # ────────────────────────────────────────────────────────────
@@ -224,6 +407,14 @@ def update_member(
         user_id=user_id,
         role=member_in.role,
     )
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="member.role",
+        target=str(user.email),
+        details=member_in.role,
+    )
     return _member_public(user, membership)
 
 
@@ -250,6 +441,13 @@ def delete_member(*, context: TenantContextDep, user_id: uuid.UUID) -> Any:
         )
     context.session.delete(membership)
     context.session.commit()
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="member.remove",
+        target=str(user_id),
+    )
     return Message(message="Member removed")
 
 
@@ -286,6 +484,21 @@ def create_invite(*, context: TenantContextDep, invite_in: TenantInviteCreate) -
         )
     email = str(invite_in.email).lower()
     now = datetime.now(UTC)
+    if settings.TENANT_MAX_USERS > 0:
+        member_count = len(
+            crud.list_tenant_memberships(
+                session=context.session, tenant_id=context.tenant.id
+            )
+        )
+        pending_count = len(
+            crud.list_pending_invites(
+                session=context.session,
+                tenant_id=context.tenant.id,
+                now=now,
+            )
+        )
+        if member_count + pending_count >= settings.TENANT_MAX_USERS:
+            raise HTTPException(status_code=409, detail="Tenant user quota reached")
     existing_user = crud.get_user_by_email(session=context.session, email=email)
     if existing_user and crud.get_membership(
         session=context.session,
@@ -341,6 +554,14 @@ def create_invite(*, context: TenantContextDep, invite_in: TenantInviteCreate) -
             # of failing the request.
             delivered = False
 
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="invite.create",
+        target=email,
+        details=invite.role,
+    )
     return TenantInviteCreated.model_validate(
         invite,
         update={
@@ -368,4 +589,11 @@ def revoke_invite(*, context: TenantContextDep, invite_id: uuid.UUID) -> Any:
         invite.revoked_at = datetime.now(UTC)
         context.session.add(invite)
         context.session.commit()
+        crud.record_audit(
+            session=context.session,
+            tenant_id=context.tenant.id,
+            user_id=context.user.id,
+            action="invite.revoke",
+            target=str(invite.email),
+        )
     return Message(message="Invitation revoked")

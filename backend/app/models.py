@@ -47,6 +47,28 @@ class TenantUpdate(SQLModel):
         return TenantCreate._normalize_slug(value)
 
 
+class TenantDelete(SQLModel):
+    # Deleting a tenant is irreversible; typing the slug confirms intent.
+    slug: str = Field(min_length=1, max_length=50)
+
+
+class TenantHealthPrinter(SQLModel):
+    serial: str
+    name: str
+    connected: bool
+    last_report_seconds_ago: float | None = None
+
+
+class TenantHealth(SQLModel):
+    tenant_id: uuid.UUID
+    name: str
+    is_active: bool
+    bambu_connected: bool
+    printers_configured: int
+    printers_connected: int
+    printers: list[TenantHealthPrinter]
+
+
 class Tenant(TenantBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     is_active: bool = True
@@ -165,6 +187,37 @@ class TenantInviteAccept(SQLModel):
 class TenantInviteRegister(TenantInviteAccept):
     full_name: str | None = Field(default=None, max_length=255)
     password: str = Field(min_length=8, max_length=128)
+
+
+# ────────────────────────────────────────────────────────────
+# Audit log
+# ────────────────────────────────────────────────────────────
+class AuditLog(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: uuid.UUID = Field(
+        foreign_key="tenant.id", ondelete="CASCADE", index=True
+    )
+    user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL", index=True
+    )
+    action: str = Field(max_length=100, index=True)
+    target: str | None = Field(default=None, max_length=255)
+    details: str | None = None
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+
+
+class AuditLogPublic(SQLModel):
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    action: str
+    target: str | None = None
+    details: str | None = None
+    created_at: datetime | None = None
+
+
+class AuditLogsPublic(SQLModel):
+    data: list[AuditLogPublic]
+    count: int
 
 
 class TenantInvite(SQLModel, table=True):

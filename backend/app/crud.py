@@ -14,6 +14,7 @@ from app.core.security import (
 from app.core.tenancy import DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_TENANT_SLUG
 from app.models import (
     AppSetting,
+    AuditLog,
     Filament,
     FilamentStats,
     Membership,
@@ -198,6 +199,44 @@ def create_invite(
     session.commit()
     session.refresh(invite)
     return invite
+
+
+# ────────────────────────────────────────────────────────────
+# Audit log
+# ────────────────────────────────────────────────────────────
+def record_audit(
+    *,
+    session: Session,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID | None,
+    action: str,
+    target: str | None = None,
+    details: str | None = None,
+) -> AuditLog:
+    entry = AuditLog(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        action=action,
+        target=target,
+        details=details,
+    )
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    return entry
+
+
+def list_audit_logs(
+    *, session: Session, tenant_id: uuid.UUID, limit: int = 100
+) -> list[AuditLog]:
+    return list(
+        session.exec(
+            select(AuditLog)
+            .where(AuditLog.tenant_id == tenant_id)
+            .order_by(col(AuditLog.created_at).desc(), col(AuditLog.id).desc())
+            .limit(limit)
+        ).all()
+    )
 
 
 # ────────────────────────────────────────────────────────────

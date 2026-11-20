@@ -19,6 +19,7 @@ from app.core.bambu_exceptions import (
 )
 from app.core.config import settings
 from app.core.db import engine
+from app.core.rate_limit import TenantRateLimitMiddleware
 from app.services.printer_service import printer_service
 
 logger = logging.getLogger("uvicorn.error")
@@ -64,6 +65,7 @@ app.add_middleware(
     # from other 401s (for example an unlinked Bambu Cloud account).
     expose_headers=["WWW-Authenticate"],
 )
+app.add_middleware(TenantRateLimitMiddleware)
 
 
 @app.exception_handler(CloudflareError)

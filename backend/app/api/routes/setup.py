@@ -87,4 +87,10 @@ def skip_setup(context: TenantContextDep) -> Any:
             value="true",
             tenant_id=context.tenant.id,
         )
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="setup.skip",
+    )
     return Message(message="Setup skipped")

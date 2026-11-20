@@ -136,6 +136,13 @@ def create_filament(*, context: TenantContextDep, filament_in: FilamentCreate) -
     context.session.add(filament)
     context.session.commit()
     context.session.refresh(filament)
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="filament.create",
+        target=str(filament.id),
+    )
     return filament
 
 
@@ -167,4 +174,11 @@ def delete_filament(filament_id: uuid.UUID, context: TenantContextDep) -> Any:
     filament = _get_filament(context, filament_id)
     context.session.delete(filament)
     context.session.commit()
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="filament.delete",
+        target=str(filament_id),
+    )
     return Message(message="Filament deleted")

@@ -80,6 +80,13 @@ def accept_invite(
     invite.accepted_at = datetime.now(UTC)
     session.add(invite)
     session.commit()
+    crud.record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=current_user.id,
+        action="invite.accept",
+        target=str(current_user.email),
+    )
     return TenantMembershipPublic(
         id=tenant.id,
         name=tenant.name,
@@ -120,4 +127,11 @@ def register_from_invite(*, session: SessionDep, body: TenantInviteRegister) -> 
     invite.accepted_at = datetime.now(UTC)
     session.add(invite)
     session.commit()
+    crud.record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="invite.register",
+        target=str(user.email),
+    )
     return Message(message="Account created. Sign in to continue.")

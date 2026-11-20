@@ -2281,14 +2281,21 @@ class BambuClient:
         ):
             connected = False
         reauth_required = self._reauth_required
+        last_report = (
+            round(time.monotonic() - self._last_seen, 1)
+            if self._last_seen is not None
+            else None
+        )
         if not self._current_status:
             return {
                 "connected": connected,
                 "status": "no_data",
                 "reauth_required": reauth_required,
+                "last_report_seconds_ago": last_report,
             }
         return {
             **self._current_status,
             "connected": connected,
             "reauth_required": reauth_required,
+            "last_report_seconds_ago": last_report,
         }

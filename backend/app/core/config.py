@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: str | None = None
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 1
     TENANT_INVITE_EXPIRE_DAYS: int = 7
+    # 0 means unlimited. Quotas protect a shared deployment from one tenant
+    # consuming every printer slot or account.
+    TENANT_MAX_PRINTERS: int = 0
+    TENANT_MAX_USERS: int = 0
+    TENANT_RATE_LIMIT_PER_MINUTE: int = 0
 
     @model_validator(mode="after")
     def _set_default_emails_from(self) -> "Settings":

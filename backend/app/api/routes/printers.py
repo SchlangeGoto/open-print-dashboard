@@ -10,6 +10,7 @@ from sqlmodel import SQLModel
 from app import crud
 from app.api.deps import TenantContextDep, require_permission
 from app.core.bambu_exceptions import CloudflareError, NotLoggedInError
+from app.core.config import settings
 from app.models import (
     Message,
     Printer,
@@ -221,6 +222,12 @@ def get_printers(context: TenantContextDep) -> Any:
     dependencies=[Depends(require_permission("printers.write"))],
 )
 def create_printer(*, context: TenantContextDep, printer_in: PrinterCreate) -> Any:
+    if (
+        settings.TENANT_MAX_PRINTERS > 0
+        and crud.count_printers(session=context.session, tenant_id=context.tenant.id)
+        >= settings.TENANT_MAX_PRINTERS
+    ):
+        raise HTTPException(status_code=409, detail="Tenant printer quota reached")
     existing = crud.get_printer_by_serial(
         session=context.session,
         serial=printer_in.serial,
@@ -246,6 +253,13 @@ def create_printer(*, context: TenantContextDep, printer_in: PrinterCreate) -> A
             detail="A printer with this serial number is already configured",
         )
     printer_service.reload_printer(context.tenant.id, printer.serial)
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="printer.create",
+        target=printer.serial,
+    )
     return _serialize_printers(
         printer=printer,
         cloud_device=_cloud_device(context, printer.serial),
@@ -271,6 +285,13 @@ def update_printer(
         session=context.session, printer=printer, printer_in=printer_in
     )
     printer_service.reload_printer(context.tenant.id, printer.serial)
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="printer.update",
+        target=printer.serial,
+    )
     return _serialize_printers(
         printer=printer,
         cloud_device=_cloud_device(context, printer.serial),
@@ -292,6 +313,13 @@ def delete_printer(*, context: TenantContextDep, printer_id: uuid.UUID) -> Any:
     serial = printer.serial
     crud.delete_printer(session=context.session, printer=printer)
     printer_service.reload_printer(context.tenant.id, serial)
+    crud.record_audit(
+        session=context.session,
+        tenant_id=context.tenant.id,
+        user_id=context.user.id,
+        action="printer.delete",
+        target=serial,
+    )
     return Message(message="Printer deleted")
 
 

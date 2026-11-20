@@ -51,7 +51,7 @@ export default function HomePage() {
     description:
       "Self-hosted dashboard for Bambu Lab 3D printers with live status, filament and spool inventory, print history and material cost.",
     offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
-    license: "https://www.gnu.org/licenses/agpl-3.0.html",
+    license: "https://fsl.software/",
   };
 
   const faqJsonLd = {
@@ -105,7 +105,7 @@ export default function HomePage() {
               </Link>
             </div>
             <p className="mt-5 text-sm text-[var(--color-muted-2)]">
-              Runs in Docker. Works with Bambu Lab X1, P1 and A1. AGPL-3.0.
+              Runs in Docker. Works with Bambu Lab X1, P1 and A1. FSL-1.1.
             </p>
           </div>
 
@@ -458,9 +458,11 @@ export default function HomePage() {
               Built in the open.
             </h2>
             <p className="mt-5 max-w-xl text-base leading-7 text-[var(--color-muted)]">
-              OpenPrintDashboard is AGPL-3.0. Read the code, run it, fork it,
-              send a pull request. No open-core tricks, no feature gates, no
-              telemetry.
+              OpenPrintDashboard is source-available under FSL-1.1. Read the
+              code, run it, fork it, send a pull request. No open-core tricks,
+              no feature gates, no telemetry. The one restriction: don&apos;t
+              offer it as a competing hosted service. Every release becomes
+              Apache-2.0 after two years.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a
@@ -478,7 +480,7 @@ export default function HomePage() {
                 rel="noreferrer"
                 className="inline-flex items-center rounded-md border border-[var(--color-rule-strong)] px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-surface-hover)]"
               >
-                AGPL-3.0 license
+                FSL-1.1 license
               </a>
             </div>
           </div>

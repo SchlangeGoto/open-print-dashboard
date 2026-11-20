@@ -150,8 +150,9 @@ export default function HostingPage() {
           <p className="mt-4 text-sm leading-6 text-[var(--color-muted)]">
             The beta is for people who want to try the product without running
             the stack themselves. It is a convenience, not a feature gate or the
-            business model; the app stays AGPL-3.0 and self-hosting stays free.
-            We are keeping the beta small so feedback has somewhere to go.
+            business model; the app stays source-available under FSL-1.1 and
+            self-hosting stays free. We are keeping the beta small so feedback
+            has somewhere to go.
           </p>
         </div>
 
@@ -170,7 +171,7 @@ export default function HostingPage() {
             {
               icon: ShieldCheck,
               title: "Self-hosting stays free",
-              body: "The AGPL-3.0 app remains available to run yourself. The beta is an option, not a replacement.",
+              body: "The FSL-1.1 app remains available to run yourself. The beta is an option, not a replacement.",
             },
           ].map((item) => (
             <div key={item.title}>
@@ -194,7 +195,7 @@ export default function HostingPage() {
           {[
             [
               "Is self-hosting going away?",
-              "No. Self-hosting is the default, stays free, and remains AGPL-3.0. The hosted beta is for people who would rather not run a server.",
+              "No. Self-hosting is the default, stays free, and remains source-available under FSL-1.1. The hosted beta is for people who would rather not run a server.",
             ],
             [
               "How much will it cost?",

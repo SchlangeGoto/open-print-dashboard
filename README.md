@@ -12,7 +12,7 @@ spool inventory, print history and material cost — on your own hardware.
 [<img src="https://img.shields.io/badge/website-openprintdash.app-059669?style=flat-square" alt="Website" />](https://openprintdash.app)
 [<img src="https://img.shields.io/badge/demo-live-059669?style=flat-square" alt="Live demo" />](https://demo.openprintdash.app)
 [<img src="https://img.shields.io/badge/version-0.1.0-059669?style=flat-square" alt="Version 0.1.0" />](https://github.com/SchlangeGoto/open-print-dashboard)
-[<img src="https://img.shields.io/badge/license-AGPL--3.0-059669?style=flat-square" alt="AGPL-3.0" />](LICENSE)
+[<img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-059669?style=flat-square" alt="FSL-1.1-ALv2" />](LICENSE)
 [<img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker ready" />](compose.prod.yml)
 
 [Website](https://openprintdash.app) ·
@@ -70,8 +70,13 @@ without a paid Apple Developer account.
 | **Bambu Cloud** | Account login, printer discovery, and history or covers where cloud sync is used. |
 | **Nowhere else** | No analytics, no telemetry, no third-party tracking. |
 
-The app is AGPL-3.0. Bambu Cloud is part of the printer connection, and we
-say so plainly. Your dashboard data stays on your hardware.
+The app is source-available under the Functional Source License
+(`FSL-1.1-ALv2`). Run it for yourself or your business, modify it and share it.
+You may not offer it as a competing hosted service. Every release becomes
+Apache-2.0 two years after it is published. See [`LICENSING.md`](LICENSING.md)
+for the plain-language version and the older AGPL releases. Bambu Cloud is part
+of the printer connection, and we say so plainly. Your dashboard data stays on
+your hardware.
 
 ## Stack
 
@@ -198,7 +203,9 @@ Donations cover the demo, the domain and maintenance; self-hosting stays free.
 
 ## License
 
-GNU AGPLv3 — see [`LICENSE`](LICENSE). Not affiliated with Bambu Lab.
+Functional Source License 1.1, ALv2 Future License — see [`LICENSE`](LICENSE)
+and [`LICENSING.md`](LICENSING.md). Older releases remain AGPL-3.0. Not
+affiliated with Bambu Lab.
 
 ## Acknowledgements
 

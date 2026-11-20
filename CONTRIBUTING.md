@@ -3,6 +3,15 @@
 Thanks for helping. This repository is a polyglot monorepo: a FastAPI backend,
 a Next.js dashboard, an Expo mobile app, and a static marketing site.
 
+## Licensing of contributions
+
+The project is source-available under `FSL-1.1-ALv2`; it is not OSI open source
+while those terms apply. By submitting a contribution you confirm that you have
+the right to license it under those terms and grant the maintainer the rights
+needed to distribute it under the future Apache-2.0 license described in
+[`LICENSING.md`](LICENSING.md). If your employer owns your work, make sure you
+have permission before contributing.
+
 ## Before you start
 
 - Read [`docs/SETUP.md`](docs/SETUP.md) for local setup.

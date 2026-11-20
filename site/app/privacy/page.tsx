@@ -139,7 +139,7 @@ export default function PrivacyPage() {
                 rel="noreferrer"
                 className="text-[var(--color-muted)] hover:text-[var(--color-ink)]"
               >
-                AGPL-3.0 license
+                FSL-1.1 license
               </a>
             </div>
           </section>

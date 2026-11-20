@@ -335,7 +335,7 @@ export default function MembersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="hidden md:table">
             <TableHeader>
               <TableRow>
                 <TableHead>Member</TableHead>
@@ -396,6 +396,59 @@ export default function MembersPage() {
               ))}
             </TableBody>
           </Table>
+
+          <div className="space-y-3 md:hidden">
+            {members.map((member) => (
+              <div
+                key={member.user_id}
+                className="space-y-3 rounded-lg border bg-muted/20 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {member.full_name || member.email}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {member.email}
+                    </p>
+                  </div>
+                  <Badge variant={member.is_active ? "success" : "secondary"}>
+                    {member.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={member.role}
+                    onValueChange={(value) =>
+                      value && void handleRoleChange(member, value)
+                    }
+                    disabled={busyUserId === member.user_id}
+                  >
+                    <SelectTrigger size="sm" className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner">Owner</SelectItem>
+                      {ROLE_OPTIONS.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {roleLabel(role)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={`Remove ${member.email}`}
+                    disabled={busyUserId === member.user_id}
+                    onClick={() => setMemberToRemove(member)}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -412,34 +465,59 @@ export default function MembersPage() {
               No pending invitations.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invites.map((invite) => (
-                  <TableRow key={invite.id}>
-                    <TableCell>{invite.email}</TableCell>
-                    <TableCell>{roleLabel(invite.role)}</TableCell>
-                    <TableCell>{formatDate(invite.expires_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void handleRevoke(invite)}
-                      >
-                        Revoke
-                      </Button>
-                    </TableCell>
+            <>
+              <Table className="hidden md:table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invites.map((invite) => (
+                    <TableRow key={invite.id}>
+                      <TableCell>{invite.email}</TableCell>
+                      <TableCell>{roleLabel(invite.role)}</TableCell>
+                      <TableCell>{formatDate(invite.expires_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void handleRevoke(invite)}
+                        >
+                          Revoke
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="space-y-2 md:hidden">
+                {invites.map((invite) => (
+                  <div
+                    key={invite.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm">{invite.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {roleLabel(invite.role)} · expires{" "}
+                        {formatDate(invite.expires_at)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleRevoke(invite)}
+                    >
+                      Revoke
+                    </Button>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -457,34 +535,57 @@ export default function MembersPage() {
               No recorded activity yet.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {audit.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDateTime(entry.created_at)}
-                    </TableCell>
-                    <TableCell className="capitalize">
-                      {actionLabel(entry.action)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {entry.target ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {entry.details ?? "—"}
-                    </TableCell>
+            <>
+              <Table className="hidden md:table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Details</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {audit.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {formatDateTime(entry.created_at)}
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {actionLabel(entry.action)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {entry.target ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {entry.details ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="space-y-2 md:hidden">
+                {audit.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-lg border bg-muted/20 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium capitalize">
+                        {actionLabel(entry.action)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDateTime(entry.created_at)}
+                      </p>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                      {entry.target ?? "—"}
+                      {entry.details ? ` · ${entry.details}` : ""}
+                    </p>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

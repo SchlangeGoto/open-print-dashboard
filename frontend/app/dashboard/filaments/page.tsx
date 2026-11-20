@@ -275,13 +275,13 @@ export default function FilamentsPage() {
                       className="size-12 shrink-0 rounded-xl border shadow-inner"
                       style={{ backgroundColor: f.color_hex }}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{f.color_name}</p>
-                      <p className="text-xs text-muted-foreground">{f.brand}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-muted-foreground">{f.brand}</p>
+                        <Badge variant="secondary">{f.material}</Badge>
+                      </div>
                     </div>
-                    <Badge variant="secondary" className="ml-auto">
-                      {f.material}
-                    </Badge>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">

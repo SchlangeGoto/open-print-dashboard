@@ -209,7 +209,7 @@ export default function TenantsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="hidden md:table">
             <TableHeader>
               <TableRow>
                 <TableHead>Tenant</TableHead>
@@ -270,6 +270,59 @@ export default function TenantsPage() {
               ))}
             </TableBody>
           </Table>
+          <div className="space-y-3 md:hidden">
+            {tenants.map((tenant) => (
+              <div
+                key={tenant.id}
+                className="space-y-3 rounded-lg border bg-muted/20 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{tenant.name}</p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {tenant.slug}
+                    </p>
+                  </div>
+                  <Badge variant={tenant.is_active ? "success" : "secondary"}>
+                    {tenant.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Created {formatDate(tenant.created_at)}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!tenant.is_active}
+                    onClick={() => switchTenant(tenant.id)}
+                  >
+                    <ExternalLink /> Open
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busyId === tenant.id || tenant.slug === "default"}
+                    onClick={() => void toggleActive(tenant)}
+                  >
+                    <Power />
+                    {tenant.is_active ? "Deactivate" : "Activate"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={tenant.slug === "default"}
+                    onClick={() => {
+                      setDeleteTarget(tenant);
+                      setDeleteConfirm("");
+                    }}
+                  >
+                    <Trash2 /> Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

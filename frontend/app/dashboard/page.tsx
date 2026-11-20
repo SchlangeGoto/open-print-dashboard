@@ -5,6 +5,7 @@ import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
 import { Eye, Printer as PrinterIcon, Thermometer } from "lucide-react";
 
 import { api, type Printer } from "@/lib/api";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   chartColor,
   formatEstimatedEnd,
@@ -37,6 +38,7 @@ const filamentChartConfig = {
 } satisfies ChartConfig;
 
 export default function DashboardPage() {
+  const isMobile = useIsMobile();
   const [activePrints, setActivePrints] = useState<any[]>([]);
   const [filaments, setFilaments] = useState<any[]>([]);
   const [spools, setSpools] = useState<any[]>([]);
@@ -270,7 +272,7 @@ export default function DashboardPage() {
           <CardContent>
             <ChartContainer
               config={filamentChartConfig}
-              className="h-[300px] w-full"
+              className="h-[230px] w-full md:h-[300px]"
             >
               <BarChart accessibilityLayer data={filamentChartData}>
                 <CartesianGrid vertical={false} />
@@ -279,6 +281,7 @@ export default function DashboardPage() {
                   tickLine={false}
                   tickMargin={10}
                   axisLine={false}
+                  tick={!isMobile}
                   tickFormatter={(value) =>
                     value.length > 12 ? `${value.slice(0, 12)}…` : value
                   }
@@ -286,6 +289,7 @@ export default function DashboardPage() {
                 <YAxis
                   tickLine={false}
                   axisLine={false}
+                  width={48}
                   tickFormatter={(value) => `${value}g`}
                 />
                 <ChartTooltip

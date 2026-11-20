@@ -35,6 +35,11 @@ customers on one instance would see and control each other's printers.
 **Out of scope for the first cut:** billing, per-tenant custom domains,
 per-tenant themes.
 
+**Status (2026-11-20):** moved out of the public repo. The hosted edition lives
+in the private `open-print-dashboard-hosted` repository; the public dashboard
+stays single-tenant and AGPL-3.0. The rest of this section is kept as the
+design reference for that private edition.
+
 ### Phases and tasks
 
 #### T-01 — Tenant and membership schema
@@ -267,10 +272,108 @@ These open issues should be solved as part of the epic, not separately:
 | D-14 | Scan and confirm accept a client-generated `request_id` for retry idempotency. This is not content dedupe (D-06): two different requests still add two spools. | Barcode scan/confirm |
 | D-15 | `:latest` moves only when the tag is plain `vX.Y.Z`, the newest semver on `main`, and the `main` tip at guard time. Version tags still publish from any main commit. Pin `IMAGE_TAG` in production. | Release containers |
 | D-13 | AMS adoption is weight-aware: a partial tray never adopts a full spool; only untagged spools on no printer whose remaining weight is within max(50 g, 15 %) are candidates, FIFO breaks ties. A tray with no percentage creates a `remaining_unknown` spool (nominal capacity as placeholder), never 0 g or a fake full weight. Entering the remaining grams clears the flag. | AMS sync, spool UI |
+| D-16 | The public repo stays **AGPL-3.0 and single-tenant**. Tenancy, hosted onboarding, platform-admin tenant tools and the provisioning API live in the private hosted edition; billing and the control plane live in the private `opd-cloud` repo. | Repo split, 2026-11-20 |
+| D-17 | The public mobile app is the self-hosted client. The hosted app is a separate build/repo with the tenant picker and hosted-only admin screens. General mobile features sync back through the upstream workflow. | Repo split, mobile |
+| D-18 | The public marketing site stays in this repo and markets the free self-hosted product. Pricing, checkout, account and admin pages live in the private hosted site. | Site split |
 
 ---
 
-## 4. Done (for reference)
+## 4. Dashboard motion and polish (idea)
+
+**Goal:** the dashboard should feel alive without becoming noisy. Animate on
+first load and meaningful state changes, never on background polling.
+
+**Library:** start with CSS transitions/keyframes and the View Transition API
+where it fits. Add `motion` (Framer Motion successor) only if shared layout
+animations justify the dependency.
+
+#### A-01 — Motion primitives
+- Shared duration/easing tokens (fast 120 ms, normal 200 ms, slow 350 ms).
+- A `useReducedMotion` hook and a global `prefers-reduced-motion` fallback.
+- One rule: polled refreshes update values in place; only mount, navigation and
+  explicit actions animate.
+
+#### A-02 — Spools
+- Stagger spool cards on first load.
+- Animate the remaining-filament fill and spool ring from 0 to the real value.
+- Animate load/unload transitions and the active-spool indicator.
+- Keep the animation short so a poll does not replay it.
+
+#### A-03 — Dashboard and analytics
+- Count up the stat cards on first mount.
+- Grow chart bars/lines from the baseline when the range or data changes.
+- Crossfade skeleton → content instead of a hard swap.
+
+#### A-04 — Navigation and overlays
+- Subtle page-enter transition on dashboard routes.
+- Animate the sidebar active pill, dropdowns, dialogs and sheets.
+- Animate the spool/filament load and save transitions.
+
+#### A-05 — Feedback
+- Spool scan success, activate/unload and filament save get a short visual
+  confirmation instead of only a toast.
+- Error states shake/fade once; never loop.
+
+**Acceptance:** animates only transform/opacity, no layout shift, 60 fps on a
+mid-range laptop, full `prefers-reduced-motion` support, and a Playwright check
+that the spool page renders the final values after the animation.
+
+---
+
+## 5. Mobile parity and phone-first dashboard
+
+**Goal:** the phone is a first-class client, not only a scanner. It should show
+the same operational picture as the web dashboard and make the common actions
+reachable in one or two taps.
+
+**Planned public work (ported from the closed mobile branches):**
+
+- **M-00:** Port the general mobile dashboard, print jobs, filaments and
+  analytics screens back into the public self-host client **without** tenant
+  picker, member or tenant-admin code.
+- Mobile **Dashboard** tab: online/loaded/filament/printing stats, active print
+  progress, recent history, low-filament list and quick actions.
+- Mobile **Print jobs** screen with status filters and history.
+- Mobile **Filaments** screen with remaining stock and a filament detail page.
+- Mobile **Analytics** screen with totals, seven-day activity and top filaments.
+- Web small-screen fixes: card layouts instead of clipped tables, phone-safe
+  filament cards, responsive stock chart.
+
+**Still open:**
+
+- M-01: Safe printer actions from the phone (pause/cancel only with explicit
+  confirmation) and active-job detail.
+- M-02: Mobile filament/spool editing.
+- M-03: Push notifications for print finished/failed and spool loaded.
+- M-04: A full responsive pass over every remaining table, chart and dialog.
+
+**Acceptance:** every dashboard data view has a phone layout with no horizontal
+page scroll, no clipped actions, and at least one Playwright/mobile smoke test.
+
+---
+
+## 6. Filament pricing defaults
+
+**Goal:** a filament type carries its usual price per kilogram, so adding or
+scanning a spool does not require typing the price every time.
+
+- F-01: add `default_price_per_kg` to `Filament` (migration, create/update
+  forms, filament detail).
+- F-02: new and scanned spools inherit the filament default when
+  `price_per_kg` is omitted.
+- F-03: after a scan, show the inherited price in the confirm/edit step and let
+  the user override it for that spool.
+- F-04: mobile scan-confirm and spool detail expose the same field.
+- F-05: price edits only affect new spools; existing spools keep their recorded
+  purchase price.
+
+**Acceptance:** scanning a known filament creates a spool with the default
+price, and the user can change that spool's price immediately without opening
+the full filament editor.
+
+---
+
+## 7. Done (for reference)
 
 These were found and fixed while consolidating PR #20. Kept here so they are not
 re-opened.

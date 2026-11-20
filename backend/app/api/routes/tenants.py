@@ -34,7 +34,6 @@ from app.models import (
     TenantCreate,
     TenantDelete,
     TenantHealth,
-    TenantHealthPrinter,
     TenantInvite,
     TenantInviteCreate,
     TenantInviteCreated,
@@ -50,6 +49,7 @@ from app.models import (
     User,
 )
 from app.services.printer_service import printer_service
+from app.services.tenant_health import build_tenant_health
 from app.utils import generate_invite_email, send_email
 
 router = APIRouter(tags=["tenants"])
@@ -260,31 +260,7 @@ def admin_update_tenant(
 )
 def tenant_health(context: TenantContextDep) -> Any:
     """Report this tenant's cloud and MQTT connection state."""
-    printers = crud.get_printers(session=context.session, tenant_id=context.tenant.id)
-    statuses = printer_service.get_statuses(context.tenant.id)
-    health_printers = [
-        TenantHealthPrinter(
-            serial=printer.serial,
-            name=printer.name,
-            connected=bool((statuses.get(printer.serial) or {}).get("connected")),
-            last_report_seconds_ago=(statuses.get(printer.serial) or {}).get(
-                "last_report_seconds_ago"
-            ),
-        )
-        for printer in printers
-    ]
-    return TenantHealth(
-        tenant_id=context.tenant.id,
-        name=context.tenant.name,
-        is_active=context.tenant.is_active,
-        bambu_connected=crud.get_cloud_token(
-            session=context.session, tenant_id=context.tenant.id
-        )
-        is not None,
-        printers_configured=len(printers),
-        printers_connected=sum(1 for item in health_printers if item.connected),
-        printers=health_printers,
-    )
+    return build_tenant_health(context.session, context.tenant)
 
 
 @router.get(

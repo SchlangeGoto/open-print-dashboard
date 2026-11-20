@@ -22,6 +22,7 @@ GLOBAL_PREFIXES = (
     f"{API}/users",
     f"{API}/utils",
     f"{API}/invites",
+    f"{API}/internal",
     f"{API}/password-recovery",
     f"{API}/reset-password",
     f"{API}/me/tenants",

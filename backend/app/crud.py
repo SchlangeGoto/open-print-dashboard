@@ -64,6 +64,10 @@ def get_tenant_by_slug(*, session: Session, slug: str) -> Tenant | None:
     return session.exec(select(Tenant).where(Tenant.slug == slug)).first()
 
 
+def get_tenant_by_external_id(*, session: Session, external_id: str) -> Tenant | None:
+    return session.exec(select(Tenant).where(Tenant.external_id == external_id)).first()
+
+
 def get_tenants(*, session: Session, active_only: bool = False) -> list[Tenant]:
     statement = select(Tenant).order_by(col(Tenant.created_at), col(Tenant.id))
     if active_only:
@@ -71,8 +75,13 @@ def get_tenants(*, session: Session, active_only: bool = False) -> list[Tenant]:
     return list(session.exec(statement).all())
 
 
-def create_tenant(*, session: Session, tenant_in: TenantCreate) -> Tenant:
-    tenant = Tenant.model_validate(tenant_in)
+def create_tenant(
+    *,
+    session: Session,
+    tenant_in: TenantCreate,
+    external_id: str | None = None,
+) -> Tenant:
+    tenant = Tenant.model_validate(tenant_in, update={"external_id": external_id})
     session.add(tenant)
     session.commit()
     session.refresh(tenant)
@@ -185,7 +194,7 @@ def create_invite(
     role: str,
     token_hash: str,
     expires_at: datetime,
-    invited_by: uuid.UUID,
+    invited_by: uuid.UUID | None = None,
 ) -> TenantInvite:
     invite = TenantInvite(
         tenant_id=tenant_id,

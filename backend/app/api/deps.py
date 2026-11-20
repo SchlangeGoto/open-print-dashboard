@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
@@ -300,3 +301,27 @@ def require_tenant_admin(context: TenantContextDep) -> TenantContext:
             detail="Tenant admin privileges required",
         )
     return context
+
+
+def require_provisioning_token(
+    x_provisioning_token: Annotated[
+        str | None, Header(alias="X-Provisioning-Token")
+    ] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """Authenticate the hosted control plane against the internal API.
+
+    The token is a deployment secret, not a user JWT. Internal routes are not
+    registered for public use; reverse proxies should also block them.
+    """
+    expected = settings.PROVISIONING_TOKEN
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not found")
+    token = x_provisioning_token
+    if not token and authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:]
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid provisioning token",
+        )

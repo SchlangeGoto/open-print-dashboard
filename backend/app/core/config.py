@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_REUSE_GRACE_SECONDS: int = 30
     FRONTEND_HOST: str = "http://localhost:3000"
 
+    # A shared secret for the private provisioning API used by the hosted
+    # control plane. When unset, the internal routes are disabled.
+    PROVISIONING_TOKEN: str | None = None
+
     DATABASE_URL: PostgresDsn
 
     @field_validator("DATABASE_URL", mode="before")

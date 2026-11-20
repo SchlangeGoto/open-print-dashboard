@@ -70,8 +70,27 @@ class TenantHealth(SQLModel):
     printers: list[TenantHealthPrinter]
 
 
+class InternalTenantCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    slug: str = Field(min_length=1, max_length=50)
+    owner_email: EmailStr
+
+    @field_validator("slug")
+    @classmethod
+    def _normalize_slug(cls, value: str) -> str:
+        return TenantCreate._normalize_slug(value)
+
+
+class InternalTenantUpdate(SQLModel):
+    is_active: bool
+
+
 class Tenant(TenantBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    # Hosted control-plane idempotency key. Null for self-hosted tenants.
+    external_id: str | None = Field(
+        default=None, unique=True, index=True, max_length=100
+    )
     is_active: bool = True
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     updated_at: datetime | None = Field(default_factory=get_datetime_utc)
@@ -81,6 +100,13 @@ class TenantPublic(TenantBase):
     id: uuid.UUID
     is_active: bool
     created_at: datetime | None = None
+
+
+class InternalTenantResult(SQLModel):
+    tenant: TenantPublic
+    owner_email: EmailStr
+    invite_url: str | None = None
+    created: bool
 
 
 class TenantMembershipPublic(SQLModel):

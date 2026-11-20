@@ -152,6 +152,34 @@ Keep the `data` volume: it contains `secret_key`, which decrypts the stored
 Bambu credentials. A database restore without the matching key makes every
 Bambu account look disconnected.
 
+## Internal provisioning API
+
+The hosted control plane uses `/api/v1/internal/*`. It is authenticated with
+`PROVISIONING_TOKEN`, a deployment secret, not a user JWT. When the variable is
+empty the routes return `404`.
+
+```bash
+curl -X POST -H "X-Provisioning-Token: $PROVISIONING_TOKEN" \
+     -H "Content-Type: application/json" \
+     -H "Idempotency-Key: <workspace-uuid>" \
+     -d '{"name":"Acme","slug":"acme","owner_email":"owner@acme.example"}' \
+     https://dashboard.example.com/api/v1/internal/tenants
+```
+
+- `POST /tenants` is idempotent on `Idempotency-Key` (stored as
+  `tenant.external_id`). A retry returns the same tenant and a fresh owner
+  invite when the owner has not accepted yet.
+- `GET /tenants/{id}` and `GET /tenants/{id}/health` support reconciliation
+  and support.
+- `PATCH /tenants/{id}` activates or suspends the workspace. The Default
+  tenant cannot be changed through this API.
+- The owner receives an invite link in the response exactly once; the control
+  plane sends its own welcome email.
+
+Reverse proxies must block `/api/v1/internal/` from the public internet. The
+token should live in a secret manager and be rotated independently of
+`SECRET_KEY`.
+
 ## Tests
 
 `backend/tests/test_route_inventory.py` fails when a new API route is added

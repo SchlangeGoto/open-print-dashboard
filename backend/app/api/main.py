@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     bambu,
     filaments,
+    internal,
     invites,
     login,
     printers,
@@ -20,6 +21,7 @@ api_router.include_router(login.router)
 api_router.include_router(users.router)
 api_router.include_router(tenants.router)
 api_router.include_router(invites.router)
+api_router.include_router(internal.router)
 api_router.include_router(utils.router)
 api_router.include_router(setup.router)
 api_router.include_router(bambu.router)

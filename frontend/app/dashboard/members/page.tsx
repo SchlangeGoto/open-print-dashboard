@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, MailPlus, Trash2, Users } from "lucide-react";
+import { Copy, Download, MailPlus, Trash2, Users } from "lucide-react";
 
 import {
   api,
+  type AuditEntry,
   type TenantInvite,
   type TenantInviteCreated,
   type TenantMember,
@@ -70,6 +71,17 @@ function formatDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
 }
 
+function formatDateTime(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function actionLabel(action: string): string {
+  const [, verb] = action.split(".");
+  return verb ? verb.replaceAll("_", " ") : action;
+}
+
 export default function MembersPage() {
   const { tenants, activeTenantId } = useAuth();
   const activeTenant = tenants.find((tenant) => tenant.id === activeTenantId);
@@ -78,9 +90,11 @@ export default function MembersPage() {
 
   const [members, setMembers] = useState<TenantMember[]>([]);
   const [invites, setInvites] = useState<TenantInvite[]>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<TenantMember | null>(
     null,
   );
@@ -100,12 +114,14 @@ export default function MembersPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [memberList, inviteList] = await Promise.all([
+      const [memberList, inviteList, auditList] = await Promise.all([
         api.getTenantMembers(),
         api.getTenantInvites(),
+        api.getTenantAudit(50),
       ]);
       setMembers(memberList);
       setInvites(inviteList);
+      setAudit(auditList);
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Could not load members",
@@ -130,6 +146,37 @@ export default function MembersPage() {
     }
   }, [activeTenant]);
 
+  const refreshAudit = useCallback(async () => {
+    try {
+      setAudit(await api.getTenantAudit(50));
+    } catch {
+      // The action itself succeeded; an audit refresh failure is not fatal.
+    }
+  }, []);
+
+  async function handleExport() {
+    setExportBusy(true);
+    try {
+      const data = await api.exportTenant();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${tenantSlug || "tenant"}-export.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Export downloaded");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not export the tenant",
+      );
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   async function handleRoleChange(member: TenantMember, role: string) {
     setBusyUserId(member.user_id);
     try {
@@ -140,6 +187,7 @@ export default function MembersPage() {
         ),
       );
       toast.success(`${updated.full_name || updated.email} is now ${role}`);
+      await refreshAudit();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not change the role",
@@ -159,6 +207,7 @@ export default function MembersPage() {
         current.filter((member) => member.user_id !== target.user_id),
       );
       toast.success("Member removed");
+      await refreshAudit();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not remove the member",
@@ -179,6 +228,7 @@ export default function MembersPage() {
       setInviteEmail("");
       setInviteRole("viewer");
       toast.success("Invitation created");
+      await refreshAudit();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not create the invite",
@@ -193,6 +243,7 @@ export default function MembersPage() {
       await api.revokeTenantInvite(invite.id);
       setInvites((current) => current.filter((item) => item.id !== invite.id));
       toast.success("Invitation revoked");
+      await refreshAudit();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not revoke the invite",
@@ -256,6 +307,13 @@ export default function MembersPage() {
         </div>
         <Button onClick={() => setInviteOpen(true)}>
           <MailPlus /> Invite member
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => void handleExport()}
+          disabled={exportBusy}
+        >
+          <Download /> {exportBusy ? "Exporting…" : "Export data"}
         </Button>
       </div>
 
@@ -375,6 +433,51 @@ export default function MembersPage() {
                       >
                         Revoke
                       </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent activity</CardTitle>
+          <CardDescription>
+            Tenant changes recorded for owners and admins.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {audit.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No recorded activity yet.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {audit.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatDateTime(entry.created_at)}
+                    </TableCell>
+                    <TableCell className="capitalize">
+                      {actionLabel(entry.action)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {entry.target ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {entry.details ?? "—"}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -203,6 +203,40 @@ function saveDemoInvites(invites: any[]): void {
   save(`invites:${currentDemoTenantId()}`, invites);
 }
 
+function demoAudit(): any[] {
+  return load(`audit:${currentDemoTenantId()}`, [
+    {
+      id: "demo-audit-1",
+      user_id: DEMO_USER.id,
+      action: "invite.create",
+      target: "alex@openprint.local",
+      details: "operator",
+      created_at: "2026-03-12T14:30:00.000Z",
+    },
+    {
+      id: "demo-audit-2",
+      user_id: DEMO_USER.id,
+      action: "printer.create",
+      target: "01P00A000000001",
+      details: null,
+      created_at: "2026-03-10T09:15:00.000Z",
+    },
+  ]);
+}
+
+function recordDemoAudit(action: string, target: string, details?: string) {
+  const entries = demoAudit();
+  entries.unshift({
+    id: newId(),
+    user_id: DEMO_USER.id,
+    action,
+    target,
+    details: details ?? null,
+    created_at: new Date().toISOString(),
+  });
+  save(`audit:${currentDemoTenantId()}`, entries.slice(0, 100));
+}
+
 
 export const demoApi: ApiShape = {
   // ── Setup / auth ──────────────────────────────────────────────────────────
@@ -235,6 +269,9 @@ export const demoApi: ApiShape = {
       )!,
       ...data,
       created_at: null,
+    }).then((tenant) => {
+      recordDemoAudit("tenant.update", tenant.slug ?? "demo");
+      return tenant;
     }),
 
   getTenantMembers: () => delay(demoMembers()),
@@ -245,13 +282,16 @@ export const demoApi: ApiShape = {
     if (!member) throw new Error("Member not found");
     member.role = role;
     saveDemoMembers(members);
+    recordDemoAudit("member.role", member.email, role);
     return delay(member);
   },
 
   removeTenantMember: (userId) => {
+    const member = demoMembers().find((item) => item.user_id === userId);
     saveDemoMembers(
       demoMembers().filter((member) => member.user_id !== userId),
     );
+    recordDemoAudit("member.remove", member?.email ?? userId);
     return delay({ message: "Member removed" });
   },
 
@@ -271,13 +311,16 @@ export const demoApi: ApiShape = {
     const invites = demoInvites();
     invites.unshift(invite);
     saveDemoInvites(invites);
+    recordDemoAudit("invite.create", email, role);
     return delay(invite);
   },
 
   revokeTenantInvite: (inviteId) => {
+    const invite = demoInvites().find((item) => item.id === inviteId);
     saveDemoInvites(
       demoInvites().filter((invite) => invite.id !== inviteId),
     );
+    recordDemoAudit("invite.revoke", invite?.email ?? inviteId);
     return delay({ message: "Invitation revoked" });
   },
 
@@ -297,6 +340,34 @@ export const demoApi: ApiShape = {
 
   registerFromInvite: () =>
     delay({ message: "Account created. Sign in to continue." }),
+
+  getTenantAudit: (limit = 100) => delay(demoAudit().slice(0, limit)),
+
+  getTenantHealth: () =>
+    delay({
+      tenant_id: currentDemoTenantId(),
+      name:
+        DEMO_TENANTS.find((tenant) => tenant.id === currentDemoTenantId())
+          ?.name ?? DEMO_TENANTS[0].name,
+      is_active: true,
+      bambu_connected: true,
+      printers_configured: 2,
+      printers_connected: 2,
+      printers: [],
+    }),
+
+  exportTenant: () =>
+    delay({
+      tenant: DEMO_TENANTS.find(
+        (tenant) => tenant.id === currentDemoTenantId(),
+      ),
+      members: demoMembers(),
+      printers: getPrintersRaw(),
+      filaments: getFilamentsRaw(),
+      spools: getSpoolsRaw(),
+      print_jobs: getPrintsRaw(),
+      settings: [{ key: "bambu_cloud_email", value: "demo@openprint.local" }],
+    }),
 
   skipSetup: () => delay({ message: "Setup skipped" }),
 

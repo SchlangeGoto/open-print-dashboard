@@ -5,6 +5,7 @@ import { Building2, Check, ChevronsUpDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -45,24 +46,28 @@ export function TenantMenu() {
             align="start"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="font-normal text-xs text-muted-foreground">
-              Tenants
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal text-xs text-muted-foreground">
+                Tenants
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {tenants.map((tenant) => (
-              <DropdownMenuItem
-                key={tenant.id}
-                disabled={!tenant.is_active}
-                onClick={() => switchTenant(tenant.id)}
-              >
-                <Building2 />
-                <span className="truncate">{tenant.name}</span>
-                <span className="ml-auto text-xs capitalize text-muted-foreground">
-                  {tenant.role}
-                </span>
-                {tenant.id === activeTenantId && <Check className="size-4" />}
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuGroup>
+              {tenants.map((tenant) => (
+                <DropdownMenuItem
+                  key={tenant.id}
+                  disabled={!tenant.is_active}
+                  onClick={() => switchTenant(tenant.id)}
+                >
+                  <Building2 />
+                  <span className="truncate">{tenant.name}</span>
+                  <span className="ml-auto text-xs capitalize text-muted-foreground">
+                    {tenant.role}
+                  </span>
+                  {tenant.id === activeTenantId && <Check className="size-4" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

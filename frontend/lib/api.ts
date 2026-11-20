@@ -338,6 +338,15 @@ export interface TenantInviteInfo {
   valid: boolean;
 }
 
+export interface AuditEntry {
+  id: string;
+  user_id: string | null;
+  action: string;
+  target: string | null;
+  details: string | null;
+  created_at: string | null;
+}
+
 export interface SetupStatus {
   user_created: boolean;
   setup_complete: boolean;
@@ -528,6 +537,18 @@ const apiImpl = {
         full_name: fullName ?? null,
       }),
     }),
+
+  getTenantAudit: async (limit = 100) =>
+    (
+      await request<{ data: AuditEntry[]; count: number }>(
+        `/tenants/current/audit?limit=${limit}`,
+      )
+    ).data,
+
+  getTenantHealth: () => request<any>("/tenants/current/health"),
+
+  exportTenant: () =>
+    request<Record<string, unknown>>("/tenants/current/export"),
 
   recoverPassword: (email: string) =>
     request<{ message: string }>(

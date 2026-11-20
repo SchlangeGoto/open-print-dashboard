@@ -317,7 +317,38 @@ that the spool page renders the final values after the animation.
 
 ---
 
-## 5. Done (for reference)
+## 5. Mobile parity and phone-first dashboard
+
+**Goal:** the phone is a first-class client, not only a scanner. It should show
+the same operational picture as the web dashboard and make the common actions
+reachable in one or two taps.
+
+**Implemented on `feat/mobile-dashboard`:**
+
+- Mobile **Dashboard** tab: online/loaded/filament/printing stats, active print
+  progress, recent history, low-filament list and quick actions.
+- Mobile **Print jobs** screen with status filters and history.
+- Mobile **Filaments** screen with remaining stock and a filament detail page.
+- Web small-screen fixes: responsive Members and Tenants cards instead of
+  clipped tables, phone-safe filament cards, and a chart that drops X-axis
+  labels on narrow screens.
+
+**Still open:**
+
+- M-01: Mobile Members/Tenants administration for owners and platform admins.
+- M-02: Mobile analytics (job counts, success rate, filament used, cost).
+- M-03: Safe printer actions from the phone (pause/cancel only with explicit
+  confirmation) and active-job detail.
+- M-04: Mobile filament/spool editing where the web can already do it.
+- M-05: Push notifications for print finished/failed and spool loaded.
+- M-06: A full responsive pass over every remaining table, chart and dialog.
+
+**Acceptance:** every dashboard data view has a phone layout with no horizontal
+page scroll, no clipped actions, and at least one Playwright/mobile smoke test.
+
+---
+
+## 6. Done (for reference)
 
 These were found and fixed while consolidating PR #20. Kept here so they are not
 re-opened.

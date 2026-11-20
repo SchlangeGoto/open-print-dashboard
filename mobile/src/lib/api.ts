@@ -4,6 +4,7 @@ import type {
   FilamentInput,
   ListResponse,
   Printer,
+  PrintJob,
   Spool,
   TenantMembership,
   TokenResponse,
@@ -426,8 +427,28 @@ export class ApiClient {
     return this.request<Spool>(`/spools/${id}`);
   }
 
+  async getPrintJobs(limit = 50): Promise<PrintJob[]> {
+    const data = await this.request<ListResponse<PrintJob>>(
+      `/prints/?limit=${limit}`,
+    );
+    return data.data;
+  }
+
+  async getActivePrints(): Promise<PrintJob[]> {
+    const data =
+      await this.request<ListResponse<PrintJob>>("/prints/active");
+    return data.data;
+  }
+
   getFilament(id: string): Promise<Filament> {
     return this.request<Filament>(`/filaments/${id}`);
+  }
+
+  async getFilamentSpools(id: string): Promise<Spool[]> {
+    const data = await this.request<ListResponse<Spool>>(
+      `/filaments/${id}/spools`,
+    );
+    return data.data;
   }
 
   scanBarcode(

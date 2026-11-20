@@ -187,6 +187,43 @@ def test_tenant_rate_limit_is_per_tenant(
     assert unaffected.status_code == 200, unaffected.text
 
 
+def test_platform_admin_deactivates_a_tenant(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    tenant = _tenant(db, "deactivate")
+    headers, _ = _headers(client, db, tenant)
+    assert (
+        client.get(
+            f"{settings.API_V1_STR}/tenants/current/health", headers=headers
+        ).status_code
+        == 200
+    )
+
+    admin_headers = dict(superuser_token_headers)
+    admin_headers["X-Tenant-ID"] = str(DEFAULT_TENANT_ID)
+    deactivated = client.patch(
+        f"{settings.API_V1_STR}/tenants/{tenant.id}",
+        headers=admin_headers,
+        json={"is_active": False},
+    )
+    assert deactivated.status_code == 200, deactivated.text
+    assert deactivated.json()["is_active"] is False
+
+    blocked = client.get(
+        f"{settings.API_V1_STR}/tenants/current/health", headers=headers
+    )
+    assert blocked.status_code == 404, blocked.text
+
+    default = client.patch(
+        f"{settings.API_V1_STR}/tenants/{DEFAULT_TENANT_ID}",
+        headers=admin_headers,
+        json={"is_active": False},
+    )
+    assert default.status_code == 400, default.text
+
+
 def test_tenant_delete_requires_a_matching_slug_and_keeps_default(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:

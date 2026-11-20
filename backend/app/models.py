@@ -38,6 +38,7 @@ class TenantCreate(SQLModel):
 class TenantUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     slug: str | None = Field(default=None, min_length=1, max_length=50)
+    is_active: bool | None = None
 
     @field_validator("slug")
     @classmethod

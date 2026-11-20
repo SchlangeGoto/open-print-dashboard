@@ -208,6 +208,52 @@ def delete_tenant(
 # ────────────────────────────────────────────────────────────
 # Operations
 # ────────────────────────────────────────────────────────────
+@router.patch(
+    "/tenants/{tenant_id}",
+    response_model=TenantPublic,
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def admin_update_tenant(
+    *,
+    session: SessionDep,
+    tenant_id: uuid.UUID,
+    tenant_in: TenantUpdate,
+    current_user: CurrentUser,
+) -> Any:
+    """Platform-admin tenant update, including deactivation."""
+    tenant = crud.get_tenant(session=session, tenant_id=tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    data = tenant_in.model_dump(exclude_unset=True)
+    if data.get("slug") and data["slug"] != tenant.slug:
+        existing = crud.get_tenant_by_slug(session=session, slug=data["slug"])
+        if existing and existing.id != tenant.id:
+            raise HTTPException(status_code=409, detail="Tenant slug already exists")
+    if data.get("is_active") is False and tenant.id == DEFAULT_TENANT_ID:
+        raise HTTPException(
+            status_code=400, detail="The Default tenant cannot be deactivated"
+        )
+    tenant.sqlmodel_update(data)
+    session.add(tenant)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Tenant slug already exists")
+    session.refresh(tenant)
+    if not tenant.is_active:
+        printer_service.disconnect_tenant(tenant.id)
+    crud.record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=current_user.id,
+        action="tenant.admin_update",
+        target=tenant.slug,
+        details="active" if tenant.is_active else "inactive",
+    )
+    return tenant
+
+
 @router.get(
     "/tenants/current/health",
     response_model=TenantHealth,

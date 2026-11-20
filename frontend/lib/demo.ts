@@ -24,6 +24,23 @@ export const DEMO_USER = {
   created_at: "2026-01-01T00:00:00.000Z",
 };
 
+export const DEMO_TENANTS = [
+  {
+    id: "demo-tenant",
+    name: "Demo workspace",
+    slug: "demo",
+    is_active: true,
+    role: "owner",
+  },
+  {
+    id: "demo-tenant-lab",
+    name: "Prototype lab",
+    slug: "prototype-lab",
+    is_active: true,
+    role: "admin",
+  },
+];
+
 export function isDemoActive(): boolean {
   if (!DEMO_AVAILABLE || typeof window === "undefined") return false;
   return localStorage.getItem(DEMO_OPT_OUT_KEY) !== "1";

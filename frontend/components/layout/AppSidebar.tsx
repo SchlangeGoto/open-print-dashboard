@@ -10,6 +10,7 @@ import {
   Palette,
   Printer,
   Settings,
+  Users,
 } from "lucide-react";
 
 import {
@@ -39,10 +40,23 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
+const adminItems = [
+  { href: "/dashboard/members", label: "Members", icon: Users },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { tenants, activeTenantId } = useAuth();
   const activeTenant = tenants.find((tenant) => tenant.id === activeTenantId);
+  const canManageMembers =
+    activeTenant?.role === "owner" || activeTenant?.role === "admin";
+  const items = canManageMembers
+    ? [
+        ...navItems.slice(0, -1),
+        ...adminItems,
+        navItems[navItems.length - 1],
+      ]
+    : navItems;
 
   return (
     <Sidebar collapsible="icon">
@@ -68,7 +82,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {items.map((item) => {
                 const isActive =
                   item.href === "/dashboard"
                     ? pathname === "/dashboard"

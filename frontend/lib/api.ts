@@ -293,9 +293,49 @@ export interface TenantMembership {
   role: string;
 }
 
+export interface TenantPublic {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  created_at?: string | null;
+}
+
 export interface TenantsResponse {
   data: TenantMembership[];
   count: number;
+}
+
+export interface TenantMember {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  role: string;
+  created_at: string | null;
+}
+
+export interface TenantInvite {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  created_at: string | null;
+  invited_by: string | null;
+}
+
+export interface TenantInviteCreated extends TenantInvite {
+  token: string | null;
+  accept_url: string | null;
+}
+
+export interface TenantInviteInfo {
+  tenant_name: string;
+  tenant_slug: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  valid: boolean;
 }
 
 export interface SetupStatus {
@@ -423,6 +463,71 @@ const apiImpl = {
   getMeTenants: () => request<TenantsResponse>("/me/tenants"),
 
   getCurrentTenant: () => request<TenantMembership>("/tenants/current"),
+
+  updateCurrentTenant: (data: { name?: string; slug?: string }) =>
+    request<TenantPublic>("/tenants/current", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  getTenantMembers: async () =>
+    (
+      await request<{ data: TenantMember[]; count: number }>(
+        "/tenants/current/members",
+      )
+    ).data,
+
+  updateTenantMember: (userId: string, role: string) =>
+    request<TenantMember>(`/tenants/current/members/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+
+  removeTenantMember: (userId: string) =>
+    request<{ message: string }>(`/tenants/current/members/${userId}`, {
+      method: "DELETE",
+    }),
+
+  getTenantInvites: async () =>
+    (
+      await request<{ data: TenantInvite[]; count: number }>(
+        "/tenants/current/invites",
+      )
+    ).data,
+
+  createTenantInvite: (email: string, role: string) =>
+    request<TenantInviteCreated>("/tenants/current/invites", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+
+  revokeTenantInvite: (inviteId: string) =>
+    request<{ message: string }>(`/tenants/current/invites/${inviteId}`, {
+      method: "DELETE",
+    }),
+
+  getInvite: (token: string) =>
+    request<TenantInviteInfo>(`/invites/${encodeURIComponent(token)}`),
+
+  acceptInvite: (token: string) =>
+    request<TenantMembership>("/invites/accept", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+
+  registerFromInvite: (
+    token: string,
+    password: string,
+    fullName?: string,
+  ) =>
+    request<{ message: string }>("/invites/register", {
+      method: "POST",
+      body: JSON.stringify({
+        token,
+        password,
+        full_name: fullName ?? null,
+      }),
+    }),
 
   recoverPassword: (email: string) =>
     request<{ message: string }>(

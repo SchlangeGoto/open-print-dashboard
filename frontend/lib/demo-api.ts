@@ -1,5 +1,5 @@
 import type { ApiShape } from "./api";
-import { DEMO_USER, demoStorageKey } from "./demo";
+import { DEMO_TENANTS, DEMO_USER, demoStorageKey } from "./demo";
 import {
   DEMO_BAMBU_PROFILE,
   DEMO_BARCODES,
@@ -151,6 +151,59 @@ function getPrintersRaw(): any[] {
   }));
 }
 
+function currentDemoTenantId(): string {
+  if (typeof window === "undefined") return DEMO_TENANTS[0].id;
+  return (
+    localStorage.getItem("opd-tenant-id") ?? DEMO_TENANTS[0].id
+  );
+}
+
+function defaultDemoMembers(): any[] {
+  return [
+    {
+      user_id: DEMO_USER.id,
+      email: DEMO_USER.email,
+      full_name: DEMO_USER.full_name,
+      is_active: true,
+      role: currentDemoTenantId() === DEMO_TENANTS[1].id ? "admin" : "owner",
+      created_at: DEMO_USER.created_at,
+    },
+    {
+      user_id: "11111111-1111-4111-8111-111111111111",
+      email: "alex@openprint.local",
+      full_name: "Alex Rivera",
+      is_active: true,
+      role: "operator",
+      created_at: "2026-02-04T09:10:00.000Z",
+    },
+    {
+      user_id: "22222222-2222-4222-8222-222222222222",
+      email: "sam@openprint.local",
+      full_name: "Sam Chen",
+      is_active: true,
+      role: "viewer",
+      created_at: "2026-03-12T14:30:00.000Z",
+    },
+  ];
+}
+
+function demoMembers(): any[] {
+  return load(`members:${currentDemoTenantId()}`, defaultDemoMembers());
+}
+
+function saveDemoMembers(members: any[]): void {
+  save(`members:${currentDemoTenantId()}`, members);
+}
+
+function demoInvites(): any[] {
+  return load(`invites:${currentDemoTenantId()}`, []);
+}
+
+function saveDemoInvites(invites: any[]): void {
+  save(`invites:${currentDemoTenantId()}`, invites);
+}
+
+
 export const demoApi: ApiShape = {
   // ── Setup / auth ──────────────────────────────────────────────────────────
   getSetupStatus: () =>
@@ -169,26 +222,81 @@ export const demoApi: ApiShape = {
 
   getMeTenants: () =>
     delay({
-      data: [
-        {
-          id: "demo-tenant",
-          name: "Demo workspace",
-          slug: "demo",
-          is_active: true,
-          role: "owner" as const,
-        },
-      ],
-      count: 1,
+      data: DEMO_TENANTS,
+      count: DEMO_TENANTS.length,
     }),
 
-  getCurrentTenant: () =>
+  getCurrentTenant: () => delay(DEMO_TENANTS[0]),
+
+  updateCurrentTenant: (data) =>
     delay({
-      id: "demo-tenant",
-      name: "Demo workspace",
-      slug: "demo",
-      is_active: true,
-      role: "owner" as const,
+      ...DEMO_TENANTS.find(
+        (tenant) => tenant.id === currentDemoTenantId(),
+      )!,
+      ...data,
+      created_at: null,
     }),
+
+  getTenantMembers: () => delay(demoMembers()),
+
+  updateTenantMember: (userId, role) => {
+    const members = demoMembers();
+    const member = members.find((item) => item.user_id === userId);
+    if (!member) throw new Error("Member not found");
+    member.role = role;
+    saveDemoMembers(members);
+    return delay(member);
+  },
+
+  removeTenantMember: (userId) => {
+    saveDemoMembers(
+      demoMembers().filter((member) => member.user_id !== userId),
+    );
+    return delay({ message: "Member removed" });
+  },
+
+  getTenantInvites: () => delay(demoInvites()),
+
+  createTenantInvite: (email, role) => {
+    const invite = {
+      id: newId(),
+      email,
+      role,
+      expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+      created_at: new Date().toISOString(),
+      invited_by: DEMO_USER.id,
+      token: "demo-invite-token",
+      accept_url: "/invite?token=demo-invite-token",
+    };
+    const invites = demoInvites();
+    invites.unshift(invite);
+    saveDemoInvites(invites);
+    return delay(invite);
+  },
+
+  revokeTenantInvite: (inviteId) => {
+    saveDemoInvites(
+      demoInvites().filter((invite) => invite.id !== inviteId),
+    );
+    return delay({ message: "Invitation revoked" });
+  },
+
+  getInvite: (token) =>
+    delay({
+      tenant_name:
+        DEMO_TENANTS.find((tenant) => tenant.id === currentDemoTenantId())
+          ?.name ?? DEMO_TENANTS[0].name,
+      tenant_slug: "demo",
+      email: DEMO_USER.email,
+      role: "operator",
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
+      valid: Boolean(token),
+    }),
+
+  acceptInvite: () => delay(DEMO_TENANTS[0]),
+
+  registerFromInvite: () =>
+    delay({ message: "Account created. Sign in to continue." }),
 
   skipSetup: () => delay({ message: "Setup skipped" }),
 

@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import {
   DEMO_AVAILABLE,
+  DEMO_TENANTS,
   DEMO_USER,
   disableDemo,
   enableDemo,
@@ -109,6 +110,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (DEMO_AVAILABLE && isDemoActive()) {
       setDemo(true);
       setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
+      const stored = getActiveTenantId();
+      const active =
+        DEMO_TENANTS.find((tenant) => tenant.id === stored) ??
+        DEMO_TENANTS[0];
+      setTenants(DEMO_TENANTS);
+      setActiveTenantId(active.id);
+      setActiveTenantIdState(active.id);
       setTenantReady(true);
       setIsLoading(false);
       return;
@@ -171,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isPublicRoute =
       pathname === "/" ||
       pathname.startsWith("/setup") ||
+      pathname.startsWith("/invite") ||
       pathname.startsWith("/recover-password") ||
       pathname.startsWith("/reset-password");
     if (!username && !isPublicRoute) {
@@ -223,8 +232,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTokens();
     setDemo(true);
     setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
-    setTenants([]);
-    setActiveTenantIdState(null);
+    setTenants(DEMO_TENANTS);
+    setActiveTenantId(DEMO_TENANTS[0].id);
+    setActiveTenantIdState(DEMO_TENANTS[0].id);
     setTenantReady(true);
     setIsLoading(false);
     router.push("/dashboard");

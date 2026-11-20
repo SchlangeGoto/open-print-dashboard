@@ -19,11 +19,11 @@ import {
 import { useAuth } from "@/lib/auth";
 
 export function TenantMenu() {
-  const { tenants, activeTenantId, switchTenant, demo } = useAuth();
+  const { tenants, activeTenantId, switchTenant } = useAuth();
   const { isMobile } = useSidebar();
   const active = tenants.find((tenant) => tenant.id === activeTenantId);
 
-  if (demo || !active || tenants.length < 2) return null;
+  if (!active || tenants.length < 2) return null;
 
   return (
     <SidebarMenu>

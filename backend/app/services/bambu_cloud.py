@@ -23,22 +23,49 @@ BASE_URL = "https://api.bambulab.com"
 # request worker or the print-job save thread indefinitely.
 DEFAULT_TIMEOUT = 15
 
-# Cover images are only ever fetched from Bambu Lab content hosts. Anything
-# else is refused so the endpoint cannot be used as an SSRF proxy.
-ALLOWED_COVER_HOSTS = ("bblmw.com", "bambulab.com")
+# Cover images are only ever fetched from these exact Bambu Lab content hosts.
+# Anything else is refused so the endpoint cannot be used as an SSRF proxy.
+ALLOWED_COVER_HOSTS = (
+    "public-cdn.bblmw.com",
+    "makerworld.bblmw.com",
+    "bambulab.com",
+    "www.bambulab.com",
+)
 MAX_COVER_BYTES = 10 * 1024 * 1024
 
 
-def is_allowed_cover_url(url: str) -> bool:
+def _cover_host(host: str | None) -> str | None:
+    """Return a fixed allowlisted host for a parsed hostname.
+
+    The returned value is a literal, not the caller's string, so a request can
+    never be redirected to a different host by the input.
+    """
+    normalized = (host or "").lower().rstrip(".")
+    if normalized == "public-cdn.bblmw.com":
+        return "public-cdn.bblmw.com"
+    if normalized == "makerworld.bblmw.com":
+        return "makerworld.bblmw.com"
+    if normalized == "bambulab.com":
+        return "bambulab.com"
+    if normalized == "www.bambulab.com":
+        return "www.bambulab.com"
+    return None
+
+
+def cover_request_url(url: str) -> str | None:
+    """Build a safe HTTPS URL for an allowlisted cover host, or None."""
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
-        return False
-    host = (parsed.hostname or "").lower()
-    if not host:
-        return False
-    return any(
-        host == domain or host.endswith(f".{domain}") for domain in ALLOWED_COVER_HOSTS
-    )
+        return None
+    host = _cover_host(parsed.hostname)
+    if host is None:
+        return None
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"https://{host}{parsed.path or '/'}{query}"
+
+
+def is_allowed_cover_url(url: str) -> bool:
+    return cover_request_url(url) is not None
 
 
 class BambuCloudClient:
@@ -251,9 +278,15 @@ class BambuCloudClient:
         if not is_allowed_cover_url(url):
             logger.warning("Refused to fetch a cover image from %s", url)
             return None
+        safe_url = cover_request_url(url)
+        if safe_url is None:
+            return None
         try:
             with requests.get(
-                url, timeout=DEFAULT_TIMEOUT, allow_redirects=False, stream=True
+                safe_url,
+                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=False,
+                stream=True,
             ) as resp:
                 resp.raise_for_status()
                 if resp.is_redirect or resp.status_code >= 300:

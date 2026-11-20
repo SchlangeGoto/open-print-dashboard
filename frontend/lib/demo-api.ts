@@ -153,9 +153,15 @@ function getPrintersRaw(): any[] {
 
 function currentDemoTenantId(): string {
   if (typeof window === "undefined") return DEMO_TENANTS[0].id;
-  return (
-    localStorage.getItem("opd-tenant-id") ?? DEMO_TENANTS[0].id
-  );
+  return localStorage.getItem("opd-tenant-id") ?? DEMO_TENANTS[0].id;
+}
+
+function demoTenants(): any[] {
+  return load("tenants", DEMO_TENANTS as any[]);
+}
+
+function saveDemoTenants(tenants: any[]): void {
+  save("tenants", tenants);
 }
 
 function defaultDemoMembers(): any[] {
@@ -256,11 +262,49 @@ export const demoApi: ApiShape = {
 
   getMeTenants: () =>
     delay({
-      data: DEMO_TENANTS,
-      count: DEMO_TENANTS.length,
+      data: demoTenants().map((tenant, index) => ({
+        ...tenant,
+        role: index === 0 ? "owner" : "admin",
+      })),
+      count: demoTenants().length,
     }),
 
-  getCurrentTenant: () => delay(DEMO_TENANTS[0]),
+  getCurrentTenant: () => {
+    const tenant = demoTenants().find(
+      (item) => item.id === currentDemoTenantId(),
+    );
+    return delay({ ...(tenant ?? demoTenants()[0]), role: "owner" });
+  },
+
+  getTenants: () => delay(demoTenants()),
+
+  createTenant: (name, slug) => {
+    const tenant = {
+      id: newId(),
+      name,
+      slug,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+    saveDemoTenants([...demoTenants(), tenant]);
+    return delay(tenant);
+  },
+
+  updateTenant: (tenantId, data) => {
+    const tenants = demoTenants();
+    const tenant = tenants.find((item) => item.id === tenantId);
+    if (!tenant) throw new Error("Tenant not found");
+    Object.assign(tenant, data);
+    saveDemoTenants(tenants);
+    return delay(tenant);
+  },
+
+  deleteTenant: (tenantId) => {
+    saveDemoTenants(
+      demoTenants().filter((tenant) => tenant.id !== tenantId),
+    );
+    return delay({ message: "Tenant deleted" });
+  },
 
   updateCurrentTenant: (data) =>
     delay({

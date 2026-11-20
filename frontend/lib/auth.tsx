@@ -18,6 +18,7 @@ import {
   SESSION_EXPIRED_EVENT,
   setActiveTenantId,
   type TenantMembership,
+  type UserPublic,
 } from "@/lib/api";
 import {
   DEMO_AVAILABLE,
@@ -31,6 +32,7 @@ import { toast } from "@/lib/toast";
 
 interface AuthContextType {
   username: string | null;
+  user: UserPublic | null;
   isLoading: boolean;
   demo: boolean;
   demoAvailable: boolean;
@@ -40,12 +42,14 @@ interface AuthContextType {
   login: (username: string) => void;
   logout: () => Promise<void>;
   switchTenant: (tenantId: string) => void;
+  refreshTenants: () => Promise<void>;
   enterDemo: () => void;
   exitDemo: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   username: null,
+  user: null,
   isLoading: true,
   demo: false,
   demoAvailable: DEMO_AVAILABLE,
@@ -55,6 +59,7 @@ const AuthContext = createContext<AuthContextType>({
   login: () => {},
   logout: async () => {},
   switchTenant: () => {},
+  refreshTenants: async () => {},
   enterDemo: () => {},
   exitDemo: () => {},
 });
@@ -66,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return null;
     return window.localStorage.getItem(USERNAME_KEY);
   });
+  const [user, setUser] = useState<UserPublic | null>(null);
   const [demo, setDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [tenants, setTenants] = useState<TenantMembership[]>([]);
@@ -109,16 +115,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // of truth so opting out in one tab survives reloads.
     if (DEMO_AVAILABLE && isDemoActive()) {
       setDemo(true);
+      setUser(DEMO_USER);
       setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
-      const stored = getActiveTenantId();
-      const active =
-        DEMO_TENANTS.find((tenant) => tenant.id === stored) ??
-        DEMO_TENANTS[0];
-      setTenants(DEMO_TENANTS);
-      setActiveTenantId(active.id);
-      setActiveTenantIdState(active.id);
-      setTenantReady(true);
-      setIsLoading(false);
+      void loadTenants().finally(() => {
+        setTenantReady(true);
+        setIsLoading(false);
+      });
       return;
     }
 
@@ -137,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(async (me) => {
         const name = me.full_name || me.email;
         window.localStorage.setItem(USERNAME_KEY, name);
+        setUser(me);
         setUsername(name);
         await loadTenants();
       })
@@ -151,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearTokens();
           window.localStorage.removeItem(USERNAME_KEY);
           setUsername(null);
+          setUser(null);
           setActiveTenantId(null);
           setActiveTenantIdState(null);
           setTenants([]);
@@ -164,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     function handleSessionExpired() {
       window.localStorage.removeItem(USERNAME_KEY);
       setUsername(null);
+      setUser(null);
       setTenants([]);
       setActiveTenantId(null);
       setActiveTenantIdState(null);
@@ -191,6 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(USERNAME_KEY, name);
     setUsername(name);
     setTenantReady(false);
+    void api
+      .getMe()
+      .then(setUser)
+      .catch(() => setUser(null));
     void loadTenants();
   }
 
@@ -212,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.localStorage.removeItem(USERNAME_KEY);
     setUsername(null);
+    setUser(null);
     setTenants([]);
     setActiveTenantId(null);
     setActiveTenantIdState(null);
@@ -231,12 +241,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     enableDemo();
     clearTokens();
     setDemo(true);
+    setUser(DEMO_USER);
     setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
     setTenants(DEMO_TENANTS);
     setActiveTenantId(DEMO_TENANTS[0].id);
     setActiveTenantIdState(DEMO_TENANTS[0].id);
     setTenantReady(true);
     setIsLoading(false);
+    void loadTenants();
     router.push("/dashboard");
   }
 
@@ -246,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTokens();
     setDemo(false);
     setUsername(null);
+    setUser(null);
     setTenants([]);
     setActiveTenantIdState(null);
     setTenantReady(false);
@@ -256,6 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         username,
+        user,
         isLoading,
         demo,
         demoAvailable: DEMO_AVAILABLE,
@@ -265,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         switchTenant,
+        refreshTenants: loadTenants,
         enterDemo,
         exitDemo,
       }}

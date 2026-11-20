@@ -479,6 +479,29 @@ const apiImpl = {
       body: JSON.stringify(data),
     }),
 
+  getTenants: () => request<TenantPublic[]>("/tenants"),
+
+  createTenant: (name: string, slug: string) =>
+    request<TenantPublic>("/tenants", {
+      method: "POST",
+      body: JSON.stringify({ name, slug }),
+    }),
+
+  updateTenant: (
+    tenantId: string,
+    data: { name?: string; slug?: string; is_active?: boolean },
+  ) =>
+    request<TenantPublic>(`/tenants/${tenantId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteTenant: (tenantId: string, slug: string) =>
+    request<{ message: string }>(`/tenants/${tenantId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ slug }),
+    }),
+
   getTenantMembers: async () =>
     (
       await request<{ data: TenantMember[]; count: number }>(

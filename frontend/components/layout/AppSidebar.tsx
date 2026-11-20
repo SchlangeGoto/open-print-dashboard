@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart2,
+  Building2,
   History,
   LayoutDashboard,
   Package,
@@ -44,15 +45,20 @@ const adminItems = [
   { href: "/dashboard/members", label: "Members", icon: Users },
 ];
 
+const platformItems = [
+  { href: "/dashboard/tenants", label: "Tenants", icon: Building2 },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
-  const { tenants, activeTenantId } = useAuth();
+  const { user, tenants, activeTenantId } = useAuth();
   const activeTenant = tenants.find((tenant) => tenant.id === activeTenantId);
   const canManageMembers =
     activeTenant?.role === "owner" || activeTenant?.role === "admin";
   const items = canManageMembers
     ? [
         ...navItems.slice(0, -1),
+        ...(user?.is_superuser ? platformItems : []),
         ...adminItems,
         navItems[navItems.length - 1],
       ]

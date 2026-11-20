@@ -26,3 +26,6 @@ jobs:
         with:
           advanced-security: false
           annotations: true
+          # Pinned: the action defaults to `latest`, so a new zizmor release
+          # could turn main red without any change here (as 1.32.0 did).
+          version: "1.32.0"

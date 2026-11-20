@@ -8,7 +8,8 @@ export const SPONSOR_URL = "https://github.com/sponsors/SchlangeGoto";
 export const DEMO_URL =
   process.env.NEXT_PUBLIC_DEMO_URL ?? "https://demo.openprintdash.app";
 
-export const HOSTING_BETA_MAILTO =
-  "mailto:kazimir@kkazi.dev?subject=OpenPrintDash%20hosting%20beta";
+// The paid hosted edition lives outside this repository.
+export const HOSTED_URL =
+  process.env.NEXT_PUBLIC_HOSTED_URL ?? "https://cloud.openprintdash.app";
 
 export const PRINTERS = ["X1", "P1", "A1"] as const;

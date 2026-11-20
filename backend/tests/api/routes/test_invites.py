@@ -1,3 +1,8 @@
+import re
+import time
+
+import pytest
+import requests
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -48,6 +53,34 @@ def _invite(
     assert response.status_code == 200, response.text
     assert response.json()["token"]
     return response.json()
+
+
+def _mailpit_invite_token(*, email: str, tenant_name: str) -> str:
+    base = f"http://{settings.SMTP_HOST or 'localhost'}:8025"
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            messages = requests.get(
+                f"{base}/api/v1/messages?limit=50", timeout=3
+            ).json()["messages"]
+        except (requests.RequestException, KeyError, TypeError):
+            pytest.skip("Mailpit is not available in this environment")
+        for message in messages:
+            recipients = [item.get("Address", "") for item in message["To"]]
+            if (
+                email.lower() in [recipient.lower() for recipient in recipients]
+                and tenant_name in message["Subject"]
+            ):
+                detail = requests.get(
+                    f"{base}/api/v1/message/{message['ID']}", timeout=3
+                ).json()
+                match = re.search(
+                    r"/invite\?token=([A-Za-z0-9_\-]+)", detail.get("HTML", "")
+                )
+                if match:
+                    return match.group(1)
+        time.sleep(0.25)
+    raise AssertionError("Invitation email did not arrive in Mailpit")
 
 
 def test_members_and_invites_require_permission(
@@ -232,6 +265,45 @@ def test_owner_transfer_and_last_owner_guard(client: TestClient, db: Session) ->
         json={"role": "admin"},
     )
     assert denied.status_code == 400, denied.text
+
+
+def test_invite_email_round_trip_through_mailpit(
+    client: TestClient, db: Session
+) -> None:
+    tenant = _create_tenant(db, "mailpit")
+    owner_email, owner_password = _create_member(db, tenant, "owner")
+    owner_headers = user_authentication_headers(
+        client=client, email=owner_email, password=owner_password
+    )
+    invited_email = random_email()
+    invited_password = random_lower_string()
+    crud.create_user(
+        session=db,
+        user_create=UserCreate(email=invited_email, password=invited_password),
+    )
+
+    created = client.post(
+        f"{settings.API_V1_STR}/tenants/current/invites",
+        headers=owner_headers,
+        json={"email": invited_email, "role": "operator"},
+    )
+
+    assert created.status_code == 200, created.text
+    # The real email path must not leak the raw token into the API response.
+    assert created.json()["token"] is None
+    assert created.json()["accept_url"] is None
+
+    token = _mailpit_invite_token(email=invited_email, tenant_name=tenant.name)
+    invited_headers = user_authentication_headers(
+        client=client, email=invited_email, password=invited_password
+    )
+    accepted = client.post(
+        f"{settings.API_V1_STR}/invites/accept",
+        headers=invited_headers,
+        json={"token": token},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["role"] == "operator"
 
 
 def test_member_removal_keeps_the_owner(client: TestClient, db: Session) -> None:

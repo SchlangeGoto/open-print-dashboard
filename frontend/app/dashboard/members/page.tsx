@@ -305,16 +305,18 @@ export default function MembersPage() {
             People with access to {activeTenant?.name ?? "this tenant"}.
           </p>
         </div>
-        <Button onClick={() => setInviteOpen(true)}>
-          <MailPlus /> Invite member
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => void handleExport()}
-          disabled={exportBusy}
-        >
-          <Download /> {exportBusy ? "Exporting…" : "Export data"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setInviteOpen(true)}>
+            <MailPlus /> Invite member
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void handleExport()}
+            disabled={exportBusy}
+          >
+            <Download /> {exportBusy ? "Exporting…" : "Export data"}
+          </Button>
+        </div>
       </div>
 
       {loadError ? (

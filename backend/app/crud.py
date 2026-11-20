@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -24,6 +25,7 @@ from app.models import (
     Spool,
     Tenant,
     TenantCreate,
+    TenantInvite,
     User,
     UserCreate,
     UserUpdate,
@@ -117,13 +119,10 @@ def ensure_membership(
     role: str,
 ) -> Membership:
     membership = get_membership(session=session, tenant_id=tenant_id, user_id=user_id)
-    if membership is None:
-        membership = Membership(tenant_id=tenant_id, user_id=user_id, role=role)
-    else:
-        membership.role = role
     if role == "owner":
         # The partial unique index allows one owner. Demote the previous one
-        # in the same transaction instead of failing the promotion.
+        # and flush before promoting the new owner, otherwise the update of
+        # the second row still sees the first owner.
         for other in session.exec(
             select(Membership).where(
                 Membership.tenant_id == tenant_id,
@@ -133,10 +132,72 @@ def ensure_membership(
         ).all():
             other.role = "admin"
             session.add(other)
+        session.flush()
+    if membership is None:
+        membership = Membership(tenant_id=tenant_id, user_id=user_id, role=role)
+    else:
+        membership.role = role
     session.add(membership)
     session.commit()
     session.refresh(membership)
     return membership
+
+
+def count_tenant_owners(*, session: Session, tenant_id: uuid.UUID) -> int:
+    return session.exec(
+        select(func.count())
+        .select_from(Membership)
+        .where(Membership.tenant_id == tenant_id, Membership.role == "owner")
+    ).one()
+
+
+def get_invite_by_token_hash(
+    *, session: Session, token_hash: str
+) -> TenantInvite | None:
+    return session.exec(
+        select(TenantInvite).where(TenantInvite.token_hash == token_hash)
+    ).first()
+
+
+def list_pending_invites(
+    *, session: Session, tenant_id: uuid.UUID, now: datetime
+) -> list[TenantInvite]:
+    return list(
+        session.exec(
+            select(TenantInvite)
+            .where(
+                TenantInvite.tenant_id == tenant_id,
+                col(TenantInvite.accepted_at).is_(None),
+                col(TenantInvite.revoked_at).is_(None),
+                col(TenantInvite.expires_at) > now,
+            )
+            .order_by(col(TenantInvite.created_at).desc())
+        ).all()
+    )
+
+
+def create_invite(
+    *,
+    session: Session,
+    tenant_id: uuid.UUID,
+    email: str,
+    role: str,
+    token_hash: str,
+    expires_at: datetime,
+    invited_by: uuid.UUID,
+) -> TenantInvite:
+    invite = TenantInvite(
+        tenant_id=tenant_id,
+        email=email,
+        role=role,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        invited_by=invited_by,
+    )
+    session.add(invite)
+    session.commit()
+    session.refresh(invite)
+    return invite
 
 
 # ────────────────────────────────────────────────────────────

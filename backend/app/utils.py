@@ -36,7 +36,7 @@ def send_email(
     email_to: str,
     subject: str = "",
     html_content: str = "",
-) -> None:
+) -> bool:
     assert settings.emails_enabled, "no provided configuration for email variables"
     assert settings.EMAILS_FROM_EMAIL  # For type checker
     message = emails.message.Message(
@@ -60,8 +60,9 @@ def send_email(
         # Keep the request successful (no account enumeration / no failed
         # signup), but make the silent non-delivery visible in the logs.
         logger.error("Email to %s was not sent: %s", email_to, response)
-    else:
-        logger.info("Email to %s sent with status %s", email_to, status)
+        return False
+    logger.info("Email to %s sent with status %s", email_to, status)
+    return True
 
 
 def generate_test_email(email_to: str) -> EmailData:
@@ -101,6 +102,30 @@ def generate_new_account_email(email_to: str, username: str) -> EmailData:
             "username": username,
             "email": email_to,
             "link": settings.FRONTEND_HOST,
+        },
+    )
+    return EmailData(html_content=html_content, subject=subject)
+
+
+def generate_invite_email(
+    *,
+    email_to: str,
+    tenant_name: str,
+    role: str,
+    token: str,
+) -> EmailData:
+    project_name = settings.PROJECT_NAME
+    subject = f"{project_name} - Invitation to {tenant_name}"
+    link = f"{settings.FRONTEND_HOST}/invite?token={token}"
+    html_content = render_email_template(
+        template_name="invite.html",
+        context={
+            "project_name": project_name,
+            "tenant_name": tenant_name,
+            "role": role,
+            "email": email_to,
+            "valid_days": settings.TENANT_INVITE_EXPIRE_DAYS,
+            "link": link,
         },
     )
     return EmailData(html_content=html_content, subject=subject)

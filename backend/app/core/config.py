@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: EmailStr | None = None
     EMAILS_FROM_NAME: str | None = None
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 1
+    TENANT_INVITE_EXPIRE_DAYS: int = 7
 
     @model_validator(mode="after")
     def _set_default_emails_from(self) -> "Settings":

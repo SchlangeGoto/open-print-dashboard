@@ -105,6 +105,68 @@ class MembershipPublic(SQLModel):
     created_at: datetime | None = None
 
 
+class TenantMemberPublic(SQLModel):
+    user_id: uuid.UUID
+    email: EmailStr
+    full_name: str | None = None
+    is_active: bool
+    role: str
+    created_at: datetime | None = None
+
+
+class TenantMembersPublic(SQLModel):
+    data: list[TenantMemberPublic]
+    count: int
+
+
+class TenantMemberUpdate(SQLModel):
+    role: str = Field(min_length=1, max_length=20)
+
+
+class TenantInviteCreate(SQLModel):
+    email: EmailStr
+    role: str = Field(default="viewer", min_length=1, max_length=20)
+
+
+class TenantInvitePublic(SQLModel):
+    id: uuid.UUID
+    email: EmailStr
+    role: str
+    expires_at: datetime
+    created_at: datetime | None = None
+    invited_by: uuid.UUID | None = None
+
+
+class TenantInviteCreated(TenantInvitePublic):
+    # Only returned when email delivery is disabled: the admin has to share
+    # the link themselves.
+    token: str | None = None
+    accept_url: str | None = None
+
+
+class TenantInvitesPublic(SQLModel):
+    data: list[TenantInvitePublic]
+    count: int
+
+
+class TenantInviteInfo(SQLModel):
+    tenant_name: str
+    tenant_slug: str
+    email: EmailStr
+    role: str
+    expires_at: datetime
+    valid: bool
+
+
+class TenantInviteAccept(SQLModel):
+    token: str = Field(min_length=1, max_length=512)
+
+
+class TenantInviteRegister(TenantInviteAccept):
+    full_name: str | None = Field(default=None, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
 class TenantInvite(SQLModel, table=True):
     __table_args__ = (
         Index(

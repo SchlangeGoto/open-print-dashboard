@@ -50,9 +50,7 @@ def _create_member(
     return email, password
 
 
-def test_me_tenants_lists_memberships(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
+def test_me_tenants_lists_memberships(client: TestClient, db: Session) -> None:
     other = _create_tenant(db, "second")
     email, password = _create_member(db, other, "viewer")
     crud.ensure_membership(

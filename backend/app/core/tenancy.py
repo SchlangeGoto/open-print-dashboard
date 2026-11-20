@@ -14,6 +14,8 @@ DEFAULT_TENANT_NAME = "Default"
 DEFAULT_TENANT_SLUG = "default"
 
 ROLES = ("owner", "admin", "operator", "viewer")
+# Owner transfer is an explicit member-role change, not an invite.
+INVITABLE_ROLES = frozenset({"admin", "operator", "viewer"})
 
 READ_PERMISSIONS = frozenset(
     {

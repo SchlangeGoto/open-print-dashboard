@@ -12,6 +12,7 @@ function timeoutSignal(): AbortSignal {
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 const ACCESS_TOKEN_EXPIRES_AT_KEY = "access_token_expires_at";
+const TENANT_ID_KEY = "opd-tenant-id";
 
 export const SESSION_EXPIRED_EVENT = "opd:session-expired";
 
@@ -30,6 +31,20 @@ export function getAccessToken(): string | null {
 export function getRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function getActiveTenantId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TENANT_ID_KEY);
+}
+
+export function setActiveTenantId(tenantId: string | null): void {
+  if (typeof window === "undefined") return;
+  if (tenantId) {
+    localStorage.setItem(TENANT_ID_KEY, tenantId);
+  } else {
+    localStorage.removeItem(TENANT_ID_KEY);
+  }
 }
 
 export function hasStoredSession(): boolean {
@@ -67,6 +82,7 @@ export function clearTokens(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
+  localStorage.removeItem(TENANT_ID_KEY);
 }
 
 let refreshPromise: Promise<string | null> | null = null;
@@ -187,6 +203,10 @@ async function fetchWithAuth(
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
+  const tenantId = getActiveTenantId();
+  if (tenantId) {
+    headers.set("X-Tenant-ID", tenantId);
+  }
 
   const res = await fetch(url, {
     ...options,
@@ -205,6 +225,10 @@ async function fetchWithAuth(
     if (newToken) {
       const retryHeaders = new Headers(options.headers);
       retryHeaders.set("Authorization", `Bearer ${newToken}`);
+      const tenantId = getActiveTenantId();
+      if (tenantId) {
+        retryHeaders.set("X-Tenant-ID", tenantId);
+      }
       return fetch(url, {
         ...options,
         headers: retryHeaders,
@@ -259,6 +283,19 @@ export interface UserPublic {
   is_active: boolean;
   is_superuser: boolean;
   created_at: string | null;
+}
+
+export interface TenantMembership {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  role: string;
+}
+
+export interface TenantsResponse {
+  data: TenantMembership[];
+  count: number;
 }
 
 export interface SetupStatus {
@@ -382,6 +419,10 @@ const apiImpl = {
   },
 
   getMe: () => request<UserPublic>("/users/me"),
+
+  getMeTenants: () => request<TenantsResponse>("/me/tenants"),
+
+  getCurrentTenant: () => request<TenantMembership>("/tenants/current"),
 
   recoverPassword: (email: string) =>
     request<{ message: string }>(

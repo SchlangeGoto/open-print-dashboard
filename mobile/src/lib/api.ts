@@ -5,6 +5,7 @@ import type {
   ListResponse,
   Printer,
   Spool,
+  TenantMembership,
   TokenResponse,
   UserPublic,
 } from "./types";
@@ -28,6 +29,7 @@ export interface AuthTokens {
 interface ApiClientOptions {
   getServerUrl: () => string | null;
   getTokens: () => AuthTokens | null;
+  getTenantId: () => string | null;
   setTokens: (tokens: AuthTokens) => Promise<void>;
   clearTokens: () => Promise<void>;
   onSessionExpired: () => void;
@@ -211,6 +213,10 @@ export class ApiClient {
     if (tokens?.accessToken) {
       headers.set("Authorization", `Bearer ${tokens.accessToken}`);
     }
+    const tenantId = this.options.getTenantId();
+    if (tenantId) {
+      headers.set("X-Tenant-ID", tenantId);
+    }
     if (init.body && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
@@ -231,6 +237,10 @@ export class ApiClient {
       if (accessToken) {
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
+        const tenantId = this.options.getTenantId();
+        if (tenantId) {
+          retryHeaders.set("X-Tenant-ID", tenantId);
+        }
         if (init.body && !retryHeaders.has("Content-Type")) {
           retryHeaders.set("Content-Type", "application/json");
         }
@@ -376,6 +386,13 @@ export class ApiClient {
 
   getMe(): Promise<UserPublic> {
     return this.request<UserPublic>("/users/me");
+  }
+
+  async getMeTenants(): Promise<TenantMembership[]> {
+    const data = await this.request<ListResponse<TenantMembership>>(
+      "/me/tenants",
+    );
+    return data.data;
   }
 
   async getSpools(): Promise<Spool[]> {

@@ -12,12 +12,15 @@ import {
 import { ApiClient, ApiError, normalizeServerUrl, type AuthTokens } from "./api";
 import {
   clearStoredSession,
+  clearStoredTenantId,
   loadStoredServerUrl,
   loadStoredSession,
+  loadStoredTenantId,
   saveStoredServerUrl,
   saveStoredSession,
+  saveStoredTenantId,
 } from "./storage";
-import type { UserPublic } from "./types";
+import type { TenantMembership, UserPublic } from "./types";
 
 export type AuthStatus =
   | "loading"
@@ -30,11 +33,13 @@ export type AuthStatus =
 // module state instead of React refs. The provider is the only writer.
 let sessionServerUrl: string | null = null;
 let sessionTokens: AuthTokens | null = null;
+let sessionTenantId: string | null = null;
 let sessionExpiredHandler: (() => void) | null = null;
 
 const apiClient = new ApiClient({
   getServerUrl: () => sessionServerUrl,
   getTokens: () => sessionTokens,
+  getTenantId: () => sessionTenantId,
   setTokens: async (tokens) => {
     sessionTokens = tokens;
     await saveStoredSession(tokens);
@@ -52,9 +57,12 @@ interface AuthContextValue {
   status: AuthStatus;
   user: UserPublic | null;
   serverUrl: string | null;
+  tenants: TenantMembership[];
+  activeTenantId: string | null;
   api: ApiClient;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  switchTenant: (tenantId: string) => Promise<void>;
   setServerUrl: (url: string) => Promise<void>;
   retry: () => Promise<void>;
 }
@@ -65,12 +73,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<UserPublic | null>(null);
   const [serverUrl, setServerUrlState] = useState<string | null>(null);
+  const [tenants, setTenants] = useState<TenantMembership[]>([]);
+  const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const restoreEpoch = useRef(0);
+
+  const applyTenants = useCallback(async (list: TenantMembership[]) => {
+    setTenants(list);
+    const active =
+      list.find(
+        (tenant) => tenant.id === sessionTenantId && tenant.is_active,
+      ) ??
+      list.find((tenant) => tenant.is_active) ??
+      list[0] ??
+      null;
+    sessionTenantId = active?.id ?? null;
+    setActiveTenantId(sessionTenantId);
+    if (sessionTenantId) {
+      await saveStoredTenantId(sessionTenantId);
+    } else {
+      await clearStoredTenantId();
+    }
+  }, []);
+
+  const loadTenants = useCallback(async () => {
+    try {
+      const list = await apiClient.getMeTenants();
+      await applyTenants(list);
+    } catch {
+      // A tenant lookup must not end the session. Single-tenant installs fall
+      // back to the only membership server-side.
+      setTenants([]);
+      setActiveTenantId(sessionTenantId);
+    }
+  }, [applyTenants]);
 
   useEffect(() => {
     sessionExpiredHandler = () => {
       sessionTokens = null;
+      sessionTenantId = null;
       setUser(null);
+      setTenants([]);
+      setActiveTenantId(null);
       setStatus("logged-out");
     };
     return () => {
@@ -102,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       sessionTokens = storedSession;
+      sessionTenantId = await loadStoredTenantId();
       try {
         // A routable-but-unreachable server must not hold the loading screen
         // for the full 20 s request timeout.
@@ -116,6 +160,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         if (epoch !== restoreEpoch.current) return;
         setUser(me);
+        await loadTenants();
+        if (epoch !== restoreEpoch.current) return;
         setStatus("authenticated");
       } catch (error) {
         if (epoch !== restoreEpoch.current) return;
@@ -138,6 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           if (epoch !== restoreEpoch.current) return;
           setUser(null);
+          setTenants([]);
+          setActiveTenantId(null);
           setStatus("logged-out");
         } else {
           // A network or server problem must not throw away a valid session.
@@ -148,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (epoch !== restoreEpoch.current) return;
       setStatus("needs-server");
     }
-  }, []);
+  }, [loadTenants]);
 
   useEffect(() => {
     // Session restoration is inherently an async external-system read.
@@ -156,21 +204,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void restore();
   }, [restore]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    restoreEpoch.current += 1;
-    const me = await apiClient.login(email, password);
-    setUser(me);
-    setStatus("authenticated");
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      restoreEpoch.current += 1;
+      const me = await apiClient.login(email, password);
+      setUser(me);
+      await loadTenants();
+      setStatus("authenticated");
+    },
+    [loadTenants],
+  );
 
   const logout = useCallback(async () => {
     restoreEpoch.current += 1;
     try {
       await apiClient.logout();
     } finally {
+      sessionTenantId = null;
       setUser(null);
+      setTenants([]);
+      setActiveTenantId(null);
       setStatus("logged-out");
     }
+  }, []);
+
+  const switchTenant = useCallback(async (tenantId: string) => {
+    sessionTenantId = tenantId;
+    setActiveTenantId(tenantId);
+    await saveStoredTenantId(tenantId);
   }, []);
 
   const setServerUrl = useCallback(async (input: string) => {
@@ -186,11 +247,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // an in-flight refresh cannot persist the old server's session after the
     // clear.
     sessionTokens = null;
+    sessionTenantId = null;
     sessionServerUrl = normalized;
     setServerUrlState(normalized);
     setUser(null);
+    setTenants([]);
+    setActiveTenantId(null);
     setStatus("logged-out");
     await clearStoredSession();
+    await clearStoredTenantId();
     await saveStoredServerUrl(normalized);
   }, []);
 
@@ -199,13 +264,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       serverUrl,
+      tenants,
+      activeTenantId,
       api: apiClient,
       login,
       logout,
+      switchTenant,
       setServerUrl,
       retry: restore,
     }),
-    [status, user, serverUrl, login, logout, setServerUrl, restore],
+    [
+      status,
+      user,
+      serverUrl,
+      tenants,
+      activeTenantId,
+      login,
+      logout,
+      switchTenant,
+      setServerUrl,
+      restore,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

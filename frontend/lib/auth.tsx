@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useEffect,
+  useCallback,
   ReactNode,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -12,8 +13,11 @@ import {
   api,
   ApiError,
   clearTokens,
+  getActiveTenantId,
   hasStoredSession,
   SESSION_EXPIRED_EVENT,
+  setActiveTenantId,
+  type TenantMembership,
 } from "@/lib/api";
 import {
   DEMO_AVAILABLE,
@@ -29,8 +33,12 @@ interface AuthContextType {
   isLoading: boolean;
   demo: boolean;
   demoAvailable: boolean;
+  tenants: TenantMembership[];
+  activeTenantId: string | null;
+  tenantReady: boolean;
   login: (username: string) => void;
   logout: () => Promise<void>;
+  switchTenant: (tenantId: string) => void;
   enterDemo: () => void;
   exitDemo: () => void;
 }
@@ -40,8 +48,12 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   demo: false,
   demoAvailable: DEMO_AVAILABLE,
+  tenants: [],
+  activeTenantId: null,
+  tenantReady: true,
   login: () => {},
   logout: async () => {},
+  switchTenant: () => {},
   enterDemo: () => {},
   exitDemo: () => {},
 });
@@ -55,8 +67,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const [demo, setDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [tenants, setTenants] = useState<TenantMembership[]>([]);
+  const [activeTenantId, setActiveTenantIdState] = useState<string | null>(
+    () => {
+      if (typeof window === "undefined") return null;
+      return getActiveTenantId();
+    },
+  );
+  const [tenantReady, setTenantReady] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+
+  const applyTenants = useCallback((list: TenantMembership[]) => {
+    setTenants(list);
+    const stored = getActiveTenantId();
+    const active =
+      list.find((tenant) => tenant.id === stored && tenant.is_active) ??
+      list.find((tenant) => tenant.is_active) ??
+      list[0] ??
+      null;
+    setActiveTenantId(active?.id ?? null);
+    setActiveTenantIdState(active?.id ?? null);
+    setTenantReady(true);
+  }, []);
+
+  const loadTenants = useCallback(async () => {
+    try {
+      const response = await api.getMeTenants();
+      applyTenants(response.data);
+    } catch {
+      // A failed tenant lookup must not block the dashboard. Single-tenant
+      // installs still work because the API falls back to the only
+      // membership; data requests will surface a real error if not.
+      setTenantReady(true);
+    }
+  }, [applyTenants]);
 
   useEffect(() => {
     // Demo mode skips the whole login/setup flow. `isDemoActive` is the source
@@ -64,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (DEMO_AVAILABLE && isDemoActive()) {
       setDemo(true);
       setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
+      setTenantReady(true);
       setIsLoading(false);
       return;
     }
@@ -71,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!hasStoredSession()) {
       window.localStorage.removeItem(USERNAME_KEY);
       setUsername(null);
+      setTenantReady(true);
       setIsLoading(false);
       return;
     }
@@ -79,10 +126,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // automatically when it has expired.
     api
       .getMe()
-      .then((me) => {
+      .then(async (me) => {
         const name = me.full_name || me.email;
         window.localStorage.setItem(USERNAME_KEY, name);
         setUsername(name);
+        await loadTenants();
       })
       .catch((error) => {
         // A 401/403 means the session is really gone. A transport error or a
@@ -95,15 +143,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearTokens();
           window.localStorage.removeItem(USERNAME_KEY);
           setUsername(null);
+          setActiveTenantId(null);
+          setActiveTenantIdState(null);
+          setTenants([]);
         }
+        setTenantReady(true);
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [loadTenants]);
 
   useEffect(() => {
     function handleSessionExpired() {
       window.localStorage.removeItem(USERNAME_KEY);
       setUsername(null);
+      setTenants([]);
+      setActiveTenantId(null);
+      setActiveTenantIdState(null);
+      setTenantReady(true);
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
     return () =>
@@ -125,6 +181,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function login(name: string) {
     window.localStorage.setItem(USERNAME_KEY, name);
     setUsername(name);
+    setTenantReady(false);
+    void loadTenants();
+  }
+
+  function switchTenant(tenantId: string) {
+    if (!tenantId || tenantId === activeTenantId) return;
+    setActiveTenantId(tenantId);
+    setActiveTenantIdState(tenantId);
+    // Every page holds data for the previous tenant. A reload is the simplest
+    // way to drop all caches and refetch with the new header.
+    window.location.reload();
   }
 
   async function logout() {
@@ -136,6 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.localStorage.removeItem(USERNAME_KEY);
     setUsername(null);
+    setTenants([]);
+    setActiveTenantId(null);
+    setActiveTenantIdState(null);
+    setTenantReady(true);
     if (!revoked) {
       toast.error(
         "Signed out locally, but the server could not be reached. The old session may still be valid.",
@@ -152,6 +223,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTokens();
     setDemo(true);
     setUsername(DEMO_USER.full_name ?? DEMO_USER.email);
+    setTenants([]);
+    setActiveTenantIdState(null);
+    setTenantReady(true);
     setIsLoading(false);
     router.push("/dashboard");
   }
@@ -162,6 +236,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTokens();
     setDemo(false);
     setUsername(null);
+    setTenants([]);
+    setActiveTenantIdState(null);
+    setTenantReady(false);
     router.push("/");
   }
 
@@ -172,8 +249,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         demo,
         demoAvailable: DEMO_AVAILABLE,
+        tenants,
+        activeTenantId,
+        tenantReady,
         login,
         logout,
+        switchTenant,
         enterDemo,
         exitDemo,
       }}

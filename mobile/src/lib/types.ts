@@ -7,6 +7,14 @@ export interface UserPublic {
   created_at: string | null;
 }
 
+export interface TenantMembership {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  role: string;
+}
+
 export interface Filament {
   id: string;
   brand: string;

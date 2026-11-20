@@ -25,6 +25,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { SpoolMark } from "@/components/brand/SpoolMark";
+import { useAuth } from "@/lib/auth";
+import { TenantMenu } from "./TenantMenu";
 import { UserMenu } from "./UserMenu";
 
 const navItems = [
@@ -39,6 +41,8 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { tenants, activeTenantId } = useAuth();
+  const activeTenant = tenants.find((tenant) => tenant.id === activeTenantId);
 
   return (
     <Sidebar collapsible="icon">
@@ -52,12 +56,13 @@ export function AppSidebar() {
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">Open Print</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  Dashboard
+                  {activeTenant?.name ?? "Dashboard"}
                 </span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <TenantMenu />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

@@ -15,9 +15,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/lib/auth";
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
-  const { isLoading, username } = useAuth();
+  const { isLoading, username, tenantReady } = useAuth();
 
-  if (isLoading) {
+  if (isLoading || !tenantReady) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-background">
         <div className="flex items-center gap-3 text-muted-foreground">

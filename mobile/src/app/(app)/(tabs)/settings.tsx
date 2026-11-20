@@ -28,7 +28,14 @@ import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function SettingsScreen() {
-  const { user, serverUrl, logout } = useAuth();
+  const {
+    user,
+    serverUrl,
+    tenants,
+    activeTenantId,
+    switchTenant,
+    logout,
+  } = useAuth();
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -128,6 +135,64 @@ export default function SettingsScreen() {
             <Badge label="Admin" variant="accent" />
           ) : null}
         </Card>
+
+        {tenants.length > 1 ? (
+          <Card style={styles.section}>
+            <View style={styles.sectionTitle}>
+              <View
+                style={[
+                  styles.iconWrap,
+                  { backgroundColor: `${theme.colors.accent}18` },
+                ]}
+              >
+                <Ionicons
+                  name="business-outline"
+                  size={18}
+                  color={theme.colors.accentText}
+                />
+              </View>
+              <AppText variant="heading">Tenant</AppText>
+            </View>
+            {tenants.map((tenant) => (
+              <Pressable
+                key={tenant.id}
+                accessibilityRole="button"
+                accessibilityState={{
+                  selected: tenant.id === activeTenantId,
+                  disabled: !tenant.is_active,
+                }}
+                disabled={!tenant.is_active}
+                onPress={() => {
+                  void switchTenant(tenant.id).then(() => router.replace("/"));
+                }}
+                style={[
+                  styles.tenantRow,
+                  !tenant.is_active ? styles.tenantInactive : null,
+                ]}
+              >
+                <AppText
+                  numberOfLines={1}
+                  color={
+                    tenant.id === activeTenantId
+                      ? theme.colors.accentText
+                      : theme.colors.text
+                  }
+                  style={styles.tenantName}
+                >
+                  {tenant.name}
+                </AppText>
+                <Badge label={tenant.role} />
+                {tenant.id === activeTenantId ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={18}
+                    color={theme.colors.accentText}
+                  />
+                ) : null}
+              </Pressable>
+            ))}
+          </Card>
+        ) : null}
 
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -396,6 +461,18 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     lineHeight: 21,
+  },
+  tenantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  tenantInactive: {
+    opacity: 0.45,
+  },
+  tenantName: {
+    flex: 1,
   },
   aboutRow: {
     flexDirection: "row",

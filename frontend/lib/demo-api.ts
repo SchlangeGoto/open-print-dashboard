@@ -167,6 +167,29 @@ export const demoApi: ApiShape = {
       setup_complete: true,
     }),
 
+  getMeTenants: () =>
+    delay({
+      data: [
+        {
+          id: "demo-tenant",
+          name: "Demo workspace",
+          slug: "demo",
+          is_active: true,
+          role: "owner" as const,
+        },
+      ],
+      count: 1,
+    }),
+
+  getCurrentTenant: () =>
+    delay({
+      id: "demo-tenant",
+      name: "Demo workspace",
+      slug: "demo",
+      is_active: true,
+      role: "owner" as const,
+    }),
+
   skipSetup: () => delay({ message: "Setup skipped" }),
 
   register: (email, _password, fullName) => {

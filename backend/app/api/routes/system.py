@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -148,15 +147,21 @@ def request_update(payload: UpdateRequest) -> Any:
     request_file = directory / "request"
     if request_file.exists() or (directory / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")
-    tmp_path: str | None = None
     try:
-        fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".request.")
+        fd = os.open(request_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError as exc:
+        raise HTTPException(
+            status_code=409, detail="An update is already queued"
+        ) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503, detail="Could not queue the update"
+        ) from exc
+    try:
         with os.fdopen(fd, "w") as tmp:
             tmp.write(tag + "\n")
-        Path(tmp_path).replace(request_file)
     except OSError as exc:
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
+        request_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=503, detail="Could not queue the update"
         ) from exc

@@ -162,10 +162,17 @@ The guided installer enables the `updater` profile. A superuser sees
 Settings → Updates, which checks the latest stable GitHub release and updates
 backend/frontend after confirmation. The sidecar takes a `pg_dump` first. If a
 new image migrated the database, automatic rollback is skipped and the status
-points at the backup; restore it before downgrading. The updater mounts
-`/var/run/docker.sock` (host-root trust boundary); remove
-`COMPOSE_PROFILES=updater` from `.env` to disable it and use the manual commands
-above.
+points at the backup; restore it before downgrading. If the sidecar restarts
+mid-update, it restores the previous tag when the database revision did not
+move, and otherwise stops with the backup path. The updater mounts
+`/var/run/docker.sock` (host-root trust boundary). To disable it, stop the
+sidecar before removing the profile:
+
+```bash
+docker compose -f compose.ghcr.yml stop updater
+docker compose -f compose.ghcr.yml rm -f updater
+# then remove COMPOSE_PROFILES=updater from .env
+```
 
 ## Automatic deployment on tags (optional)
 

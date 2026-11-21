@@ -61,6 +61,7 @@ services:
       - BAMBU_CLOUD_MQTT_HOST=${BAMBU_CLOUD_MQTT_HOST:-us.mqtt.bambulab.com}
       - BAMBU_CLOUD_MQTT_PORT=${BAMBU_CLOUD_MQTT_PORT:-8883}
       - APP_VERSION=${APP_VERSION:-dev}
+      - UPDATE_GITHUB_TOKEN=${UPDATE_GITHUB_TOKEN:-}
       - UPDATER_DIR=/app/updater
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -100,6 +101,16 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   caddy:
     image: caddy:2.11.9-alpine

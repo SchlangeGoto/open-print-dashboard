@@ -24,7 +24,9 @@ release and the updater sidecar state. `POST /system/update` with
 
 The sidecar pulls the tag, recreates only the backend and frontend containers,
 and waits for the backend and frontend health checks. `state` is one of `idle`,
-`queued`, `running`, `success`, `error`, `stale` or `unavailable`. It takes a `pg_dump`
-backup first. If the new backend already migrated the database, it does not
-automatic-roll back; the status points at the backup for a manual restore.
-Database and upload volumes are never recreated.
+`queued`, `running`, `success`, `error`, `stale` or `unavailable`. It takes a
+`pg_dump` backup first, one file per attempt. If the new backend already
+migrated the database, it does not roll back automatically; the status points
+at the backup for a manual restore. A sidecar restart during an update restores
+the previous tag when the migration revision did not change. Database and
+upload volumes are never recreated.

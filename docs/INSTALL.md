@@ -17,7 +17,7 @@ The interactive prompts cover:
 - the first admin email and password.
 
 The install directory (`--dir`, default `/opt/openprintdashboard`), project
-name (`--project-name`, default `openprintdashboard`) and release tag
+name (`--project-name`, default: derived from the install directory) and release tag
 (`--tag vX.Y.Z`, default: latest GitHub release) are optional flags. Adding
 `--force` reuses the existing secrets and admin values when updating an install
 in place. Changing `FIRST_SUPERUSER_PASSWORD` only affects the initial account
@@ -56,11 +56,16 @@ updater restores the previous tag automatically. If the new image already
 migrated the database, automatic rollback is skipped and the card shows the
 database backup path; restore that backup before downgrading.
 
-The dump lives in the `updater_data` volume. With the default project name:
+If the sidecar is restarted while an update is running, it recovers on start:
+it restores the previous tag when the database revision did not move, and stops
+with the backup path when a migration already committed.
+
+The dump lives in the `updater_data` volume. Each attempt gets its own file, and
+the card shows the exact path. With the default project name:
 
 ```bash
 docker run --rm -v openprintdashboard_updater_data:/d alpine \
-  sh -c 'gunzip -c /d/pre-update-X.Y.Z.sql.gz' > /tmp/opd-restore.sql
+  sh -c 'gunzip -c /d/pre-update-X.Y.Z-*.sql.gz' > /tmp/opd-restore.sql
 docker compose -f compose.ghcr.yml exec -T db psql -U opd -d openprintdashboard < /tmp/opd-restore.sql
 # with an existing reverse proxy, add: -f compose.override.yml
 ```
@@ -75,11 +80,15 @@ update commands instead.
 
 ### Manual fallback
 
-If the updater profile is disabled (remove `COMPOSE_PROFILES=updater` from
-`.env`), change `IMAGE_TAG` and `APP_VERSION` in the install directory's `.env`,
-then pull and recreate:
+To disable dashboard updates, stop the sidecar before removing the profile, then
+change `IMAGE_TAG` and `APP_VERSION` in the install directory's `.env` and pull
+and recreate:
 
 ```bash
+docker compose -f compose.ghcr.yml stop updater
+docker compose -f compose.ghcr.yml rm -f updater
+# then remove COMPOSE_PROFILES=updater from .env
+
 # bundled Caddy
 docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d

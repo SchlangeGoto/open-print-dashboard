@@ -532,8 +532,10 @@ export default function SettingsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               The backend and frontend containers restart. The database and
-              uploads are kept. If the new backend does not become healthy, the
-              updater restores the previous version.
+              uploads are kept, and a database backup is taken first. If the
+              schema changed and the new backend does not become healthy,
+              automatic rollback is skipped and a manual restore from that
+              backup is required.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

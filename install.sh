@@ -84,7 +84,7 @@ OpenPrintDash installer
   --admin-password PASS first superuser password (default: generated)
   --non-interactive     fail instead of prompting for missing values
   --force               reuse the existing install's secrets and admin
-  --project-name NAME   Compose project name (default openprintdashboard)
+  --project-name NAME   Compose project name (default: derived from --dir)
 
 Example:
   curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | bash
@@ -120,6 +120,18 @@ if [ -e "$INSTALL_DIR/.env" ]; then
     die "Already installed in $INSTALL_DIR. Use --force to update the Compose files and keep its secrets."
   fi
   EXISTING_ENV=1
+fi
+if [ "$PROJECT_NAME_SET" = 0 ] && [ "$EXISTING_ENV" = 0 ]; then
+  # Two installations on one host must not share Compose services or volumes.
+  if [ "$INSTALL_DIR" = "$DEFAULT_DIR" ]; then
+    PROJECT_NAME="openprintdashboard"
+  else
+    dir_name=$(basename "$INSTALL_DIR")
+    dir_name=$(printf '%s' "$dir_name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-')
+    dir_name=$(printf '%s' "$dir_name" | sed 's/-\{2,\}/-/g; s/^-//; s/-$//')
+    dir_hash=$(printf '%s' "$INSTALL_DIR" | cksum | awk '{print $1}')
+    PROJECT_NAME="openprintdashboard-${dir_name}-${dir_hash}"
+  fi
 fi
 printf '%s' "$PROJECT_NAME" | grep -Eq '^[a-z0-9][a-z0-9_-]*$' || \
   die "Project name must contain lowercase letters, digits, dashes or underscores"
@@ -223,14 +235,27 @@ curl -fsSL "$BASE_URL/deploy/Caddyfile" -o deploy/Caddyfile || \
   die "Could not download deploy/Caddyfile for $TAG"
 
 read_env() {
-  sed -n "s/^$1=//p" .env 2>/dev/null | head -n1 | sed "s/^'//;s/'$//"
+  sed -n "s/^$1=//p" .env 2>/dev/null | head -n1 | \
+    sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'
 }
 
 if [ "$EXISTING_ENV" = 1 ]; then
   cp .env ".env.bak.$(date +%s)"
+  POSTGRES_USER=$(read_env POSTGRES_USER)
+  POSTGRES_DB=$(read_env POSTGRES_DB)
   POSTGRES_PASSWORD=$(read_env POSTGRES_PASSWORD)
   SECRET_KEY=$(read_env SECRET_KEY)
   BAMBU_KEY=$(read_env BAMBU_CREDENTIALS_KEY)
+  [ -n "$POSTGRES_PASSWORD" ] || die "Existing .env has no POSTGRES_PASSWORD"
+  POSTGRES_USER=${POSTGRES_USER:-opd}
+  POSTGRES_DB=${POSTGRES_DB:-openprintdashboard}
+  printf '%s' "$POSTGRES_USER" | grep -Eq '^[A-Za-z0-9_]+$' || \
+    die "Existing POSTGRES_USER contains unsupported characters"
+  printf '%s' "$POSTGRES_DB" | grep -Eq '^[A-Za-z0-9_]+$' || \
+    die "Existing POSTGRES_DB contains unsupported characters"
+  validate_safe "$POSTGRES_PASSWORD" "POSTGRES_PASSWORD"
+  validate_safe "$SECRET_KEY" "SECRET_KEY"
+  validate_safe "$BAMBU_KEY" "BAMBU_CREDENTIALS_KEY"
   if [ "$ADMIN_EMAIL_SET" = 0 ]; then
     ADMIN_EMAIL=$(read_env FIRST_SUPERUSER)
   fi
@@ -253,9 +278,17 @@ if [ "$EXISTING_ENV" = 1 ]; then
   fi
   yellow "Reusing the existing secrets; admin values not overridden are kept."
 fi
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
-SECRET_KEY=${SECRET_KEY:-$(openssl rand -hex 32)}
-BAMBU_KEY=${BAMBU_KEY:-$(openssl rand -hex 32)}
+if [ "$EXISTING_ENV" = 1 ]; then
+  # Empty SECRET_KEY/BAMBU_CREDENTIALS_KEY means "use the key persisted in
+  # backend_data". Do not replace that with a new random key on --force.
+  :
+else
+  POSTGRES_PASSWORD=$(openssl rand -hex 24)
+  POSTGRES_USER=opd
+  POSTGRES_DB=openprintdashboard
+  SECRET_KEY=$(openssl rand -hex 32)
+  BAMBU_KEY=$(openssl rand -hex 32)
+fi
 FRONTEND_HOST="http://localhost:${APP_PORT}"
 [ -n "$DOMAIN" ] && FRONTEND_HOST="https://${DOMAIN}"
 
@@ -267,9 +300,9 @@ umask 077
   printf 'IMAGE_PREFIX=%s\n' "$IMAGE_PREFIX"
   printf 'IMAGE_TAG=%s\n' "$VERSION"
   printf 'APP_VERSION=%s\n' "$VERSION"
-  printf 'POSTGRES_USER=opd\n'
+  printf 'POSTGRES_USER=%s\n' "$(env_quote "$POSTGRES_USER")"
   printf 'POSTGRES_PASSWORD=%s\n' "$(env_quote "$POSTGRES_PASSWORD")"
-  printf 'POSTGRES_DB=openprintdashboard\n'
+  printf 'POSTGRES_DB=%s\n' "$(env_quote "$POSTGRES_DB")"
   printf 'SECRET_KEY=%s\n' "$(env_quote "$SECRET_KEY")"
   printf 'BAMBU_CREDENTIALS_KEY=%s\n' "$(env_quote "$BAMBU_KEY")"
   printf 'FIRST_SUPERUSER=%s\n' "$(env_quote "$ADMIN_EMAIL")"
@@ -351,8 +384,10 @@ Port forwarding
 GUIDE
 else
   if [ "$BIND_ADDR" = "0.0.0.0" ]; then
+    PROXY_TARGET="<this-server>"
     printf 'Dashboard: http://<this-server>:%s (behind your proxy)\n' "$APP_PORT"
   else
+    PROXY_TARGET="$BIND_ADDR"
     printf 'Dashboard: http://%s:%s (behind your proxy)\n' "$BIND_ADDR" "$APP_PORT"
   fi
   if [ "$BIND_ADDR" = "0.0.0.0" ]; then
@@ -363,19 +398,19 @@ else
   cat <<GUIDE
 
 Reverse proxy
-  Route /api/* to 127.0.0.1:${API_PORT} and everything else to
-  127.0.0.1:${APP_PORT}. Keep both ports on loopback unless the proxy runs on
-  another machine.
+  Route /api/* to ${PROXY_TARGET}:${API_PORT} and everything else to
+  ${PROXY_TARGET}:${APP_PORT}. Keep both ports on loopback unless the proxy
+  runs on another machine.
 
   Caddy:
     ${DOMAIN:-dashboard.example.com} {
-      handle /api/* { reverse_proxy 127.0.0.1:${API_PORT} }
-      handle { reverse_proxy 127.0.0.1:${APP_PORT} }
+      handle /api/* { reverse_proxy ${PROXY_TARGET}:${API_PORT} }
+      handle { reverse_proxy ${PROXY_TARGET}:${APP_PORT} }
     }
 
   Nginx:
-    location /api/ { proxy_pass http://127.0.0.1:${API_PORT}; }
-    location /     { proxy_pass http://127.0.0.1:${APP_PORT}; }
+    location /api/ { proxy_pass http://${PROXY_TARGET}:${API_PORT}; }
+    location /     { proxy_pass http://${PROXY_TARGET}:${APP_PORT}; }
 
   Port forwarding
     Forward only the ports your proxy listens on (normally 80/443). If the

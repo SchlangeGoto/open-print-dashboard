@@ -58,6 +58,7 @@ export interface Filament {
   bed_temp: number | null;
   bambu_info_idx: string | null;
   spool_weight_g: number;
+  default_price_per_kg: number | null;
   notes: string | null;
   created_at: string | null;
 }
@@ -68,6 +69,7 @@ export interface FilamentInput {
   color_name: string;
   color_hex: string;
   spool_weight_g?: number;
+  default_price_per_kg?: number;
   nozzle_temp_min?: number;
   nozzle_temp_max?: number;
   bed_temp?: number;

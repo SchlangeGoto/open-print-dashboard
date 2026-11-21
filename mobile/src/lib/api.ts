@@ -582,6 +582,16 @@ export class ApiClient {
     });
   }
 
+  updateSpool(
+    spoolId: string,
+    data: { price_per_kg?: number | null; [key: string]: unknown },
+  ): Promise<Spool> {
+    return this.request<Spool>(`/spools/${spoolId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
   private request<T>(path: string, init?: RequestInit): Promise<T> {
     return this.fetchWithAuth(path, init).then((res) => this.parse<T>(res));
   }

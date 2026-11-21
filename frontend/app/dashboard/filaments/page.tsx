@@ -55,6 +55,7 @@ const emptyFilament = {
   nozzle_temp_max: 220,
   bed_temp: 60,
   bambu_info_idx: "",
+  default_price_per_kg: null as number | null,
   notes: "",
 };
 
@@ -128,6 +129,7 @@ export default function FilamentsPage() {
       nozzle_temp_max: f.nozzle_temp_max ?? 220,
       bed_temp: f.bed_temp ?? 60,
       bambu_info_idx: f.bambu_info_idx ?? "",
+      default_price_per_kg: f.default_price_per_kg ?? null,
       notes: f.notes ?? "",
     });
     setEditingId(f.id);
@@ -414,15 +416,40 @@ export default function FilamentsPage() {
               </Field>
             </div>
 
-            <Field>
-              <FieldLabel htmlFor="bambu-idx">Bambu Info Index</FieldLabel>
-              <Input
-                id="bambu-idx"
-                placeholder="GFL99"
-                value={form.bambu_info_idx}
-                onChange={(e) => setForm({ ...form, bambu_info_idx: e.target.value })}
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="bambu-idx">Bambu Info Index</FieldLabel>
+                <Input
+                  id="bambu-idx"
+                  placeholder="GFL99"
+                  value={form.bambu_info_idx}
+                  onChange={(e) =>
+                    setForm({ ...form, bambu_info_idx: e.target.value })
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="default-price">Default price / kg (€)</FieldLabel>
+                <Input
+                  id="default-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="24.99"
+                  value={form.default_price_per_kg ?? ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      default_price_per_kg:
+                        e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Used for new and scanned spools until changed.
+                </p>
+              </Field>
+            </div>
 
             <Field>
               <FieldLabel htmlFor="filament-notes">Notes</FieldLabel>

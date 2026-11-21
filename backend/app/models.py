@@ -120,6 +120,7 @@ class FilamentBase(SQLModel):
     bed_temp: int | None = None
     bambu_info_idx: str | None = Field(default=None, max_length=50)
     spool_weight_g: float = Field(default=1000, gt=0)
+    default_price_per_kg: float | None = Field(default=None, ge=0)
     notes: str | None = Field(default=None, max_length=1000)
 
 
@@ -138,6 +139,7 @@ class FilamentUpdate(SQLModel):
     bed_temp: int | None = None
     bambu_info_idx: str | None = Field(default=None, max_length=50)
     spool_weight_g: float | None = Field(default=None, gt=0)
+    default_price_per_kg: float | None = Field(default=None, ge=0)
     notes: str | None = Field(default=None, max_length=1000)
 
     @model_validator(mode="after")

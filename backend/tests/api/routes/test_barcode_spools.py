@@ -350,6 +350,117 @@ def test_unknown_barcode_can_create_filament_and_spool(
     assert data["spool"]["source"] == "barcode"
 
 
+def test_confirm_on_a_mapped_barcode_updates_the_default_price(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    code = "TEST-MAPPED-DEFAULT-PRICE"
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json={
+            "code": code,
+            "request_id": "mapped-price-1",
+            "filament": {
+                "brand": "Test",
+                "material": "PLA",
+                "color_name": "Mapped price",
+                "color_hex": "#445566",
+                "default_price_per_kg": 20,
+            },
+            "total_weight_g": 1000,
+        },
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["spool"]["price_per_kg"] == 20
+
+    # A second confirm for the same barcode reuses the filament. The price
+    # entered here must still become the default for future spools.
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json={
+            "code": code,
+            "request_id": "mapped-price-2",
+            "filament": {
+                "brand": "Test",
+                "material": "PLA",
+                "color_name": "Mapped price",
+                "color_hex": "#445566",
+                "default_price_per_kg": 25,
+            },
+            "total_weight_g": 1000,
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["spool"]["price_per_kg"] == 25
+
+    db.expire_all()
+    filament = db.get(Filament, uuid.UUID(first.json()["filament"]["id"]))
+    assert filament is not None
+    assert filament.default_price_per_kg == 25
+    first_spool = db.get(Spool, uuid.UUID(first.json()["spool"]["id"]))
+    assert first_spool is not None
+    assert first_spool.price_per_kg == 20
+
+
+def test_confirm_applies_the_default_after_a_mapping_conflict(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.api.routes import spools as spool_routes
+
+    existing = Filament(
+        brand="Winner",
+        material="PLA",
+        color_name="Conflict winner",
+        color_hex="#010203",
+        default_price_per_kg=10,
+    )
+    db.add(existing)
+    db.commit()
+    db.refresh(existing)
+    existing_id = existing.id
+
+    def conflict_link(*, session: Session, code: str, filament: Filament) -> Filament:
+        # The other request committed its mapping first; this one rolls back
+        # its own filament and continues with the winner. Re-read it through
+        # the request session instead of leaking the test session's object.
+        session.rollback()
+        winner = session.get(Filament, existing_id)
+        if winner is None:
+            raise AssertionError("conflict winner disappeared")
+        return winner
+
+    monkeypatch.setattr(spool_routes, "_link_barcode", conflict_link)
+
+    response = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json={
+            "code": "TEST-CONFLICT-DEFAULT-PRICE",
+            "request_id": "conflict-price-1",
+            "filament": {
+                "brand": "Loser",
+                "material": "PLA",
+                "color_name": "Conflict loser",
+                "color_hex": "#040506",
+                "default_price_per_kg": 30,
+            },
+            "total_weight_g": 1000,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["filament"]["id"] == str(existing.id)
+    assert response.json()["spool"]["price_per_kg"] == 30
+
+    db.expire_all()
+    stored = db.get(Filament, existing.id)
+    assert stored is not None
+    assert stored.default_price_per_kg == 30
+
+
 def test_scan_imported_catalog_barcode(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:

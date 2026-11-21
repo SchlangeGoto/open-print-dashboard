@@ -24,7 +24,7 @@ JOURNAL_FILE="$PRIVATE_DIR/journal"
 mkdir -p "$DATA_DIR" "$PRIVATE_DIR"
 chmod 0700 "$PRIVATE_DIR"
 rm -rf "$LOCK_DIR"
-rm -f "$DATA_DIR"/.pre-update-*.sql
+rm -f "$DATA_DIR"/.pre-update-*.sql "$DATA_DIR"/.request.*
 # Keep the heartbeat fresh while a pull, dump or health loop blocks the main
 # loop; the backend treats a stale heartbeat as "updater not responding".
 ( while :; do touch "$HEARTBEAT_FILE"; sleep 5; done ) &
@@ -84,6 +84,10 @@ write_journal() {
 
 mark_journal_healthy() {
   printf 'phase=healthy\n' >> "$JOURNAL_FILE"
+}
+
+mark_journal_started() {
+  printf 'phase=started\n' >> "$JOURNAL_FILE"
 }
 
 compose() {
@@ -183,6 +187,17 @@ reconcile_interrupted() {
     return 1
   fi
   if [ "$current_revision" != "$old_revision" ]; then
+    # If the new version already started and both endpoints answer, the
+    # process may have died between the health check and the success write.
+    # Do not send the operator to an older dump in that case.
+    if { [ "$phase" = "started" ] || [ "$phase" = "healthy" ]; } &&
+       [ "$(read_env IMAGE_TAG)" = "$requested" ] &&
+       wait_for_url "$HEALTH_URL" 3 >/dev/null 2>&1 &&
+       wait_for_url "$FRONTEND_URL" 3 >/dev/null 2>&1; then
+      write_status success "$requested" "Updated to $requested"
+      rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
+      return 0
+    fi
     write_status error "$requested" \
       "An update was interrupted after a database migration. Restore $backup before downgrading."
     rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
@@ -296,6 +311,7 @@ while true; do
       sleep 5
       continue
     fi
+    mark_journal_started
     if ! compose up -d --no-deps backend frontend ||
        ! wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" ||
        ! wait_for_url "$FRONTEND_URL" "$HEALTH_ATTEMPTS"; then

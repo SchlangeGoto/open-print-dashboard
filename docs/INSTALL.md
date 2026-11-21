@@ -59,8 +59,10 @@ database backup path; restore that backup before downgrading.
 The dump lives in the `updater_data` volume. With the default project name:
 
 ```bash
-docker run --rm -v openprintdashboard_updater_data:/d alpine   sh -c 'gunzip -c /d/pre-update-X.Y.Z.sql.gz' > /tmp/opd-restore.sql
-docker compose exec -T db psql -U opd -d openprintdashboard < /tmp/opd-restore.sql
+docker run --rm -v openprintdashboard_updater_data:/d alpine \
+  sh -c 'gunzip -c /d/pre-update-X.Y.Z.sql.gz' > /tmp/opd-restore.sql
+docker compose -f compose.ghcr.yml exec -T db psql -U opd -d openprintdashboard < /tmp/opd-restore.sql
+# with an existing reverse proxy, add: -f compose.override.yml
 ```
 
 The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;

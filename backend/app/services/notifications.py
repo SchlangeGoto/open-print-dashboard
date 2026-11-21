@@ -55,7 +55,7 @@ def send_push_to_all(
             continue
 
         dead: list[str] = []
-        for token, ticket in zip(chunk, tickets):
+        for token, ticket in zip(chunk, tickets, strict=False):
             if ticket.get("status") == "ok":
                 sent += 1
                 continue

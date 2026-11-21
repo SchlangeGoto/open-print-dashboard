@@ -30,6 +30,39 @@ test.describe("demo dashboard", () => {
     });
   }
 
+  test("fills spool indicators and settles on the real value", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard/spools");
+
+    const fill = page.locator("[data-spool-fill]").first();
+    await expect(fill).toBeVisible();
+    const pct = Number(await fill.getAttribute("data-fill-pct"));
+    expect(pct).toBeGreaterThan(0);
+
+    const circle = fill.locator("[data-spool-fill-circle]");
+    const expectedRadius = 18 + 22 * (pct / 100);
+    await expect
+      .poll(async () => Number(await circle.getAttribute("r")))
+      .toBeCloseTo(expectedRadius, 0);
+  });
+
+  test("skips the spool fill animation with reduced motion", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/dashboard/spools");
+
+    const fill = page.locator("[data-spool-fill]").first();
+    await expect(fill).toBeVisible();
+    const pct = Number(await fill.getAttribute("data-fill-pct"));
+    const circle = fill.locator("[data-spool-fill-circle]");
+    const expectedRadius = 18 + 22 * (pct / 100);
+    await expect
+      .poll(async () => Number(await circle.getAttribute("r")))
+      .toBeCloseTo(expectedRadius, 0);
+  });
+
   test("keeps sidebar navigation working", async ({ page }) => {
     await page.goto("/dashboard");
     await page.getByRole("link", { name: "Spools" }).click();

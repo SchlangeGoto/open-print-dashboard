@@ -225,7 +225,7 @@ export default function FilamentsPage() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filaments.map((f) => {
+          {filaments.map((f, filamentIndex) => {
             const spools = spoolsByFilament[f.id] ?? [];
             const remaining = spools.reduce(
               (s, sp) => (sp.remaining_unknown ? s : s + sp.remaining_g),
@@ -235,7 +235,10 @@ export default function FilamentsPage() {
               <Card
                 key={f.id}
                 onClick={() => setSelectedFilament(f)}
-                className="group relative cursor-pointer transition-colors hover:ring-primary/40"
+                className="group relative cursor-pointer transition-colors hover:ring-primary/40 opd-enter"
+                style={{
+                  animationDelay: `${Math.min(filamentIndex, 11) * 35}ms`,
+                }}
               >
                 <CardContent className="space-y-4">
                   <div className="card-actions absolute right-3 top-3 z-10 flex gap-1 transition-opacity">

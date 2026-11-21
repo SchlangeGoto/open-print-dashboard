@@ -123,6 +123,10 @@ def login_access_token(
     )
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
+    # Serialize with deactivation, which locks the user before revoking
+    # tokens. Without this, a login could insert a new token after the
+    # revocation statement and survive account deactivation.
+    user = session.exec(select(User).where(User.id == user.id).with_for_update()).one()
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return _issue_token_pair(session, user)
@@ -137,14 +141,23 @@ def refresh_access_token(session: SessionDep, body: RefreshTokenRequest) -> Toke
     damage from a stolen token.
     """
     token_hash = security.hash_refresh_token(body.refresh_token)
-    stored = session.exec(
-        select(RefreshToken)
-        .where(RefreshToken.token_hash == token_hash)
-        .with_for_update()
+    found = session.exec(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     ).first()
     now = datetime.now(UTC)
+    if not found:
+        raise _refresh_error("Invalid refresh token")
 
-    if not stored:
+    # Lock the user before the token, matching update_user's lock order. A
+    # refresh and a deactivation that touch the same rows must not deadlock,
+    # and no new token may be inserted after deactivation revoked them.
+    user = session.exec(
+        select(User).where(User.id == found.user_id).with_for_update()
+    ).first()
+    stored = session.exec(
+        select(RefreshToken).where(RefreshToken.id == found.id).with_for_update()
+    ).first()
+    if not user or not stored:
         raise _refresh_error("Invalid refresh token")
 
     # Check revocation before expiry: a rotated token that has also expired is
@@ -165,8 +178,7 @@ def refresh_access_token(session: SessionDep, body: RefreshTokenRequest) -> Toke
         session.commit()
         raise _refresh_error("Refresh token expired")
 
-    user = session.get(User, stored.user_id)
-    if not user or not user.is_active:
+    if not user.is_active:
         stored.revoked_at = now
         session.add(stored)
         session.commit()

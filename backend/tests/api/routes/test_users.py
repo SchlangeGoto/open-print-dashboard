@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
-from app.models import UserCreate
+from app.models import PushToken, UserCreate
 from tests.utils.utils import random_email, random_lower_string
 
 
@@ -92,6 +92,14 @@ def test_deactivating_a_user_revokes_every_session(
     user = crud.create_user(
         session=db, user_create=UserCreate(email=email, password=password)
     )
+    db.add(
+        PushToken(
+            user_id=user.id,
+            token="ExponentPushToken[deactivated]",
+            platform="ios",
+        )
+    )
+    db.commit()
 
     login = client.post(
         f"{settings.API_V1_STR}/login/access-token",
@@ -113,6 +121,8 @@ def test_deactivating_a_user_revokes_every_session(
         json={"is_active": False},
     )
     assert deactivated.status_code == 200, deactivated.text
+    db.expire_all()
+    assert db.exec(select(PushToken).where(PushToken.user_id == user.id)).all() == []
 
     # The stateless access token dies immediately. While disabled the API
     # returns "Inactive user"; after re-activation the revoked access token

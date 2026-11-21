@@ -49,6 +49,7 @@ export default function SpoolDetailScreen() {
   const [priceOpen, setPriceOpen] = useState(false);
   const [priceDraft, setPriceDraft] = useState("");
   const [priceBusy, setPriceBusy] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
 
   const loader = useCallback(async (): Promise<SpoolDetailData> => {
     if (!id) {
@@ -69,6 +70,7 @@ export default function SpoolDetailScreen() {
     setPriceDraft(
       data?.spool.price_per_kg != null ? String(data.spool.price_per_kg) : "",
     );
+    setPriceError(null);
     setPriceOpen(true);
   }
 
@@ -77,17 +79,17 @@ export default function SpoolDetailScreen() {
     const raw = priceDraft.trim().replace(",", ".");
     const value = raw ? Number(raw) : null;
     if (value != null && (!Number.isFinite(value) || value < 0)) {
-      setActionError("Enter a valid price, or leave it empty.");
+      setPriceError("Enter a valid price, or leave it empty.");
       return;
     }
     setPriceBusy(true);
-    setActionError(null);
+    setPriceError(null);
     try {
       await api.updateSpool(id, { price_per_kg: value });
       setPriceOpen(false);
       await reload();
     } catch (err) {
-      setActionError(formatError(err));
+      setPriceError(formatError(err));
     } finally {
       setPriceBusy(false);
     }
@@ -447,6 +449,7 @@ export default function SpoolDetailScreen() {
               onChangeText={setPriceDraft}
               keyboardType="decimal-pad"
               placeholder="24.99"
+              error={priceError ?? undefined}
             />
             <View style={styles.sheetActions}>
               <AppButton

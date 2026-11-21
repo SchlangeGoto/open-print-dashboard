@@ -350,6 +350,59 @@ def test_unknown_barcode_can_create_filament_and_spool(
     assert data["spool"]["source"] == "barcode"
 
 
+def test_confirm_on_a_mapped_barcode_updates_the_default_price(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    code = "TEST-MAPPED-DEFAULT-PRICE"
+    first = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json={
+            "code": code,
+            "request_id": "mapped-price-1",
+            "filament": {
+                "brand": "Test",
+                "material": "PLA",
+                "color_name": "Mapped price",
+                "color_hex": "#445566",
+                "default_price_per_kg": 20,
+            },
+            "total_weight_g": 1000,
+        },
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["spool"]["price_per_kg"] == 20
+
+    # A second confirm for the same barcode reuses the filament. The price
+    # entered here must still become the default for future spools.
+    second = client.post(
+        f"{settings.API_V1_STR}/spools/scan/barcode/confirm",
+        headers=superuser_token_headers,
+        json={
+            "code": code,
+            "request_id": "mapped-price-2",
+            "filament": {
+                "brand": "Test",
+                "material": "PLA",
+                "color_name": "Mapped price",
+                "color_hex": "#445566",
+                "default_price_per_kg": 25,
+            },
+            "total_weight_g": 1000,
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["spool"]["price_per_kg"] == 25
+
+    db.expire_all()
+    filament = db.get(Filament, uuid.UUID(first.json()["filament"]["id"]))
+    assert filament is not None
+    assert filament.default_price_per_kg == 25
+    first_spool = db.get(Spool, uuid.UUID(first.json()["spool"]["id"]))
+    assert first_spool is not None
+    assert first_spool.price_per_kg == 20
+
+
 def test_scan_imported_catalog_barcode(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:

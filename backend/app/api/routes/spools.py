@@ -389,6 +389,12 @@ def confirm_barcode(payload: BarcodeConfirmRequest, session: SessionDep) -> Any:
         session.add(candidate)
         session.flush()
         filament = _link_barcode(session=session, code=code, filament=candidate)
+    elif payload.filament.default_price_per_kg is not None:
+        # A concurrent confirm created the mapping while this request was in
+        # flight. The price entered by this user is still the intended
+        # default for future spools of this filament.
+        filament.default_price_per_kg = payload.filament.default_price_per_kg
+        session.add(filament)
 
     try:
         spool = _create_barcode_spool(

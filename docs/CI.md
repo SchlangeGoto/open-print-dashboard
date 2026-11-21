@@ -25,7 +25,7 @@ This repository uses GitHub Actions for three kinds of work:
 | Dependency Review | `.github/workflows/dependency-review.yml` | Every PR | Blocks new dependencies with high-severity advisories |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR to `main`, weekly | JavaScript/TypeScript and Python security analysis |
 | Build Mobile APK | `.github/workflows/build-mobile-apk.yml` | Manual | Generates the native Android project and uploads a debug APK |
-| Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
+| Release Containers | `.github/workflows/release-containers.yml` | Tags `v*`, manual | Requires `docs/release-notes/vX.Y.Z.md` on `main`; builds and pushes multi-arch backend, frontend, site, and demo images to GHCR |
 | Release Android | `.github/workflows/release-android.yml` | Tags `v*`, manual | Requires the tag and `docs/release-notes/vX.Y.Z.md` on `main`, builds an EAS signed APK and attaches it to the GitHub Release |
 | Deploy | `.github/workflows/deploy.yml` | Called by `Release Containers` for a plain `vX.Y.Z` tag, manual | SSH-deploys the dashboard and/or site from GHCR; disabled until the `DEPLOY_*` variables and secrets are configured |
 | Dependabot | `.github/dependabot.yml` | Weekly | npm, uv, GitHub Actions and Docker updates; npm updates are grouped |
@@ -225,8 +225,9 @@ stricter security requirements:
   dependency's advisory. The graph is enabled for this repository.
 - **Release Containers fails**: check that `IMAGE_PREFIX` is lowercase, the
   workflow has `packages: write`, and the tag starts with `v`.
-- **Release Android fails**: set `EXPO_TOKEN`, run `eas init` in `mobile/`, and
-  generate the Android keystore with `eas credentials -p android`. The first
+- **Release Android fails**: check that `docs/release-notes/vX.Y.Z.md` exists on
+  `main` and is not empty, then set `EXPO_TOKEN`, run `eas init` in `mobile/`,
+  and generate the Android keystore with `eas credentials -p android`. The first
   build cannot be non-interactive until that one-time setup is done.
 - **Site/demo is not reachable**: check `docker compose -f compose.public.yml ps`,
   then the host proxy. The containers publish on `127.0.0.1:8080` and

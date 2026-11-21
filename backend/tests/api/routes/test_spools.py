@@ -4383,3 +4383,281 @@ def test_stale_pending_deduction_is_marked_abandoned(db: Session) -> None:
     repeated = db.get(PrintJob, job.id)
     assert repeated is not None
     assert repeated.finish_state == "ABANDONED"
+
+
+def test_legacy_job_without_recorded_rolls_is_not_deducted(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Legacy rolls",
+        color_hex="#112233",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    replacement_a = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="LEGACY-A",
+    )
+    replacement_b = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="LEGACY-B",
+    )
+    db.add(replacement_a)
+    db.add(replacement_b)
+    db.commit()
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+    ]
+    job = PrintJob(
+        title="Legacy deduction",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="legacy-deduction",
+        finished_at=datetime.now(UTC),
+        ams_detail_mapping=json.dumps(mapping),
+        finish_state="LEGACY",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "legacy-deduction",
+        "title": "Legacy deduction",
+        "status": 2,
+        "weight": 150,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "LEGACY-A"},
+                        {"id": 1, "tag_uid": "LEGACY-B"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored_job = db.get(PrintJob, job.id)
+    assert stored_job is not None
+    assert stored_job.filament_deducted_at is None
+    assert stored_job.finish_state == "LEGACY"
+    assert db.get(Spool, replacement_a.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, replacement_b.id).remaining_g == 1000  # type: ignore[union-attr]
+
+    # A late finish report must not resolve the historical slots against
+    # the replacement rolls either.
+    client._save_print_job("legacy-deduction", "FINISH")
+
+    db.expire_all()
+    stored_job = db.get(PrintJob, job.id)
+    assert stored_job is not None
+    assert stored_job.filament_deducted_at is None
+    assert stored_job.finish_state == "LEGACY"
+    assert db.get(Spool, replacement_a.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, replacement_b.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
+def test_multi_slot_job_with_only_a_start_spool_is_not_deducted(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Start spool only",
+        color_hex="#334455",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    start = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="START-A",
+    )
+    other = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="START-B",
+    )
+    db.add(start)
+    db.add(other)
+    db.commit()
+    db.refresh(start)
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+    ]
+    job = PrintJob(
+        title="Multi slot start only",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="multi-slot-start-only",
+        finished_at=datetime.now(UTC),
+        ams_detail_mapping=json.dumps(mapping),
+        spool_id=start.id,
+        finish_state="LEGACY",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "multi-slot-start-only",
+        "title": "Multi slot start only",
+        "status": 2,
+        "weight": 150,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "START-A"},
+                        {"id": 1, "tag_uid": "START-B"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._deduct_persisted_job(
+        "multi-slot-start-only", {"id": "multi-slot-start-only", "status": 2}
+    )
+    client._save_print_job("multi-slot-start-only", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+    assert stored.finish_state == "LEGACY"
+    assert db.get(Spool, start.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, other.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
+def test_abandoned_marker_survives_a_late_finish(db: Session, monkeypatch) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Abandoned replacement",
+        color_hex="#223344",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    replacement_a = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="ABANDON-A",
+    )
+    replacement_b = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="ABANDON-B",
+    )
+    db.add(replacement_a)
+    db.add(replacement_b)
+    db.commit()
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+    ]
+    job = PrintJob(
+        title="Abandoned then finished",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="abandoned-late-finish",
+        finished_at=datetime.now(UTC) - timedelta(days=8),
+        ams_detail_mapping=json.dumps(mapping),
+        finish_state="ABANDONED",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "abandoned-late-finish",
+        "title": "Abandoned then finished",
+        "status": 2,
+        "weight": 150,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    # Live trays are resolvable. A late finish must still not charge them,
+    # because the abandoned job's original rolls were never recorded.
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "ABANDON-A"},
+                        {"id": 1, "tag_uid": "ABANDON-B"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._save_print_job("abandoned-late-finish", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+    assert stored.finish_state == "ABANDONED"
+    assert db.get(Spool, replacement_a.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, replacement_b.id).remaining_g == 1000  # type: ignore[union-attr]

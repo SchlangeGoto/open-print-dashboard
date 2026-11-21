@@ -172,8 +172,13 @@ export default function DashboardScreen() {
   const lowStock = useMemo(() => {
     if (!data) return [];
     const totals = new Map<string, number>();
+    const incomplete = new Set<string>();
     for (const spool of data.spools) {
-      if (!spool.filament_id || spool.remaining_unknown) continue;
+      if (!spool.filament_id) continue;
+      if (spool.remaining_unknown) {
+        incomplete.add(spool.filament_id);
+        continue;
+      }
       totals.set(
         spool.filament_id,
         (totals.get(spool.filament_id) ?? 0) + spool.remaining_g,
@@ -182,9 +187,14 @@ export default function DashboardScreen() {
     return data.filaments
       .map((filament) => ({
         filament,
-        remaining: totals.get(filament.id) ?? 0,
+        remaining: totals.get(filament.id),
       }))
-      .filter((item) => item.remaining > 0 && item.remaining < 250)
+      .filter(
+        (item): item is { filament: Filament; remaining: number } =>
+          item.remaining != null &&
+          !incomplete.has(item.filament.id) &&
+          item.remaining < 250,
+      )
       .sort((a, b) => a.remaining - b.remaining)
       .slice(0, 3);
   }, [data]);

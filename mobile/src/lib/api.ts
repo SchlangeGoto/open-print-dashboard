@@ -42,6 +42,7 @@ interface ApiClientOptions {
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
+export const PRINT_HISTORY_CAP = 2_000;
 
 function isIPv4(host: string): number[] | null {
   const parts = host.split(".");
@@ -253,9 +254,17 @@ export class ApiClient {
     if (isAuthChallenge && retry) {
       const accessToken = await this.refreshAccessToken(true);
       if (accessToken) {
+        if (this.options.getTenantId() !== tenantId) {
+          // The user switched tenants while the token refreshed. Replaying a
+          // request built for the old tenant would act on the wrong one, and
+          // returning the 401 would clear a session that just refreshed.
+          throw new ApiError(
+            0,
+            "Active tenant changed during the request. Try again.",
+          );
+        }
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
-        const tenantId = this.options.getTenantId();
         if (tenantId) {
           retryHeaders.set("X-Tenant-ID", tenantId);
         }
@@ -546,6 +555,48 @@ export class ApiClient {
       `/prints/?limit=${limit}`,
     );
     return data.data;
+  }
+
+  async getAllPrintJobs(
+    pageSize = 500,
+    maxJobs = PRINT_HISTORY_CAP,
+  ): Promise<{ jobs: PrintJob[]; truncated: boolean; limit: number }> {
+    const tenantId = this.options.getTenantId();
+    const byId = new Map<string, PrintJob>();
+    let skip = 0;
+    let received = 0;
+    let total = 0;
+    for (;;) {
+      const page = await this.request<ListResponse<PrintJob>>(
+        `/prints/?skip=${skip}&limit=${pageSize}`,
+      );
+      if (this.options.getTenantId() !== tenantId) {
+        throw new ApiError(
+          0,
+          "Active tenant changed while loading print history. Try again.",
+        );
+      }
+      total = page.count;
+      for (const job of page.data) {
+        byId.set(job.id, job);
+      }
+      received += page.data.length;
+      skip += page.data.length;
+      if (
+        page.data.length === 0 ||
+        received >= page.count ||
+        received >= maxJobs
+      ) {
+        break;
+      }
+    }
+    return {
+      jobs: [...byId.values()],
+      // A job can shift pages between requests, so compare unique rows with
+      // the server total instead of trusting the received count.
+      truncated: byId.size < total,
+      limit: maxJobs,
+    };
   }
 
   async getActivePrints(): Promise<PrintJob[]> {

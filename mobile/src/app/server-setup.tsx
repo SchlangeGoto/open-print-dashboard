@@ -31,9 +31,9 @@ export default function ServerSetupScreen() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [manualOpen, setManualOpen] = useState(
-    isEdit || (Boolean(serverUrl) && !isHostedServer(serverUrl)),
-  );
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
+  const showManual =
+    manualOpen ?? (Boolean(serverUrl) && !isHostedServer(serverUrl));
 
   // Show the stored URL until the user starts editing. This avoids an effect
   // and still picks up the value when the context finishes loading.
@@ -114,10 +114,10 @@ export default function ServerSetupScreen() {
         <BrandLockup size={64} />
         <View style={styles.heading}>
           <AppText variant="display" style={styles.center}>
-            {manualOpen ? "Connect your dashboard" : "How do you use it?"}
+            {showManual ? "Connect your dashboard" : "How do you use it?"}
           </AppText>
           <AppText muted style={styles.center}>
-            {manualOpen
+            {showManual
               ? "Point the app at your Open Print Dashboard server. It works on your LAN or over the internet when the backend has a public HTTPS URL."
               : "Use the hosted service or connect your own self-hosted server. The same app supports both."}
           </AppText>
@@ -148,7 +148,7 @@ export default function ServerSetupScreen() {
           </View>
         ) : null}
 
-        {!manualOpen ? (
+        {!showManual ? (
           <View style={styles.choices}>
             <Card style={styles.choiceCard}>
               <View
@@ -228,17 +228,15 @@ export default function ServerSetupScreen() {
               onPress={handleConnect}
             />
 
-            {!isEdit ? (
-              <AppButton
-                title="Use OpenPrintDash Cloud instead"
-                variant="ghost"
-                size="sm"
-                onPress={() => {
-                  setError(null);
-                  setManualOpen(false);
-                }}
-              />
-            ) : null}
+            <AppButton
+              title="Use OpenPrintDash Cloud instead"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setError(null);
+                setManualOpen(false);
+              }}
+            />
           </Card>
         )}
 

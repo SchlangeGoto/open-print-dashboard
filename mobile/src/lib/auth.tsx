@@ -73,10 +73,12 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   switchTenant: (tenantId: string) => Promise<void>;
-  refreshTenants: () => Promise<void>;
+  refreshTenants: () => Promise<TenantLoadResult>;
   setServerUrl: (url: string) => Promise<void>;
   retry: () => Promise<void>;
 }
+
+export type TenantLoadResult = "ok" | "expired" | "failed";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -109,24 +111,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     sessionTenantId = null;
     setActiveTenantId(null);
-    setNeedsTenantSelection(only.length > 1);
+    // Zero memberships is a real no-access state, not "open the dashboard".
+    setNeedsTenantSelection(only.length !== 1);
     await clearStoredTenantId();
   }, []);
 
-  const loadTenants = useCallback(async () => {
+  const clearExpiredSession = useCallback(async () => {
+    restoreEpoch.current += 1;
+    apiClient.invalidateSession();
+    forgetPushToken();
+    sessionTokens = null;
+    sessionTenantId = null;
+    setUser(null);
+    setTenants([]);
+    setActiveTenantId(null);
+    setNeedsTenantSelection(false);
+    try {
+      await clearStoredSession();
+      await clearStoredTenantId();
+    } catch {
+      // Storage cleanup is best effort; the in-memory state is already gone.
+    }
+    setStatus("logged-out");
+  }, []);
+
+  const loadTenants = useCallback(async (): Promise<TenantLoadResult> => {
+    const generation = restoreEpoch.current;
     try {
       const list = await apiClient.getMeTenants();
+      // A sign-out, sign-in or server change while this request was in flight
+      // must not apply its result to the new session.
+      if (generation !== restoreEpoch.current) return "failed";
       await applyTenants(list);
-    } catch {
-      // A tenant lookup must not end the session. Single-tenant installs fall
-      // back to the only membership server-side.
+      return "ok";
+    } catch (error) {
+      if (generation !== restoreEpoch.current) return "failed";
+      // Only an expired/invalid session ends authentication. A 403 may be a
+      // WAF or proxy response and must stay retryable.
+      if (error instanceof ApiError && error.status === 401) {
+        await clearExpiredSession();
+        return "expired";
+      }
+      // A non-auth failure must not end the session. Single-tenant installs
+      // fall back to the only membership server-side.
       setTenants([]);
       setActiveTenantId(sessionTenantId);
+      return "failed";
     }
-  }, [applyTenants]);
+  }, [applyTenants, clearExpiredSession]);
 
   useEffect(() => {
     sessionExpiredHandler = () => {
+      restoreEpoch.current += 1;
       forgetPushToken();
       sessionTokens = null;
       sessionTenantId = null;
@@ -139,13 +175,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tenantInvalidHandler = () => {
       // The active membership was removed or the tenant was deactivated.
       // Drop the selection and show the picker with the current memberships.
+      const generation = restoreEpoch.current;
       sessionTenantId = null;
       setActiveTenantId(null);
       setNeedsTenantSelection(true);
       void clearStoredTenantId();
       void apiClient
         .getMeTenants()
-        .then(applyTenants)
+        .then((list) => {
+          if (generation === restoreEpoch.current) return applyTenants(list);
+        })
         .catch(() => {
           // A network failure still leaves the picker state in place; retry
           // from the picker or the connection screen.
@@ -203,8 +242,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         if (epoch !== restoreEpoch.current) return;
         setUser(me);
-        await loadTenants();
+        const tenantsResult = await loadTenants();
         if (epoch !== restoreEpoch.current) return;
+        if (tenantsResult === "expired") return;
         setStatus("authenticated");
       } catch (error) {
         if (epoch !== restoreEpoch.current) return;
@@ -250,10 +290,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      restoreEpoch.current += 1;
+      const generation = ++restoreEpoch.current;
       const me = await apiClient.login(email, password);
+      if (generation !== restoreEpoch.current) return;
       setUser(me);
-      await loadTenants();
+      const tenantsResult = await loadTenants();
+      if (generation !== restoreEpoch.current) return;
+      if (tenantsResult === "expired") return;
       setStatus("authenticated");
     },
     [loadTenants],

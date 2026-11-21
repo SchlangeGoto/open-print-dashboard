@@ -66,6 +66,7 @@ export interface Filament {
 export interface FilamentInput {
   brand: string;
   material: string;
+  series?: string;
   color_name: string;
   color_hex: string;
   spool_weight_g?: number;

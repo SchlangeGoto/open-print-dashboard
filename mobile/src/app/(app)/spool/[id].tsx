@@ -320,12 +320,25 @@ export default function SpoolDetailScreen() {
                 {formatPrice(spool.price_per_kg)}
               </AppText>
             </View>
-            <AppButton
-              title="Edit price"
-              size="sm"
-              variant="secondary"
-              onPress={openPrice}
-            />
+            <View style={styles.priceActions}>
+              <AppButton
+                title="Price"
+                size="sm"
+                variant="secondary"
+                onPress={openPrice}
+              />
+              <AppButton
+                title="Details"
+                size="sm"
+                variant="secondary"
+                onPress={() =>
+                  router.push({
+                    pathname: "/spool/edit",
+                    params: { id: spool.id },
+                  })
+                }
+              />
+            </View>
           </View>
         </Card>
 
@@ -574,6 +587,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.md,
+  },
+  priceActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
   },
   backdrop: {
     position: "absolute",

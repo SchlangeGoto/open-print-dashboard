@@ -352,14 +352,14 @@ if grep -qx 'COMPOSE_PROFILES=updater' .env; then
   }
   pull_missing=0
   if ! pull_updater; then
-    if grep -qiE 'manifest unknown|not found|404' "$probe_log"; then
+    if grep -qiE 'manifest unknown|not found|404|no such service' "$probe_log"; then
       pull_missing=1
     else
       # A transient registry or network failure should not disable updates
       # permanently; retry once, then stop with a clear instruction.
       sleep 2
       if ! pull_updater; then
-        if grep -qiE 'manifest unknown|not found|404' "$probe_log"; then
+        if grep -qiE 'manifest unknown|not found|404|no such service' "$probe_log"; then
           pull_missing=1
         else
           rm -f "$probe_log"
@@ -425,14 +425,17 @@ else
   else
     printf 'Backend:   http://%s:%s\n' "$BIND_ADDR" "$API_PORT"
   fi
+  REMOTE_HINT=""
+  if [ "$PROXY_TARGET" = "<this-server>" ]; then
+    REMOTE_HINT="  Replace <this-server> with this machine's address in the examples below."
+  fi
   cat <<GUIDE
 
 Reverse proxy
   Route /api/* to ${PROXY_TARGET}:${API_PORT} and everything else to
   ${PROXY_TARGET}:${APP_PORT}. Keep both ports on loopback unless the proxy
   runs on another machine.
-  Replace <this-server> with this machine's address in the examples below.
-
+${REMOTE_HINT}
   Caddy:
     ${DOMAIN:-dashboard.example.com} {
       handle /api/* { reverse_proxy ${PROXY_TARGET}:${API_PORT} }

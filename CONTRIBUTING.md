@@ -3,6 +3,14 @@
 Thanks for helping. This repository is a polyglot monorepo: a FastAPI backend,
 a Next.js dashboard, an Expo mobile app, and a static marketing site.
 
+## Contributor License Agreement
+
+Contributions may also be used in the private hosted edition. Before a pull
+request can be merged, you must agree to [`CLA.md`](CLA.md). State in the pull
+request that you accept it. Contributions that are not intended for the hosted
+edition can still be merged under AGPL-3.0, but the CLA keeps the licensing
+path open.
+
 ## Before you start
 
 - Read [`docs/SETUP.md`](docs/SETUP.md) for local setup.

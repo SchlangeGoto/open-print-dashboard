@@ -37,6 +37,17 @@ jobs:
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
+      - name: Require release notes before build
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          notes_size=$(git cat-file -s "origin/main:docs/release-notes/${REF_NAME}.md" 2>/dev/null || echo 0)
+          if [ "$notes_size" -le 0 ]; then
+            echo "::error::Add docs/release-notes/${REF_NAME}.md on main before tagging."
+            exit 1
+          fi
+
   build:
     needs: guard
     permissions:
@@ -124,9 +135,25 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     env:
-      # The job has no checkout; gh needs the repository explicitly.
+      # Belt-and-braces for the artifact download and release commands.
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: docs/release-notes
+
+      - name: Require concise release notes
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          test -s "docs/release-notes/${REF_NAME}.md" || {
+            echo "::error::Add docs/release-notes/${REF_NAME}.md on main, then re-run this tag."
+            exit 1
+          }
+
       - name: Download the APK artifact
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -140,5 +167,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes
+          if gh release view "$REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$REF_NAME" --notes-file "docs/release-notes/${REF_NAME}.md"
+          else
+            gh release create "$REF_NAME" --notes-file "docs/release-notes/${REF_NAME}.md"
+          fi
           gh release upload "$REF_NAME" artifacts/*.apk --clobber

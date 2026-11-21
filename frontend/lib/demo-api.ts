@@ -228,6 +228,30 @@ export const demoApi: ApiShape = {
   // ── Settings ──────────────────────────────────────────────────────────────
   getSettings: () => delay(load("settings", DEMO_SETTINGS as any[])),
 
+  getUpdateStatus: () =>
+    delay({
+      current_version: "0.1.2",
+      latest_version: "0.1.2",
+      update_available: false,
+      release_url: null,
+      updater_available: false,
+      state: "unavailable",
+      message: "Demo mode does not update itself.",
+      updated_at: null,
+    }),
+
+  startUpdate: () =>
+    delay({
+      current_version: "0.1.2",
+      latest_version: "0.1.2",
+      update_available: false,
+      release_url: null,
+      updater_available: false,
+      state: "unavailable",
+      message: "Demo mode does not update itself.",
+      updated_at: null,
+    }),
+
   // ── Printers ──────────────────────────────────────────────────────────────
   getPrinters: () => delay(getPrintersRaw()),
 

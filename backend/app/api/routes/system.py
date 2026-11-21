@@ -1,0 +1,141 @@
+import logging
+import re
+import time
+from pathlib import Path
+from typing import Any
+
+import requests
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import SQLModel
+
+from app.api.deps import get_current_active_superuser
+from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.error")
+
+router = APIRouter(
+    prefix="/system",
+    tags=["system"],
+    dependencies=[Depends(get_current_active_superuser)],
+)
+
+_TAG_RE = re.compile(r"^\d+\.\d+\.\d+$")
+_latest_cache: tuple[float, str | None, str | None] = (0.0, None, None)
+_LATEST_TTL_SECONDS = 300
+
+
+class UpdateStatus(SQLModel):
+    current_version: str
+    latest_version: str | None = None
+    update_available: bool = False
+    release_url: str | None = None
+    updater_available: bool = False
+    state: str = "unavailable"
+    message: str | None = None
+    updated_at: str | None = None
+
+
+class UpdateRequest(SQLModel):
+    tag: str
+
+
+def _version_tuple(value: str) -> tuple[int, ...] | None:
+    if not _TAG_RE.fullmatch(value):
+        return None
+    return tuple(int(part) for part in value.split("."))
+
+
+def _latest_release() -> tuple[str | None, str | None]:
+    global _latest_cache
+    now = time.monotonic()
+    cached_at, tag, url = _latest_cache
+    if now - cached_at < _LATEST_TTL_SECONDS:
+        return tag, url
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "OpenPrintDashboard",
+    }
+    if settings.UPDATE_GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.UPDATE_GITHUB_TOKEN}"
+    try:
+        response = requests.get(
+            f"https://api.github.com/repos/{settings.UPDATE_REPO}/releases/latest",
+            headers=headers,
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+        tag = str(data.get("tag_name") or "").lstrip("v") or None
+        url = data.get("html_url")
+        if tag and not _TAG_RE.fullmatch(tag):
+            tag = None
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("Could not check the latest release: %s", exc)
+        tag, url = None, None
+    _latest_cache = (now, tag, url)
+    return tag, url
+
+
+def _read_updater_status() -> dict[str, str]:
+    directory = Path(settings.UPDATER_DIR)
+    if not (directory / "ready").exists():
+        return {}
+    status: dict[str, str] = {}
+    try:
+        for line in (directory / "status").read_text().splitlines():
+            key, _, value = line.partition("=")
+            if key:
+                status[key] = value
+    except OSError:
+        return {"state": "idle"}
+    return status
+
+
+@router.get("/update", response_model=UpdateStatus)
+def read_update_status() -> Any:
+    current = settings.APP_VERSION
+    latest, url = _latest_release()
+    status = _read_updater_status()
+    available = False
+    latest_tuple = _version_tuple(latest) if latest else None
+    current_tuple = _version_tuple(current)
+    if latest_tuple is not None and current_tuple is not None:
+        available = latest_tuple > current_tuple
+    return UpdateStatus(
+        current_version=current,
+        latest_version=latest,
+        update_available=available,
+        release_url=url,
+        updater_available=bool(status),
+        state=status.get("state", "idle" if status else "unavailable"),
+        message=status.get("message") or None,
+        updated_at=status.get("updated_at") or None,
+    )
+
+
+@router.post("/update", response_model=UpdateStatus)
+def request_update(payload: UpdateRequest) -> Any:
+    tag = payload.tag.strip().lstrip("v")
+    if not _TAG_RE.fullmatch(tag):
+        raise HTTPException(status_code=422, detail="Release tag must be X.Y.Z")
+    directory = Path(settings.UPDATER_DIR)
+    if not (directory / "ready").exists():
+        raise HTTPException(
+            status_code=503,
+            detail="The updater sidecar is not installed for this deployment",
+        )
+    request_file = directory / "request"
+    if request_file.exists() or (directory / "lock").exists():
+        raise HTTPException(status_code=409, detail="An update is already queued")
+    tmp = directory / f".request.{tag}"
+    try:
+        tmp.write_text(tag + "\n")
+        tmp.replace(request_file)
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=503, detail="Could not queue the update"
+        ) from exc
+    logger.warning("Queued OpenPrintDash update to %s", tag)
+    return read_update_status()

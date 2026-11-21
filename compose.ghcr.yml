@@ -61,10 +61,25 @@ services:
       - BAMBU_CLOUD_MQTT_HOST=${BAMBU_CLOUD_MQTT_HOST:-us.mqtt.bambulab.com}
       - BAMBU_CLOUD_MQTT_PORT=${BAMBU_CLOUD_MQTT_PORT:-8883}
       - APP_VERSION=${APP_VERSION:-dev}
+      - UPDATER_DIR=/app/updater
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - backend_data:/app/data
+      - updater_data:/app/updater
+
+  updater:
+    # Optional sidecar. The guided installer enables the profile; manual
+    # deployments can omit it and update with the documented commands.
+    profiles: ["updater"]
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/updater:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/project
+      - updater_data:/data
 
   frontend:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/frontend:${IMAGE_TAG:-latest}
@@ -91,5 +106,6 @@ services:
 volumes:
   postgres_data:
   backend_data:
+  updater_data:
   caddy_data:
   caddy_config:

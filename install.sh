@@ -188,6 +188,7 @@ FRONTEND_HOST="http://localhost:${APP_PORT}"
   printf 'FIRST_SUPERUSER_PASSWORD=%s\n' "$(env_quote "$ADMIN_PASSWORD")"
   printf 'FRONTEND_HOST=%s\n' "$(env_quote "$FRONTEND_HOST")"
   printf 'OPD_PROXY_MODE=%s\n' "$PROXY"
+  printf 'COMPOSE_PROFILES=updater\n' 
   if [ "$PROXY" = "existing" ]; then
     printf 'APP_BIND=%s\nAPP_PORT=%s\nAPI_BIND=%s\nAPI_PORT=%s\n' \
       "$BIND_ADDR" "$APP_PORT" "$BIND_ADDR" "$API_PORT"
@@ -213,7 +214,7 @@ COMPOSE=(docker compose --env-file .env -f compose.ghcr.yml)
 SERVICES=()
 if [ "$PROXY" = "existing" ]; then
   COMPOSE+=(-f compose.override.yml)
-  SERVICES=(db backend frontend)
+  SERVICES=(db backend frontend updater)
 fi
 
 blue "Pulling OpenPrintDash $VERSION images…"

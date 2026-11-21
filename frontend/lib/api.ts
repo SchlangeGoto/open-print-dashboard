@@ -274,6 +274,17 @@ export interface UserPublic {
   created_at: string | null;
 }
 
+export interface UpdateStatus {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  release_url: string | null;
+  updater_available: boolean;
+  state: string;
+  message: string | null;
+  updated_at: string | null;
+}
+
 export interface SetupStatus {
   user_created: boolean;
   setup_complete: boolean;
@@ -428,6 +439,13 @@ const apiImpl = {
 
   // Settings
   getSettings: () => request<{ key: string; value: string }[]>("/settings/"),
+
+  getUpdateStatus: () => request<UpdateStatus>("/system/update"),
+  startUpdate: (tag: string) =>
+    request<UpdateStatus>("/system/update", {
+      method: "POST",
+      body: JSON.stringify({ tag }),
+    }),
 
   // Printers
   getPrinters: () => request<Printer[]>("/printers/"),

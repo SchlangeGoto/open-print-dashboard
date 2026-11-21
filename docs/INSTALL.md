@@ -39,8 +39,23 @@ them.
 
 ## Updates
 
-For now, change `IMAGE_TAG` and `APP_VERSION` in the install directory's `.env`
-to the new release (without the leading `v`), then pull and recreate:
+The installer enables the `updater` sidecar. A superuser sees an **Updates**
+card in Settings. It checks the latest stable GitHub release, shows the current
+and available version, and after confirmation updates only the backend and
+frontend containers to that release tag. The database and uploads stay in the
+named volumes.
+
+If the new backend does not become healthy, the updater restores the previous
+tag automatically. A failed update leaves a message in the card.
+
+The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;
+only the fixed updater image has it. The image accepts a single `X.Y.Z` tag and
+cannot run arbitrary commands.
+
+### Manual fallback
+
+If the updater profile is disabled, change `IMAGE_TAG` and `APP_VERSION` in the
+install directory's `.env`, then pull and recreate:
 
 ```bash
 # bundled Caddy
@@ -48,13 +63,11 @@ docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d
 
 # existing proxy
-docker compose -f compose.ghcr.yml -f compose.override.yml pull db backend frontend
-docker compose -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend
+docker compose -f compose.ghcr.yml -f compose.override.yml pull db backend frontend updater
+docker compose -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend updater
 ```
 
 The named volumes `postgres_data` and `backend_data` are never removed by these
 commands. Back up `.env` separately: it contains the admin password and the
-keys for stored Bambu credentials.
-
-A dashboard-driven updater is the next step; until it lands, an update is an
-explicit release-tag change, never a build from `main`.
+keys for stored Bambu credentials. Updates always use an explicit release tag,
+never a build from `main`.

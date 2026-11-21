@@ -5,18 +5,31 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Cloud,
+  Download,
   LogOut,
   Monitor,
   Moon,
   Palette,
+  RefreshCw,
   Sun,
   User,
 } from "lucide-react";
 
 import { ACCENTS, useAppearance, type AccentId } from "@/lib/appearance";
-import { api } from "@/lib/api";
+import { api, type UpdateStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/lib/toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +65,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bambuBusy, setBambuBusy] = useState(false);
+  const [isSuperuser, setIsSuperuser] = useState(false);
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [confirmUpdate, setConfirmUpdate] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -78,6 +96,65 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getMe()
+      .then((me) => {
+        if (!cancelled) setIsSuperuser(me.is_superuser);
+      })
+      .catch(() => {
+        if (!cancelled) setIsSuperuser(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSuperuser) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const status = await api.getUpdateStatus();
+        if (!cancelled) {
+          setUpdate(status);
+          setUpdateError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setUpdateError(
+            error instanceof Error ? error.message : "Could not check updates",
+          );
+        }
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isSuperuser]);
+
+  async function applyUpdate() {
+    if (!update?.latest_version) return;
+    setUpdateBusy(true);
+    setUpdateError(null);
+    try {
+      await api.startUpdate(update.latest_version);
+      setConfirmUpdate(false);
+      toast.success(`Update to ${update.latest_version} queued`);
+      setUpdate(await api.getUpdateStatus());
+    } catch (error) {
+      setUpdateError(
+        error instanceof Error ? error.message : "Could not start the update",
+      );
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -219,6 +296,105 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {isSuperuser ? (
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400">
+                <RefreshCw className="size-5" />
+              </div>
+              <div className="space-y-1">
+                <CardTitle>Updates</CardTitle>
+                <CardDescription>
+                  Install the latest stable release. Your database and uploads
+                  stay in place.
+                </CardDescription>
+              </div>
+            </div>
+            <CardAction>
+              <Badge
+                variant={
+                  update?.state === "running"
+                    ? "warning"
+                    : update?.state === "success"
+                      ? "success"
+                      : update?.state === "error"
+                        ? "destructive"
+                        : "secondary"
+                }
+              >
+                {update?.state ?? "checking"}
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Current version
+                </p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {update?.current_version ?? "—"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Latest release
+                </p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {update?.latest_version ?? "—"}
+                </p>
+              </div>
+            </div>
+
+            {update && !update.updater_available ? (
+              <p className="text-xs text-muted-foreground">
+                This deployment has no updater sidecar. Use the install
+                directory&apos;s documented update commands instead.
+              </p>
+            ) : null}
+
+            {update?.message ? (
+              <p className="text-xs text-muted-foreground">{update.message}</p>
+            ) : null}
+            {updateError ? (
+              <p className="text-xs text-destructive">{updateError}</p>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3">
+              {update?.release_url ? (
+                <a
+                  href={update.release_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                  Release notes
+                </a>
+              ) : (
+                <span />
+              )}
+              <Button
+                size="sm"
+                disabled={
+                  !update?.update_available ||
+                  !update.updater_available ||
+                  updateBusy ||
+                  update.state === "running" ||
+                  !update.latest_version
+                }
+                onClick={() => setConfirmUpdate(true)}
+              >
+                <Download />
+                {update?.update_available && update.latest_version
+                  ? `Update to ${update.latest_version}`
+                  : "Up to date"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid items-start gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -329,6 +505,33 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
       </div>
+
+      <AlertDialog open={confirmUpdate} onOpenChange={setConfirmUpdate}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <RefreshCw />
+            </AlertDialogMedia>
+            <AlertDialogTitle>
+              Update to {update?.latest_version}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The backend and frontend containers restart. The database and
+              uploads are kept. If the new backend does not become healthy, the
+              updater restores the previous version.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={updateBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={updateBusy}
+              onClick={() => void applyUpdate()}
+            >
+              <Download /> Update
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

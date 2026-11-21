@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -31,6 +31,9 @@ router = APIRouter(
 class CloudStatus(SQLModel):
     logged_in: bool
     error: str | None = None
+
+
+PrintControlAction = Literal["pause", "resume", "stop"]
 
 
 def _cloud_devices() -> list[dict[str, Any]]:
@@ -268,6 +271,29 @@ def reconnect_printer(*, session: SessionDep, printer_id: uuid.UUID) -> Any:
         raise HTTPException(status_code=404, detail="Printer not found")
     printer_service.reload_printer(printer.serial)
     return Message(message="Printer connection restarted")
+
+
+@router.post("/{printer_id}/print/{action}", response_model=Message)
+def control_print(
+    *, session: SessionDep, printer_id: uuid.UUID, action: PrintControlAction
+) -> Any:
+    """Pause, resume or cancel the current print on a connected printer."""
+    printer = crud.get_printer(session=session, printer_id=printer_id)
+    if not printer:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    client = printer_service.get_client(printer.serial)
+    if client is None or not client.is_configured:
+        raise HTTPException(status_code=409, detail="Printer is not connected")
+
+    handlers = {
+        "pause": client.pause_print,
+        "resume": client.resume_print,
+        "stop": client.stop_print,
+    }
+    if not handlers[action]():
+        raise HTTPException(status_code=503, detail="Could not reach the printer")
+    logger.info("Print %s sent to %s", action, printer.serial)
+    return Message(message=f"Print {action} sent")
 
 
 @router.get("/{serial}/tasks")

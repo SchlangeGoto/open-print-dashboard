@@ -223,8 +223,9 @@ stricter security requirements:
   not need to finish before merging.
 - **Dependency review fails**: enable the dependency graph or check the new
   dependency's advisory. The graph is enabled for this repository.
-- **Release Containers fails**: check that `IMAGE_PREFIX` is lowercase, the
-  workflow has `packages: write`, and the tag starts with `v`.
+- **Release Containers fails**: check that `docs/release-notes/vX.Y.Z.md` exists
+  on `main` and is not empty, `IMAGE_PREFIX` is lowercase, the workflow has
+  `packages: write`, and the tag starts with `v`.
 - **Release Android fails**: check that `docs/release-notes/vX.Y.Z.md` exists on
   `main` and is not empty, then set `EXPO_TOKEN`, run `eas init` in `mobile/`,
   and generate the Android keystore with `eas credentials -p android`. The first

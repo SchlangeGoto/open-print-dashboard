@@ -82,8 +82,26 @@ def test_new_spool_inherits_the_filament_default_price(
 
 
 def test_create_and_activate_spool(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    monkeypatch,
 ) -> None:
+    notified: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        "app.api.routes.spools.notify_spool_loaded",
+        lambda **kwargs: notified.append(kwargs),
+    )
+
+    class ImmediateThread:
+        def __init__(self, *, target, kwargs=None, daemon=None):
+            self._target = target
+            self._kwargs = kwargs or {}
+
+        def start(self) -> None:
+            self._target(**self._kwargs)
+
+    monkeypatch.setattr("app.api.routes.spools.threading.Thread", ImmediateThread)
     filament_id = _create_filament(client, superuser_token_headers)
     printer = _create_printer(db)
     data = {
@@ -109,6 +127,17 @@ def test_create_and_activate_spool(
     assert r.status_code == 200
     assert r.json()["active"] is True
     assert r.json()["printer_id"] == str(printer.id)
+    assert len(notified) == 1
+
+    # Re-activating the same spool on the same printer is a no-op and must
+    # not send another notification.
+    again = client.put(
+        f"{settings.API_V1_STR}/spools/{spool['id']}/activate",
+        headers=superuser_token_headers,
+        json={"printer_id": str(printer.id)},
+    )
+    assert again.status_code == 200
+    assert len(notified) == 1
 
     r = client.get(
         f"{settings.API_V1_STR}/spools/active",

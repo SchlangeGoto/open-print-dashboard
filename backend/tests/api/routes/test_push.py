@@ -34,9 +34,10 @@ def test_register_and_remove_a_push_token(
     assert len(rows) == 1
     assert rows[0].platform == "ios"
 
-    removed = client.delete(
-        f"{settings.API_V1_STR}/push/{payload['token']}",
+    removed = client.post(
+        f"{settings.API_V1_STR}/push/unregister",
         headers=normal_user_token_headers,
+        json={"token": payload["token"], "platform": "unknown"},
     )
     assert removed.status_code == 200, removed.text
     db.expire_all()

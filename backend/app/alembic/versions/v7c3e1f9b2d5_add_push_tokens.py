@@ -30,6 +30,12 @@ def upgrade() -> None:
     op.create_index("ix_pushtoken_user_id", "pushtoken", ["user_id"])
     op.create_index("ix_pushtoken_token", "pushtoken", ["token"], unique=True)
     op.add_column("printjob", sa.Column("notified_at", UTCDateTime(), nullable=True))
+    op.execute(
+        sa.text(
+            "UPDATE printjob SET notified_at = now() "
+            "WHERE status IN (2, 3) AND notified_at IS NULL"
+        )
+    )
 
 
 def downgrade() -> None:

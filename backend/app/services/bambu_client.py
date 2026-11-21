@@ -547,6 +547,7 @@ class BambuClient:
                 job.finish_requested_at = None
                 job.finish_attempts = 0
                 job.finish_state = None
+                job.notified_at = None
                 # Keep deduction_spools: the deferred map and the open state
                 # are not mutually exclusive, and the eventual finish still
                 # needs the rolls recorded for the previous run.
@@ -1443,6 +1444,7 @@ class BambuClient:
                         finish_requested_at=None,
                         finish_attempts=0,
                         finish_state=None,
+                        notified_at=None,
                     )
                 )
                 session.commit()

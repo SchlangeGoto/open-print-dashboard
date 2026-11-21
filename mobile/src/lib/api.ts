@@ -531,10 +531,10 @@ export class ApiClient {
   }
 
   unregisterPushToken(token: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(
-      `/push/${encodeURIComponent(token)}`,
-      { method: "DELETE" },
-    );
+    return this.request<{ message: string }>("/push/unregister", {
+      method: "POST",
+      body: JSON.stringify({ token, platform: "unknown" }),
+    });
   }
 
   getSpool(id: string): Promise<Spool> {

@@ -50,6 +50,8 @@ NON_INTERACTIVE=0
 FORCE=0
 EXISTING_ENV=0
 PROJECT_NAME="openprintdashboard"
+ADMIN_EMAIL_SET=0
+ADMIN_PASSWORD_SET=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,8 +62,8 @@ while [ $# -gt 0 ]; do
     --bind) BIND_ADDR="$2"; shift 2 ;;
     --port) APP_PORT="$2"; shift 2 ;;
     --api-port) API_PORT="$2"; shift 2 ;;
-    --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
-    --admin-password) ADMIN_PASSWORD="$2"; shift 2 ;;
+    --admin-email) ADMIN_EMAIL="$2"; ADMIN_EMAIL_SET=1; shift 2 ;;
+    --admin-password) ADMIN_PASSWORD="$2"; ADMIN_PASSWORD_SET=1; shift 2 ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
     --force) FORCE=1; shift ;;
     --project-name) PROJECT_NAME="$2"; shift 2 ;;
@@ -173,16 +175,16 @@ if [ "$PROXY" = "existing" ] && [ "$NON_INTERACTIVE" = 0 ]; then
   APP_PORT=$(ask "Frontend port" "$APP_PORT")
   API_PORT=$(ask "Backend API port" "$API_PORT")
 fi
-printf '%s' "$BIND_ADDR" | grep -Eq '^[0-9A-Za-z.:_-]+$' || \
-  die "Bind address must be an IP address or hostname"
+printf '%s' "$BIND_ADDR" | grep -Eq '^[0-9A-Za-z._-]+$' || \
+  die "Bind address must be an IPv4 address or hostname (IPv6 is not supported yet)"
 for port in "$APP_PORT" "$API_PORT"; do
   printf '%s' "$port" | grep -Eq '^[0-9]+$' || die "Ports must be numbers"
   [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "Ports must be between 1 and 65535"
 done
 
 if [ "$EXISTING_ENV" = 1 ]; then
-  ADMIN_EMAIL=""
-  ADMIN_PASSWORD=""
+  [ "$ADMIN_EMAIL_SET" = 1 ] || ADMIN_EMAIL=""
+  [ "$ADMIN_PASSWORD_SET" = 1 ] || ADMIN_PASSWORD=""
 elif [ -z "$ADMIN_EMAIL" ]; then
   if [ "$NON_INTERACTIVE" = 1 ]; then
     ADMIN_EMAIL="admin@${DOMAIN:-example.com}"
@@ -201,13 +203,7 @@ if [ "$EXISTING_ENV" = 0 ] && [ -z "$ADMIN_PASSWORD" ]; then
     fi
   fi
 fi
-if [ "$EXISTING_ENV" = 0 ]; then
-  [ ${#ADMIN_PASSWORD} -ge 8 ] || die "Admin password must be at least 8 characters"
-  printf '%s' "$ADMIN_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || \
-    die "Admin email must be a valid address with a domain"
-  validate_safe "$ADMIN_EMAIL" "Admin email"
-  validate_safe "$ADMIN_PASSWORD" "Admin password"
-fi
+
 if [ "$EXISTING_ENV" = 0 ]; then
   [ ${#ADMIN_PASSWORD} -ge 8 ] || die "Admin password must be at least 8 characters"
   printf '%s' "$ADMIN_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || \
@@ -234,17 +230,23 @@ if [ "$EXISTING_ENV" = 1 ]; then
   POSTGRES_PASSWORD=$(read_env POSTGRES_PASSWORD)
   SECRET_KEY=$(read_env SECRET_KEY)
   BAMBU_KEY=$(read_env BAMBU_CREDENTIALS_KEY)
-  ADMIN_EMAIL=$(read_env FIRST_SUPERUSER)
-  ADMIN_PASSWORD=$(read_env FIRST_SUPERUSER_PASSWORD)
+  if [ "$ADMIN_EMAIL_SET" = 0 ]; then
+    ADMIN_EMAIL=$(read_env FIRST_SUPERUSER)
+  fi
+  if [ "$ADMIN_PASSWORD_SET" = 0 ]; then
+    ADMIN_PASSWORD=$(read_env FIRST_SUPERUSER_PASSWORD)
+  fi
   PROJECT_NAME=$(read_env COMPOSE_PROJECT_NAME)
   PROJECT_NAME=${PROJECT_NAME:-openprintdashboard}
-  printf '%s' "$ADMIN_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || \
-    die "Existing admin email is invalid; rerun with --force --admin-email you@example.com"
-  [ ${#ADMIN_PASSWORD} -ge 8 ] || \
-    die "Existing admin password is invalid; set FIRST_SUPERUSER_PASSWORD in .env"
-  validate_safe "$ADMIN_EMAIL" "Admin email"
-  validate_safe "$ADMIN_PASSWORD" "Admin password"
-  yellow "Reusing the existing secrets and admin account from .env."
+  if [ -n "$ADMIN_EMAIL" ] || [ -n "$ADMIN_PASSWORD" ]; then
+    printf '%s' "$ADMIN_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || \
+      die "Existing admin email is invalid; rerun with --force --admin-email you@example.com"
+    [ ${#ADMIN_PASSWORD} -ge 8 ] || \
+      die "Existing admin password is invalid; set FIRST_SUPERUSER_PASSWORD in .env or pass --admin-password"
+    validate_safe "$ADMIN_EMAIL" "Admin email"
+    validate_safe "$ADMIN_PASSWORD" "Admin password"
+  fi
+  yellow "Reusing the existing secrets; admin values not overridden are kept."
 fi
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
 SECRET_KEY=${SECRET_KEY:-$(openssl rand -hex 32)}
@@ -255,7 +257,7 @@ FRONTEND_HOST="http://localhost:${APP_PORT}"
 umask 077
 {
   printf 'PROJECT_NAME=OpenPrintDash\n'
-  printf 'COMPOSE_PROJECT_NAME=openprintdashboard\n'
+  printf 'COMPOSE_PROJECT_NAME=%s\n' "$(env_quote "$PROJECT_NAME")"
   printf 'DOMAIN=%s\n' "$(env_quote "$DOMAIN")"
   printf 'IMAGE_PREFIX=%s\n' "$IMAGE_PREFIX"
   printf 'IMAGE_TAG=%s\n' "$VERSION"
@@ -331,7 +333,11 @@ else
   else
     printf 'Dashboard: http://%s:%s (behind your proxy)\n' "$BIND_ADDR" "$APP_PORT"
   fi
-  printf 'Backend:   http://%s:%s\n' "$BIND_ADDR" "$API_PORT"
+  if [ "$BIND_ADDR" = "0.0.0.0" ]; then
+    printf 'Backend:   http://<this-server>:%s\n' "$API_PORT"
+  else
+    printf 'Backend:   http://%s:%s\n' "$BIND_ADDR" "$API_PORT"
+  fi
   cat <<GUIDE
 
 Reverse proxy

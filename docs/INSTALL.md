@@ -16,10 +16,13 @@ The interactive prompts cover:
 - the app ports when you already have a proxy,
 - the first admin email and password.
 
-The install directory (`--dir`, default `/opt/openprintdashboard`) and release
-tag (`--tag vX.Y.Z`, default: latest GitHub release) are optional flags. Adding
-`--force` reuses the existing secrets and admin account when updating an install
-in place.
+The install directory (`--dir`, default `/opt/openprintdashboard`), project
+name (`--project-name`, default `openprintdashboard`) and release tag
+(`--tag vX.Y.Z`, default: latest GitHub release) are optional flags. Adding
+`--force` reuses the existing secrets and admin values when updating an install
+in place. Changing `FIRST_SUPERUSER_PASSWORD` only affects the initial account
+creation; an account that already exists is changed in the app's account
+settings, not by the env file.
 
 ## Bundled Caddy
 

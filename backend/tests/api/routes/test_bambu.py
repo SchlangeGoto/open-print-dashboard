@@ -1,5 +1,4 @@
 import threading
-import time
 from collections.abc import Callable
 from urllib.parse import quote
 
@@ -77,6 +76,8 @@ def _sign_out_wins_over(
     entered = threading.Event()
     release = threading.Event()
     cleared = threading.Event()
+    lock_attempted = threading.Event()
+    lock_blocked = threading.Event()
     errors: list[BaseException] = []
 
     def fake_login(code: str | None = None) -> None:
@@ -93,12 +94,31 @@ def _sign_out_wins_over(
         original_clear(session=session)
         cleared.set()
 
+    # Probe the real lock from the sign-out thread. This turns "sign-out
+    # waited" into an explicit event instead of a timing guess.
+    real_lock = printer_service.auth_lock()
+
+    class ProbeLock:
+        def __enter__(self) -> "ProbeLock":
+            if threading.current_thread().name == "bambu-sign-out":
+                lock_attempted.set()
+                if not real_lock.acquire(blocking=False):
+                    lock_blocked.set()
+                    real_lock.acquire()
+            else:
+                real_lock.acquire()
+            return self
+
+        def __exit__(self, *exc_info: object) -> None:
+            real_lock.release()
+
     printer_service.cloud_client.reset_session()
     crud.clear_cloud_credentials(session=db)
     monkeypatch.setattr(printer_service.cloud_client, "login", fake_login)
     monkeypatch.setattr(printer_service.cloud_client, "is_token_valid", lambda: False)
     monkeypatch.setattr(printer_service, "reload", lambda: None)
     monkeypatch.setattr(crud, "clear_cloud_credentials", tracking_clear)
+    monkeypatch.setattr(printer_service, "auth_lock", lambda: ProbeLock())
 
     def run_action() -> None:
         try:
@@ -113,13 +133,14 @@ def _sign_out_wins_over(
             errors.append(exc)
 
     action_thread = threading.Thread(target=run_action)
-    sign_out_thread = threading.Thread(target=run_sign_out)
+    sign_out_thread = threading.Thread(target=run_sign_out, name="bambu-sign-out")
     action_thread.start()
     assert entered.wait(5)
     sign_out_thread.start()
-    # Give sign-out time to reach the lock. With the lock it cannot clear
-    # while the login is paused; without it, it clears immediately.
-    time.sleep(0.2)
+    # Sign-out must reach the shared lock and block while the paused login
+    # holds it. A missing lock fails here instead of depending on scheduling.
+    assert lock_attempted.wait(5)
+    assert lock_blocked.wait(5)
     assert not cleared.is_set()
     release.set()
     action_thread.join(5)

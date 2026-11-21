@@ -132,12 +132,20 @@ export default function SpoolsPage() {
     return filaments.find((f) => f.id === id);
   }
 
+  function defaultPriceFor(filamentId: string): string {
+    const filament = filaments.find((f) => f.id === filamentId);
+    return filament?.default_price_per_kg != null
+      ? String(filament.default_price_per_kg)
+      : "";
+  }
+
   function openCreate() {
+    const firstFilament = filaments.length > 0 ? String(filaments[0].id) : "";
     setForm({
-      filament_id: filaments.length > 0 ? String(filaments[0].id) : "",
+      filament_id: firstFilament,
       total_weight_g: 1000,
       remaining_g: 1000,
-      price_per_kg: "",
+      price_per_kg: defaultPriceFor(firstFilament),
       purchased_at: "",
       notes: "",
     });
@@ -425,7 +433,18 @@ export default function SpoolsPage() {
               <FieldLabel htmlFor="filament">Filament</FieldLabel>
               <Select
                 value={form.filament_id}
-                onValueChange={(v) => setForm({ ...form, filament_id: v ?? "" })}
+                onValueChange={(v) => {
+                  const filamentId = v ?? "";
+                  setForm({
+                    ...form,
+                    filament_id: filamentId,
+                    // Only prefill on create; an existing spool keeps the
+                    // price it was bought at.
+                    price_per_kg: editingId
+                      ? form.price_per_kg
+                      : defaultPriceFor(filamentId),
+                  });
+                }}
                 items={filaments.map((filament) => ({
                   value: String(filament.id),
                   label: `${filament.brand} — ${filament.color_name} (${filament.material})`,

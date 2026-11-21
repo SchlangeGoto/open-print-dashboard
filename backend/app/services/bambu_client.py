@@ -1288,6 +1288,7 @@ class BambuClient:
                                 remaining_unknown=remaining is None,
                                 tag_uid=tag,
                                 source="ams",
+                                price_per_kg=filament.default_price_per_kg,
                             )
                             session.add(spool)
                         session.flush()

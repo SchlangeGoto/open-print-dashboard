@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -23,6 +24,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatGrid } from "@/components/ui/stat-readout";
+import { TextField } from "@/components/ui/text-field";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useAuth } from "@/lib/auth";
 import {
@@ -44,6 +46,9 @@ export default function SpoolDetailScreen() {
   const insets = useSafeAreaInsets();
   const [busyPrinter, setBusyPrinter] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [priceOpen, setPriceOpen] = useState(false);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [priceBusy, setPriceBusy] = useState(false);
 
   const loader = useCallback(async (): Promise<SpoolDetailData> => {
     if (!id) {
@@ -59,6 +64,34 @@ export default function SpoolDetailScreen() {
 
   const { data, loading, refreshing, error, reload, refresh } =
     useAsyncData(loader);
+
+  function openPrice() {
+    setPriceDraft(
+      data?.spool.price_per_kg != null ? String(data.spool.price_per_kg) : "",
+    );
+    setPriceOpen(true);
+  }
+
+  async function savePrice() {
+    if (!id) return;
+    const raw = priceDraft.trim().replace(",", ".");
+    const value = raw ? Number(raw) : null;
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      setActionError("Enter a valid price, or leave it empty.");
+      return;
+    }
+    setPriceBusy(true);
+    setActionError(null);
+    try {
+      await api.updateSpool(id, { price_per_kg: value });
+      setPriceOpen(false);
+      await reload();
+    } catch (err) {
+      setActionError(formatError(err));
+    } finally {
+      setPriceBusy(false);
+    }
+  }
 
   async function loadInto(printer: Printer) {
     if (!id || !printer.id) return;
@@ -278,6 +311,23 @@ export default function SpoolDetailScreen() {
         />
 
         <Card style={styles.section}>
+          <View style={styles.priceHeader}>
+            <View>
+              <AppText variant="heading">Price</AppText>
+              <AppText variant="caption" muted>
+                {formatPrice(spool.price_per_kg)}
+              </AppText>
+            </View>
+            <AppButton
+              title="Edit price"
+              size="sm"
+              variant="secondary"
+              onPress={openPrice}
+            />
+          </View>
+        </Card>
+
+        <Card style={styles.section}>
           <AppText variant="heading">Location</AppText>
           {currentPrinter ? (
             <View
@@ -373,6 +423,48 @@ export default function SpoolDetailScreen() {
           ) : null}
         </Card>
       </ScrollView>
+
+      <Modal
+        transparent
+        visible={priceOpen}
+        animationType="fade"
+        onRequestClose={() => setPriceOpen(false)}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setPriceOpen(false)}
+        />
+        <View style={styles.sheet}>
+          <Card style={styles.sheetCard}>
+            <AppText variant="heading">Price per kilogram</AppText>
+            <AppText variant="caption" muted>
+              This only changes this spool. Future spools use the filament
+              default.
+            </AppText>
+            <TextField
+              label="Price / kg (€)"
+              value={priceDraft}
+              onChangeText={setPriceDraft}
+              keyboardType="decimal-pad"
+              placeholder="24.99"
+            />
+            <View style={styles.sheetActions}>
+              <AppButton
+                title="Cancel"
+                variant="ghost"
+                size="sm"
+                onPress={() => setPriceOpen(false)}
+              />
+              <AppButton
+                title="Save"
+                size="sm"
+                loading={priceBusy}
+                onPress={() => void savePrice()}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -468,5 +560,32 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderCurve: "continuous",
     padding: spacing.md,
+  },
+  priceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  backdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "#00000088",
+  },
+  sheet: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: spacing.lg,
+  },
+  sheetCard: {
+    gap: spacing.md,
+  },
+  sheetActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
   },
 });

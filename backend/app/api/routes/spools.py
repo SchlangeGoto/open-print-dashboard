@@ -251,7 +251,9 @@ def _create_barcode_spool(
         remaining_g=weight,
         barcode=code,
         source="barcode",
-        price_per_kg=price_per_kg,
+        price_per_kg=(
+            price_per_kg if price_per_kg is not None else filament.default_price_per_kg
+        ),
         request_id=request_id,
     )
     session.add(spool)
@@ -426,11 +428,14 @@ def read_spool(spool_id: uuid.UUID, session: SessionDep) -> Any:
 
 @router.post("/", response_model=SpoolPublic)
 def create_spool(*, session: SessionDep, spool_in: SpoolCreate) -> Any:
+    filament = None
     if spool_in.filament_id:
         filament = session.get(Filament, spool_in.filament_id)
         if not filament:
             raise HTTPException(status_code=404, detail="Filament not found")
     spool = Spool.model_validate(spool_in)
+    if spool.price_per_kg is None and filament is not None:
+        spool.price_per_kg = filament.default_price_per_kg
     # A new spool has no printer yet, so it cannot be active. Loading goes
     # through /spools/{id}/activate.
     spool.active = False

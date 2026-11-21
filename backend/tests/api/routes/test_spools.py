@@ -41,6 +41,46 @@ def _create_filament(client: TestClient, headers: dict[str, str]) -> str:
     ).json()["id"]
 
 
+def test_new_spool_inherits_the_filament_default_price(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    filament = Filament(
+        brand="Bambu Lab",
+        material="PLA",
+        color_name="Default price",
+        color_hex="#123456",
+        default_price_per_kg=24.5,
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+
+    inherited = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": str(filament.id),
+            "total_weight_g": 1000,
+            "remaining_g": 1000,
+        },
+    )
+    assert inherited.status_code == 200, inherited.text
+    assert inherited.json()["price_per_kg"] == 24.5
+
+    explicit = client.post(
+        f"{settings.API_V1_STR}/spools/",
+        headers=superuser_token_headers,
+        json={
+            "filament_id": str(filament.id),
+            "total_weight_g": 1000,
+            "remaining_g": 1000,
+            "price_per_kg": 30,
+        },
+    )
+    assert explicit.status_code == 200, explicit.text
+    assert explicit.json()["price_per_kg"] == 30
+
+
 def test_create_and_activate_spool(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:

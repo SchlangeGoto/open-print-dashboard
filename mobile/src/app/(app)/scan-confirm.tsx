@@ -113,6 +113,7 @@ export default function ScanConfirmScreen() {
           color_name: colorName.trim(),
           color_hex: normalizedHex,
           spool_weight_g: weightValue,
+          default_price_per_kg: priceValue,
         },
         weightValue,
         priceValue,

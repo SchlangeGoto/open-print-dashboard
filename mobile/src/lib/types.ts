@@ -66,15 +66,15 @@ export interface Filament {
 export interface FilamentInput {
   brand: string;
   material: string;
-  series?: string;
+  series?: string | null;
   color_name: string;
   color_hex: string;
   spool_weight_g?: number;
-  default_price_per_kg?: number;
-  nozzle_temp_min?: number;
-  nozzle_temp_max?: number;
-  bed_temp?: number;
-  notes?: string;
+  default_price_per_kg?: number | null;
+  nozzle_temp_min?: number | null;
+  nozzle_temp_max?: number | null;
+  bed_temp?: number | null;
+  notes?: string | null;
 }
 
 export interface Spool {

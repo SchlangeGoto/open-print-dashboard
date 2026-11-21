@@ -38,11 +38,13 @@ function fromSpool(spool: Spool): FormState {
   };
 }
 
-function optionalNumber(value: string): number | null {
+function parseNumber(value: string): { value: number | null; invalid: boolean } {
   const raw = value.trim().replace(",", ".");
-  if (!raw) return null;
+  if (!raw) return { value: null, invalid: false };
   const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed)
+    ? { value: parsed, invalid: false }
+    : { value: null, invalid: true };
 }
 
 export default function EditSpoolScreen() {
@@ -122,6 +124,7 @@ function SpoolEditForm({ spool }: { spool: Spool }) {
   const router = useRouter();
   const theme = useTheme();
   const [form, setForm] = useState<FormState>(() => fromSpool(spool));
+  const [initial] = useState<FormState>(() => fromSpool(spool));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -131,26 +134,44 @@ function SpoolEditForm({ spool }: { spool: Spool }) {
   }
 
   async function save() {
-    const total = optionalNumber(form.total);
-    const remaining = optionalNumber(form.remaining);
-    const price = optionalNumber(form.price);
-    if (total == null || total <= 0) {
+    const total = parseNumber(form.total);
+    const remaining = parseNumber(form.remaining);
+    const price = parseNumber(form.price);
+    if (total.invalid || total.value == null || total.value <= 0) {
       setError("Enter a spool weight greater than zero.");
       return;
     }
-    if (remaining != null && (remaining < 0 || remaining > total)) {
+    if (remaining.invalid) {
+      setError("Remaining weight must be a valid number.");
+      return;
+    }
+    if (
+      remaining.value != null &&
+      (remaining.value < 0 || remaining.value > total.value)
+    ) {
       setError("Remaining weight must be between 0 and the spool weight.");
       return;
+    }
+    if (price.invalid) {
+      setError("Price must be a valid number, or empty to clear it.");
+      return;
+    }
+    const weights: Record<string, number> = {};
+    if (form.total !== initial.total) {
+      weights.total_weight_g = total.value;
+    }
+    if (form.remaining !== initial.remaining && remaining.value != null) {
+      weights.remaining_g = remaining.value;
     }
     setSaving(true);
     setError(null);
     try {
       await api.updateSpool(spool.id, {
-        total_weight_g: total,
-        ...(remaining != null
-          ? { remaining_g: remaining, remaining_unknown: false }
+        ...weights,
+        ...(weights.remaining_g != null
+          ? { remaining_unknown: false }
           : {}),
-        price_per_kg: price,
+        price_per_kg: price.value,
         notes: form.notes.trim() || null,
       });
       router.back();
@@ -176,7 +197,10 @@ function SpoolEditForm({ spool }: { spool: Spool }) {
             setError(null);
             api
               .deleteSpool(spool.id)
-              .then(() => router.back())
+              .then(() => {
+                router.dismissAll();
+                router.replace("/spools");
+              })
               .catch((err) => setError(formatError(err)))
               .finally(() => setDeleting(false));
           },

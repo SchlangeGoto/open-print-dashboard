@@ -58,11 +58,13 @@ function fromFilament(filament: Filament): FormState {
   };
 }
 
-function optionalNumber(value: string): number | undefined {
+function parseNumber(value: string): { value: number | null; invalid: boolean } {
   const raw = value.trim().replace(",", ".");
-  if (!raw) return undefined;
+  if (!raw) return { value: null, invalid: false };
   const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return Number.isFinite(parsed)
+    ? { value: parsed, invalid: false }
+    : { value: null, invalid: true };
 }
 
 export default function EditFilamentScreen() {
@@ -160,21 +162,43 @@ function FilamentEditForm({ filament }: { filament: Filament }) {
       setError("Enter a colour like #1A2B3C.");
       return;
     }
+    const spoolWeight = parseNumber(form.spoolWeight);
+    const defaultPrice = parseNumber(form.defaultPrice);
+    const nozzleMin = parseNumber(form.nozzleMin);
+    const nozzleMax = parseNumber(form.nozzleMax);
+    const bedTemp = parseNumber(form.bedTemp);
+    if (
+      spoolWeight.invalid ||
+      spoolWeight.value == null ||
+      spoolWeight.value <= 0
+    ) {
+      setError("Spool weight must be a number greater than zero.");
+      return;
+    }
+    if (
+      defaultPrice.invalid ||
+      nozzleMin.invalid ||
+      nozzleMax.invalid ||
+      bedTemp.invalid
+    ) {
+      setError("Prices and temperatures must be valid numbers.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await api.updateFilament(filament.id, {
         brand: form.brand.trim(),
         material: form.material.trim(),
-        series: form.series.trim() || undefined,
+        series: form.series.trim() || null,
         color_name: form.colorName.trim(),
         color_hex: colorHex,
-        spool_weight_g: optionalNumber(form.spoolWeight),
-        default_price_per_kg: optionalNumber(form.defaultPrice),
-        nozzle_temp_min: optionalNumber(form.nozzleMin),
-        nozzle_temp_max: optionalNumber(form.nozzleMax),
-        bed_temp: optionalNumber(form.bedTemp),
-        notes: form.notes.trim() || undefined,
+        spool_weight_g: spoolWeight.value,
+        default_price_per_kg: defaultPrice.value,
+        nozzle_temp_min: nozzleMin.value,
+        nozzle_temp_max: nozzleMax.value,
+        bed_temp: bedTemp.value,
+        notes: form.notes.trim() || null,
       });
       router.back();
     } catch (err) {
@@ -199,7 +223,10 @@ function FilamentEditForm({ filament }: { filament: Filament }) {
             setError(null);
             api
               .deleteFilament(filament.id)
-              .then(() => router.back())
+              .then(() => {
+                router.dismissAll();
+                router.replace("/filaments");
+              })
               .catch((err) => setError(formatError(err)))
               .finally(() => setDeleting(false));
           },

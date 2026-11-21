@@ -21,6 +21,7 @@ import {
   disableDemo,
   enableDemo,
   isDemoActive,
+  resetDemoData,
 } from "@/lib/demo";
 import { toast } from "@/lib/toast";
 
@@ -159,10 +160,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function exitDemo() {
     if (!DEMO_AVAILABLE) return;
     disableDemo();
+    // Remove demo edits and force a full reload so the login/setup pages do
+    // not inherit any stale demo state from the mounted tree.
+    resetDemoData();
     clearTokens();
     setDemo(false);
     setUsername(null);
-    router.push("/");
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/");
   }
 
   return (

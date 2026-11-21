@@ -4489,6 +4489,34 @@ def test_abandoned_marker_survives_a_late_finish(db: Session, monkeypatch) -> No
     from app.services.printer_service import printer_service
 
     printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Abandoned replacement",
+        color_hex="#223344",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    replacement_a = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="ABANDON-A",
+    )
+    replacement_b = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="ABANDON-B",
+    )
+    db.add(replacement_a)
+    db.add(replacement_b)
+    db.commit()
+
     mapping = [
         {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
         {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
@@ -4517,6 +4545,21 @@ def test_abandoned_marker_survives_a_late_finish(db: Session, monkeypatch) -> No
 
     client = BambuClient()
     client.serial = printer.serial
+    # Live trays are resolvable. A late finish must still not charge them,
+    # because the abandoned job's original rolls were never recorded.
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "ABANDON-A"},
+                        {"id": 1, "tag_uid": "ABANDON-B"},
+                    ],
+                }
+            ]
+        }
+    }
     client._save_print_job("abandoned-late-finish", "FINISH")
 
     db.expire_all()
@@ -4524,3 +4567,5 @@ def test_abandoned_marker_survives_a_late_finish(db: Session, monkeypatch) -> No
     assert stored is not None
     assert stored.filament_deducted_at is None
     assert stored.finish_state == "ABANDONED"
+    assert db.get(Spool, replacement_a.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, replacement_b.id).remaining_g == 1000  # type: ignore[union-attr]

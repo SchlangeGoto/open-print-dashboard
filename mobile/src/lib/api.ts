@@ -255,7 +255,6 @@ export class ApiClient {
       if (accessToken) {
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
-        const tenantId = this.options.getTenantId();
         if (tenantId) {
           retryHeaders.set("X-Tenant-ID", tenantId);
         }
@@ -546,6 +545,26 @@ export class ApiClient {
       `/prints/?limit=${limit}`,
     );
     return data.data;
+  }
+
+  async getAllPrintJobs(pageSize = 500, maxJobs = 10_000): Promise<PrintJob[]> {
+    const all: PrintJob[] = [];
+    let skip = 0;
+    for (;;) {
+      const page = await this.request<ListResponse<PrintJob>>(
+        `/prints/?skip=${skip}&limit=${pageSize}`,
+      );
+      all.push(...page.data);
+      skip += page.data.length;
+      if (
+        page.data.length === 0 ||
+        all.length >= page.count ||
+        all.length >= maxJobs
+      ) {
+        break;
+      }
+    }
+    return all;
   }
 
   async getActivePrints(): Promise<PrintJob[]> {

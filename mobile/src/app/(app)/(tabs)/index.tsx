@@ -182,9 +182,12 @@ export default function DashboardScreen() {
     return data.filaments
       .map((filament) => ({
         filament,
-        remaining: totals.get(filament.id) ?? 0,
+        remaining: totals.get(filament.id),
       }))
-      .filter((item) => item.remaining > 0 && item.remaining < 250)
+      .filter(
+        (item): item is { filament: Filament; remaining: number } =>
+          item.remaining != null && item.remaining < 250,
+      )
       .sort((a, b) => a.remaining - b.remaining)
       .slice(0, 3);
   }, [data]);

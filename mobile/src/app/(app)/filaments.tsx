@@ -90,8 +90,7 @@ export default function FilamentsScreen() {
     () => ({
       count: data?.filaments.length ?? 0,
       remaining: rows.reduce((sum, row) => sum + row.remaining, 0),
-      low: rows.filter((row) => row.remaining > 0 && row.remaining < 250)
-        .length,
+      low: rows.filter((row) => row.remaining < 250).length,
     }),
     [data, rows],
   );
@@ -167,6 +166,21 @@ export default function FilamentsScreen() {
                 ) : undefined
               }
             />
+            {error && data ? (
+              <View
+                style={[
+                  styles.errorBanner,
+                  {
+                    backgroundColor: `${theme.colors.danger}18`,
+                    borderColor: `${theme.colors.danger}55`,
+                  },
+                ]}
+              >
+                <AppText variant="caption" color={theme.colors.danger}>
+                  Could not refresh: {error}
+                </AppText>
+              </View>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => (
@@ -295,5 +309,11 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     paddingTop: spacing.lg,
+  },
+  errorBanner: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderCurve: "continuous",
+    padding: spacing.md,
   },
 });

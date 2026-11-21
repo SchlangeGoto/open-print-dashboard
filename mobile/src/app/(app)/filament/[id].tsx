@@ -65,7 +65,9 @@ export default function FilamentDetailScreen() {
 
   const printerName = useCallback(
     (printerId: string | null) =>
-      data?.printers.find((printer) => printer.id === printerId)?.name,
+      printerId
+        ? data?.printers.find((printer) => printer.id === printerId)?.name
+        : undefined,
     [data],
   );
 

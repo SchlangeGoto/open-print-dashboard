@@ -32,7 +32,7 @@ export default function ServerSetupScreen() {
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(
-    isEdit || (Boolean(serverUrl) && !isHostedServer(serverUrl)),
+    Boolean(serverUrl) && !isHostedServer(serverUrl),
   );
 
   // Show the stored URL until the user starts editing. This avoids an effect
@@ -228,17 +228,15 @@ export default function ServerSetupScreen() {
               onPress={handleConnect}
             />
 
-            {!isEdit ? (
-              <AppButton
-                title="Use OpenPrintDash Cloud instead"
-                variant="ghost"
-                size="sm"
-                onPress={() => {
-                  setError(null);
-                  setManualOpen(false);
-                }}
-              />
-            ) : null}
+            <AppButton
+              title="Use OpenPrintDash Cloud instead"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setError(null);
+                setManualOpen(false);
+              }}
+            />
           </Card>
         )}
 

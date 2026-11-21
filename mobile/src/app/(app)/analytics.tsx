@@ -52,7 +52,7 @@ export default function AnalyticsScreen() {
 
   const loader = useCallback(async (): Promise<AnalyticsData> => {
     const [jobs, filaments] = await Promise.all([
-      api.getPrintJobs(200),
+      api.getAllPrintJobs(),
       api.getFilaments(),
     ]);
     return { jobs, filaments };

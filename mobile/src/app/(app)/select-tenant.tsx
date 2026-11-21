@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/ui/app-text";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ export default function SelectTenantScreen() {
   const { tenants, activeTenantId, switchTenant, logout } = useAuth();
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   async function choose(tenantId: string) {
     await switchTenant(tenantId);
@@ -21,7 +23,13 @@ export default function SelectTenantScreen() {
 
   return (
     <Screen>
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + spacing.xxl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <PageHeader
           brand
           title="Choose a tenant"
@@ -81,7 +89,7 @@ export default function SelectTenantScreen() {
             Sign out
           </AppText>
         </Pressable>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }

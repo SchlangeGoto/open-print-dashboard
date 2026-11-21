@@ -73,7 +73,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   switchTenant: (tenantId: string) => Promise<void>;
-  refreshTenants: () => Promise<void>;
+  refreshTenants: () => Promise<boolean>;
   setServerUrl: (url: string) => Promise<void>;
   retry: () => Promise<void>;
 }
@@ -109,19 +109,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     sessionTenantId = null;
     setActiveTenantId(null);
-    setNeedsTenantSelection(only.length > 1);
+    // Zero memberships is a real no-access state, not "open the dashboard".
+    setNeedsTenantSelection(only.length !== 1);
     await clearStoredTenantId();
   }, []);
 
-  const loadTenants = useCallback(async () => {
+  const loadTenants = useCallback(async (): Promise<boolean> => {
     try {
       const list = await apiClient.getMeTenants();
       await applyTenants(list);
-    } catch {
-      // A tenant lookup must not end the session. Single-tenant installs fall
-      // back to the only membership server-side.
+      return true;
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        return false;
+      }
+      // A non-auth failure must not end the session. Single-tenant installs
+      // fall back to the only membership server-side.
       setTenants([]);
       setActiveTenantId(sessionTenantId);
+      return true;
     }
   }, [applyTenants]);
 
@@ -203,8 +212,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         if (epoch !== restoreEpoch.current) return;
         setUser(me);
-        await loadTenants();
+        const tenantsOk = await loadTenants();
         if (epoch !== restoreEpoch.current) return;
+        if (!tenantsOk || !sessionTokens) {
+          setStatus("logged-out");
+          return;
+        }
         setStatus("authenticated");
       } catch (error) {
         if (epoch !== restoreEpoch.current) return;
@@ -253,7 +266,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       restoreEpoch.current += 1;
       const me = await apiClient.login(email, password);
       setUser(me);
-      await loadTenants();
+      const tenantsOk = await loadTenants();
+      if (!tenantsOk || !sessionTokens) {
+        setStatus("logged-out");
+        return;
+      }
       setStatus("authenticated");
     },
     [loadTenants],

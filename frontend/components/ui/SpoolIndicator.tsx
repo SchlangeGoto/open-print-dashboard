@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { cn } from "cn";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 interface Props {
   remaining: number;
@@ -20,13 +23,27 @@ export function SpoolIndicator({
   className,
   unknown = false,
 }: Props) {
+  const reduced = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
   const pct = unknown
     ? 0
     : Math.max(0, Math.min(1, remaining / (total || 1)));
   const outerR = size / 2 - 4;
   const hubR = size * 0.18;
-  const filamentR = hubR + (outerR - hubR - 6) * pct;
+  // Start empty and fill on mount. Polls only change the target radius, so
+  // the CSS transition interpolates without replaying from zero.
+  const shownPct = mounted ? pct : 0;
+  const filamentR = hubR + (outerR - hubR - 6) * shownPct;
   const lowStock = pct < 0.15;
+
+  useEffect(() => {
+    if (reduced) {
+      setMounted(true);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, [reduced]);
 
   return (
     <div
@@ -38,6 +55,8 @@ export function SpoolIndicator({
       }
       className={cn("relative inline-flex", className)}
       style={{ width: size, height: size }}
+      data-spool-fill="true"
+      data-fill-pct={Math.round(pct * 100)}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <defs>
@@ -61,12 +80,17 @@ export function SpoolIndicator({
 
         {/* filament wound — smooth CSS transition only */}
         <circle
+          data-spool-fill-circle="true"
           cx={size / 2} cy={size / 2}
           r={filamentR}
           fill={`url(#spool-fill-${color.replace("#","")})`}
           stroke={color}
           strokeWidth="0.5"
-          style={{ transition: "r 1s cubic-bezier(0.22,1,0.36,1)" }}
+          style={{
+            transition: reduced
+              ? "none"
+              : "r var(--motion-spool) var(--motion-ease-out)",
+          }}
         />
 
         {/* hub body */}

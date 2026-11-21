@@ -169,3 +169,58 @@
     opacity: 1;
   }
 }
+
+/* ── Motion ─────────────────────────────────────────────────────────────
+   One shared scale. Components animate transform/opacity only; polled
+   refreshes update values in place. */
+:root {
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 350ms;
+  --motion-spool: 700ms;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes opd-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes opd-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.opd-enter {
+  animation: opd-enter var(--motion-slow) var(--motion-ease-out) both;
+}
+
+.opd-fade {
+  animation: opd-fade var(--motion-normal) var(--motion-ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .opd-enter,
+  .opd-fade {
+    animation: none;
+  }
+}

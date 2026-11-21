@@ -1,6 +1,9 @@
+"use client";
+
 import { LucideIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { useCountUp } from "@/lib/use-count-up";
 import { cn } from "cn";
 
 interface StatCardProps {
@@ -22,6 +25,10 @@ export function StatCard({
   iconBg = "bg-primary/10",
   trend,
 }: StatCardProps) {
+  const numeric = typeof value === "number" ? value : 0;
+  const counted = useCountUp(numeric);
+  const shown = typeof value === "number" ? counted : value;
+
   return (
     <Card>
       <CardContent className="space-y-3">
@@ -46,7 +53,7 @@ export function StatCard({
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {title}
           </p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{shown}</p>
           {subtitle ? (
             <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
           ) : null}

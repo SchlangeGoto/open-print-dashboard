@@ -242,7 +242,7 @@ export default function DashboardPage() {
     : null;
 
   return (
-    <div className="space-y-8 pb-8">
+    <div className="space-y-8 pb-8 opd-enter">
       <div>
         <h1 className="text-xl font-bold">Dashboard</h1>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -443,7 +443,7 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            {printers.map((dev) => {
+            {printers.map((dev, printerIndex) => {
               const deviceStatus = statusByDev[dev.serial] ?? null;
               const printing = isPrintingStatus(deviceStatus);
               const printerPrint =
@@ -471,7 +471,10 @@ export default function DashboardPage() {
                 <Card
                   key={dev.serial}
                   onClick={() => setSelectedPrinter(dev)}
-                  className="cursor-pointer gap-4 transition-colors hover:ring-primary/40"
+                  className="cursor-pointer gap-4 transition-colors hover:ring-primary/40 opd-enter"
+                  style={{
+                    animationDelay: `${Math.min(printerIndex, 7) * 45}ms`,
+                  }}
                 >
                   <CardContent className="space-y-4">
                     <div className="flex items-start justify-between">

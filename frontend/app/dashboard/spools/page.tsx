@@ -286,7 +286,8 @@ export default function SpoolsPage() {
               <Card
                 key={s.id}
                 onClick={() => setSelectedSpool(s)}
-                className="group relative cursor-pointer gap-4 transition-colors hover:ring-primary/40"
+                className="group relative cursor-pointer gap-4 transition-colors hover:ring-primary/40 opd-enter"
+                style={{ animationDelay: `${Math.min(spoolIndex, 11) * 35}ms` }}
               >
                 <CardContent className="flex flex-col gap-3">
                   <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-1">

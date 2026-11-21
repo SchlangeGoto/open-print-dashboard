@@ -17,10 +17,12 @@ FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
 READ_GID="${UPDATER_READ_GID:-1000}"
 ENV_FILE="$PROJECT_DIR/.env"
-ENV_BACKUP="$DATA_DIR/env.backup"
-JOURNAL_FILE="$DATA_DIR/journal"
+PRIVATE_DIR="${UPDATER_PRIVATE_DIR:-/private}"
+ENV_BACKUP="$PRIVATE_DIR/env.backup"
+JOURNAL_FILE="$PRIVATE_DIR/journal"
 
-mkdir -p "$DATA_DIR"
+mkdir -p "$DATA_DIR" "$PRIVATE_DIR"
+chmod 0700 "$PRIVATE_DIR"
 rm -rf "$LOCK_DIR"
 rm -f "$DATA_DIR"/.pre-update-*.sql
 # Keep the heartbeat fresh while a pull, dump or health loop blocks the main
@@ -118,6 +120,20 @@ db_revision() {
     'SELECT version_num FROM alembic_version' 2>/dev/null | tr -d '[:space:]'
 }
 
+wait_for_db() {
+  attempt=0
+  while [ "$attempt" -lt "${UPDATER_DB_ATTEMPTS:-60}" ]; do
+    revision=$(db_revision)
+    if [ -n "$revision" ]; then
+      printf '%s\n' "$revision"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  return 1
+}
+
 backup_database() {
   user=$(read_env POSTGRES_USER)
   database=$(read_env POSTGRES_DB)
@@ -146,29 +162,36 @@ reconcile_interrupted() {
   backup=$(journal_get backup)
   requested=$(journal_get requested)
   phase=$(journal_phase)
-  current_revision=$(db_revision)
 
   if [ "$phase" = "healthy" ] && [ -n "$requested" ]; then
     write_status success "$requested" "Updated to $requested"
     rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
     return 0
   fi
-  if [ -z "$previous" ] || [ -z "$old_revision" ] || [ -z "$current_revision" ]; then
+  if [ -z "$previous" ] || [ -z "$old_revision" ]; then
     write_status error "$requested" \
-      "An update was interrupted. Check the running version and restore $backup if needed."
-    rm -f "$JOURNAL_FILE"
+      "An update was interrupted with an unreadable journal. Check the running version and restore $backup if needed."
+    rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
     return 0
+  fi
+
+  # After a host reboot the database can still be starting. Keep the journal
+  # until a revision can actually be read.
+  if ! current_revision=$(wait_for_db); then
+    write_status error "$requested" \
+      "An update was interrupted and the database is not ready. Restart the updater once PostgreSQL is available."
+    return 1
   fi
   if [ "$current_revision" != "$old_revision" ]; then
     write_status error "$requested" \
       "An update was interrupted after a database migration. Restore $backup before downgrading."
-    rm -f "$JOURNAL_FILE"
+    rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
     return 0
   fi
   if [ ! -f "$ENV_BACKUP" ]; then
     write_status error "$requested" \
       "An update was interrupted and its .env backup is missing. Check the running version."
-    rm -f "$JOURNAL_FILE"
+    rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
     return 0
   fi
 
@@ -188,7 +211,7 @@ reconcile_interrupted() {
 }
 
 if [ -f "$JOURNAL_FILE" ]; then
-  reconcile_interrupted
+  reconcile_interrupted || true
 else
   write_status idle "" "Waiting for an update request"
 fi
@@ -198,6 +221,13 @@ publish_readable "$HEARTBEAT_FILE"
 [ -f "$JOURNAL_FILE" ] || rm -f "$ENV_BACKUP"
 while true; do
   touch "$HEARTBEAT_FILE"
+  if [ -f "$JOURNAL_FILE" ]; then
+    # Do not start a new update on top of an unrecovered one.
+    if ! reconcile_interrupted; then
+      sleep 30
+      continue
+    fi
+  fi
   if [ -f "$REQUEST_FILE" ] && mkdir "$LOCK_DIR" 2>/dev/null; then
     requested=$(head -n 1 "$REQUEST_FILE" | tr -d '[:space:]')
     rm -f "$REQUEST_FILE"

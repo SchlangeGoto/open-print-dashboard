@@ -89,6 +89,7 @@ services:
       - API_V1_STR=${API_V1_STR:-/api/v1}
       - UPDATER_COMPOSE_TIMEOUT=${UPDATER_COMPOSE_TIMEOUT:-900}
       - UPDATER_HEALTH_ATTEMPTS=${UPDATER_HEALTH_ATTEMPTS:-60}
+      - UPDATER_DB_ATTEMPTS=${UPDATER_DB_ATTEMPTS:-60}
       - UPDATER_READ_GID=${UPDATER_READ_GID:-1000}
     depends_on:
       - backend
@@ -96,6 +97,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/project
       - updater_data:/data
+      - updater_private:/private
 
   frontend:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/frontend:${IMAGE_TAG:-latest}
@@ -133,5 +135,6 @@ volumes:
   postgres_data:
   backend_data:
   updater_data:
+  updater_private:
   caddy_data:
   caddy_config:

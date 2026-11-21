@@ -128,7 +128,8 @@ if [ "$PROJECT_NAME_SET" = 0 ] && [ "$EXISTING_ENV" = 0 ]; then
   else
     dir_name=$(basename "$INSTALL_DIR")
     dir_name=$(printf '%s' "$dir_name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-')
-    dir_name=$(printf '%s' "$dir_name" | sed 's/-\{2,\}/-/g; s/^-//; s/-$//')
+    dir_name=$(printf '%s' "$dir_name" | sed 's/-\{2,\}/-/g; s/^-//; s/-$//' | cut -c1-32)
+    dir_name=${dir_name:-install}
     dir_hash=$(printf '%s' "$INSTALL_DIR" | cksum | awk '{print $1}')
     PROJECT_NAME="openprintdashboard-${dir_name}-${dir_hash}"
   fi
@@ -264,6 +265,8 @@ if [ "$EXISTING_ENV" = 1 ]; then
   fi
   existing_project=$(read_env COMPOSE_PROJECT_NAME)
   existing_project=${existing_project:-openprintdashboard}
+  printf '%s' "$existing_project" | grep -Eq '^[a-z0-9][a-z0-9_-]*$' || \
+    die "Existing COMPOSE_PROJECT_NAME is invalid; fix .env"
   if [ "$PROJECT_NAME_SET" = 1 ] && [ "$PROJECT_NAME" != "$existing_project" ]; then
     die "Cannot change the Compose project name on an existing install; its volumes live under $existing_project"
   fi
@@ -343,7 +346,34 @@ UPDATER_DISABLED=0
 if grep -qx 'COMPOSE_PROFILES=updater' .env; then
   # Older releases predate the updater image. Install them without the
   # sidecar instead of failing the whole install on a missing image.
-  if ! "${COMPOSE[@]}" --profile updater pull updater >/dev/null 2>&1; then
+  probe_log="$INSTALL_DIR/.updater-pull.log"
+  pull_updater() {
+    "${COMPOSE[@]}" --profile updater pull updater >"$probe_log" 2>&1
+  }
+  pull_missing=0
+  if ! pull_updater; then
+    if grep -qiE 'manifest unknown|not found|404' "$probe_log"; then
+      pull_missing=1
+    else
+      # A transient registry or network failure should not disable updates
+      # permanently; retry once, then stop with a clear instruction.
+      sleep 2
+      if ! pull_updater; then
+        if grep -qiE 'manifest unknown|not found|404' "$probe_log"; then
+          pull_missing=1
+        else
+          rm -f "$probe_log"
+          if [ "$EXISTING_ENV" = 0 ]; then
+            rm -f .env
+            die "Could not pull the updater image. Retry the installer, or pass --tag with a release that has one."
+          fi
+          die "Could not pull the updater image. Retry with --force, or remove COMPOSE_PROFILES=updater from $INSTALL_DIR/.env to install without dashboard updates."
+        fi
+      fi
+    fi
+  fi
+  rm -f "$probe_log"
+  if [ "$pull_missing" = 1 ]; then
     sed -i '/^COMPOSE_PROFILES=updater$/d' .env
     chmod 600 .env
     UPDATER_DISABLED=1
@@ -401,6 +431,7 @@ Reverse proxy
   Route /api/* to ${PROXY_TARGET}:${API_PORT} and everything else to
   ${PROXY_TARGET}:${APP_PORT}. Keep both ports on loopback unless the proxy
   runs on another machine.
+  Replace <this-server> with this machine's address in the examples below.
 
   Caddy:
     ${DOMAIN:-dashboard.example.com} {

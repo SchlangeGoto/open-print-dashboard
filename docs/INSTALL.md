@@ -58,7 +58,9 @@ database backup path; restore that backup before downgrading.
 
 If the sidecar is restarted while an update is running, it recovers on start:
 it restores the previous tag when the database revision did not move, and stops
-with the backup path when a migration already committed.
+with the backup path when a migration already committed. The recovery journal
+and `.env` snapshot live in the root-only `updater_private` volume, so the
+application container cannot rewrite them.
 
 The dump lives in the `updater_data` volume. Each attempt gets its own file, and
 the card shows the exact path. With the default project name, restore into a
@@ -80,15 +82,19 @@ fresh database so a failed migration cannot leave objects behind:
   # 2. Stop everything that writes to the database.
   docker compose -f compose.ghcr.yml stop backend updater
 
-  # 3. Recreate an empty database.
-  docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
-    -c 'DROP DATABASE IF EXISTS openprintdashboard'
-  docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
-    -c 'CREATE DATABASE openprintdashboard TEMPLATE template0'
+  # 3. Recreate an empty database. Read the names from .env if you changed them.
+  DB_USER=$(sed -n 's/^POSTGRES_USER=//p' .env | head -n1 | sed "s/^'//;s/'$//")
+  DB_NAME=$(sed -n 's/^POSTGRES_DB=//p' .env | head -n1 | sed "s/^'//;s/'$//")
+  DB_USER=${DB_USER:-opd}
+  DB_NAME=${DB_NAME:-openprintdashboard}
+  docker compose -f compose.ghcr.yml exec -T db psql -U "$DB_USER" -d postgres \
+    -c "DROP DATABASE IF EXISTS \"$DB_NAME\""
+  docker compose -f compose.ghcr.yml exec -T db psql -U "$DB_USER" -d postgres \
+    -c "CREATE DATABASE \"$DB_NAME\" TEMPLATE template0"
 
   # 4. Restore and stop on the first error.
   docker compose -f compose.ghcr.yml exec -T db psql -X -v ON_ERROR_STOP=1 \
-    -U opd -d openprintdashboard < "$RESTORE_SQL"
+    -U "$DB_USER" -d "$DB_NAME" < "$RESTORE_SQL"
 )
 
 # 5. Set IMAGE_TAG and APP_VERSION in .env back to the previous release.

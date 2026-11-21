@@ -54,6 +54,7 @@ def test_update_request_is_written_once(
     monkeypatch.setattr(settings, "UPDATER_DIR", tmp_path)
     monkeypatch.setattr(settings, "APP_VERSION", "1.2.3")
     monkeypatch.setattr(system, "_latest_release", lambda: ("1.3.0", None))
+    (tmp_path / "request").mkdir()
     (tmp_path / "ready").touch()
     (tmp_path / "heartbeat").touch()
     (tmp_path / "status").write_text("state=idle\n")
@@ -64,7 +65,7 @@ def test_update_request_is_written_once(
         json={"tag": "v1.3.0"},
     )
     assert response.status_code == 200, response.text
-    assert (tmp_path / "request").read_text().strip() == "1.3.0"
+    assert (tmp_path / "request" / "request").read_text().strip() == "1.3.0"
 
     duplicate = client.post(
         f"{settings.API_V1_STR}/system/update",

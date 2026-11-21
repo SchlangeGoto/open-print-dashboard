@@ -81,8 +81,12 @@ def _latest_release() -> tuple[str | None, str | None]:
     return tag, url
 
 
+def _protocol_dir() -> Path:
+    return Path(settings.UPDATER_DIR)
+
+
 def _read_updater_status() -> dict[str, str]:
-    directory = Path(settings.UPDATER_DIR)
+    directory = _protocol_dir()
     if not (directory / "ready").exists():
         return {}
     heartbeat = directory / "heartbeat"
@@ -131,6 +135,7 @@ def request_update(payload: UpdateRequest) -> Any:
     if not _TAG_RE.fullmatch(tag):
         raise HTTPException(status_code=422, detail="Release tag must be X.Y.Z")
     directory = Path(settings.UPDATER_DIR)
+    protocol = _protocol_dir()
     updater = _read_updater_status()
     if not updater or updater.get("state") == "stale":
         raise HTTPException(
@@ -145,10 +150,16 @@ def request_update(payload: UpdateRequest) -> Any:
                 status_code=409,
                 detail="Downgrades are not supported from the dashboard",
             )
-    request_file = directory / "request"
-    if request_file.exists() or (directory / "lock").exists():
+    request_dir = directory / "request"
+    request_file = request_dir / "request"
+    if request_file.exists() or (protocol / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")
-    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=".request.")
+    try:
+        fd, tmp_name = tempfile.mkstemp(dir=request_dir, prefix=".request.")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503, detail="Could not queue the update"
+        ) from exc
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "w") as tmp:

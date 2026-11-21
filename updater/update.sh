@@ -1,30 +1,37 @@
 #!/bin/sh
-# Watches /data/request for a release tag and updates only the backend and
+# Watches /protocol/request for a release tag and updates only the backend and
 # frontend images. The database and named volumes are never recreated.
 set -eu
 umask 077
 
 DATA_DIR="${UPDATER_DATA_DIR:-/data}"
+STATUS_DIR="${UPDATER_STATUS_DIR:-/protocol}"
 PROJECT_DIR="${UPDATER_PROJECT_DIR:-/project}"
-STATE_FILE="$DATA_DIR/status"
-READY_FILE="$DATA_DIR/ready"
-HEARTBEAT_FILE="$DATA_DIR/heartbeat"
-REQUEST_FILE="$DATA_DIR/request"
-LOCK_DIR="$DATA_DIR/lock"
+STATE_FILE="$STATUS_DIR/status"
+READY_FILE="$STATUS_DIR/ready"
+HEARTBEAT_FILE="$STATUS_DIR/heartbeat"
+REQUEST_DIR="$STATUS_DIR/request"
+REQUEST_FILE="$REQUEST_DIR/request"
+LOCK_DIR="$STATUS_DIR/lock"
 API_PREFIX="${API_V1_STR:-/api/v1}"
 HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000${API_PREFIX}/utils/health-check/}"
 FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
+RECOVERY_ATTEMPTS="${UPDATER_RECOVERY_ATTEMPTS:-20}"
 READ_GID="${UPDATER_READ_GID:-1000}"
 ENV_FILE="$PROJECT_DIR/.env"
 PRIVATE_DIR="${UPDATER_PRIVATE_DIR:-/private}"
 ENV_BACKUP="$PRIVATE_DIR/env.backup"
 JOURNAL_FILE="$PRIVATE_DIR/journal"
 
-mkdir -p "$DATA_DIR" "$PRIVATE_DIR"
+mkdir -p "$DATA_DIR" "$REQUEST_DIR" "$PRIVATE_DIR"
 chmod 0700 "$PRIVATE_DIR"
+chown "root:$READ_GID" "$STATUS_DIR" 2>/dev/null || true
+chmod 0755 "$STATUS_DIR"
+chown -R "$READ_GID:$READ_GID" "$REQUEST_DIR" 2>/dev/null || true
+chmod 0700 "$REQUEST_DIR"
 rm -rf "$LOCK_DIR"
-rm -f "$DATA_DIR"/.pre-update-*.sql "$DATA_DIR"/.request.*
+rm -rf "$DATA_DIR"/.pre-update-*.sql "$REQUEST_DIR"/.request.*
 # Keep the heartbeat fresh while a pull, dump or health loop blocks the main
 # loop; the backend treats a stale heartbeat as "updater not responding".
 ( while :; do touch "$HEARTBEAT_FILE"; sleep 5; done ) &
@@ -35,7 +42,7 @@ write_status() {
   state="$1"
   tag="$2"
   message="$3"
-  tmp="$STATE_FILE.tmp.$$"
+  tmp=$(mktemp "$STATUS_DIR/.status.XXXXXX")
   {
     printf 'state=%s\n' "$state"
     printf 'tag=%s\n' "$tag"
@@ -191,12 +198,18 @@ reconcile_interrupted() {
     # process may have died between the health check and the success write.
     # Do not send the operator to an older dump in that case.
     if { [ "$phase" = "started" ] || [ "$phase" = "healthy" ]; } &&
-       [ "$(read_env IMAGE_TAG)" = "$requested" ] &&
-       wait_for_url "$HEALTH_URL" 3 >/dev/null 2>&1 &&
-       wait_for_url "$FRONTEND_URL" 3 >/dev/null 2>&1; then
-      write_status success "$requested" "Updated to $requested"
-      rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
-      return 0
+       [ "$(read_env IMAGE_TAG)" = "$requested" ]; then
+      if wait_for_url "$HEALTH_URL" "$RECOVERY_ATTEMPTS" >/dev/null 2>&1 &&
+         wait_for_url "$FRONTEND_URL" "$RECOVERY_ATTEMPTS" >/dev/null 2>&1; then
+        write_status success "$requested" "Updated to $requested"
+        rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
+        return 0
+      fi
+      # The new images are still starting. Keep the journal so the loop can
+      # retry instead of sending the operator to an older dump.
+      write_status error "$requested" \
+        "The updated stack is still starting; recovery will retry."
+      return 1
     fi
     write_status error "$requested" \
       "An update was interrupted after a database migration. Restore $backup before downgrading."

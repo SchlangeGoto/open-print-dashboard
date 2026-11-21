@@ -60,3 +60,7 @@ root-equivalent on the host. A dashboard superuser can queue only a validated
 release tag, and the sidecar runs a fixed Compose command, but the socket means
 a compromised sidecar image or host checkout is host-root. Disable the
 `updater` profile if that trade-off is not acceptable, and update manually.
+
+The backend mounts only the request directory of the status volume. Status,
+heartbeat and the recovery journal are root-owned, so a compromised backend
+cannot rewrite `.env` or point the updater at another image registry.

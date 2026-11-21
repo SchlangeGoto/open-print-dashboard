@@ -706,6 +706,15 @@ class BambuClient:
                 ).first()
                 if not job or job.status == 4 or job.filament_deducted_at is not None:
                     return
+                if (
+                    job.finish_state in ("LEGACY", "ABANDONED")
+                    and not job.deduction_spools
+                    and job.spool_id is None
+                ):
+                    # No roll identity was recorded for this finish. The
+                    # trays loaded now may be different rolls, so never
+                    # resolve the historical slots against them.
+                    return
 
                 persisted: list[dict] = []
                 if job.ams_detail_mapping:
@@ -830,6 +839,7 @@ class BambuClient:
                             {"weight": weight, "amsDetailMapping": mapping},
                             resolved,
                         )
+                        job.finish_state = None
                         session.commit()
                         logger.info(
                             "Deducted the persisted payload for task %s", task_id
@@ -854,6 +864,7 @@ class BambuClient:
                             weight,
                             self._filament_usage_cost(session, filament_id, weight),
                         )
+                    job.finish_state = None
                     session.commit()
                     logger.info("Deducted the persisted payload for task %s", task_id)
         except Exception as exc:
@@ -893,6 +904,7 @@ class BambuClient:
                     .where(col(PrintJob.bambu_task_id).is_not(None))
                     .where(col(PrintJob.finished_at).is_not(None))
                     .where(col(PrintJob.finished_at) >= cutoff)
+                    .where(func.coalesce(PrintJob.finish_state, "") != "LEGACY")
                 ).all()
                 abandoned_rows = session.exec(
                     select(PrintJob.id, PrintJob.bambu_task_id)
@@ -903,6 +915,7 @@ class BambuClient:
                     .where(col(PrintJob.bambu_task_id).is_not(None))
                     .where(col(PrintJob.finished_at).is_not(None))
                     .where(col(PrintJob.finished_at) < cutoff)
+                    .where(func.coalesce(PrintJob.finish_state, "") != "LEGACY")
                     .where(
                         or_(
                             col(PrintJob.finish_state).is_(None),
@@ -911,17 +924,29 @@ class BambuClient:
                     )
                 ).all()
                 for job_id, task_id in abandoned_rows:
-                    session.execute(
+                    result = session.execute(
                         update(PrintJob)
                         .where(PrintJob.id == job_id)
+                        .where(PrintJob.status != 4)
+                        .where(col(PrintJob.status).is_not(None))
+                        .where(col(PrintJob.filament_deducted_at).is_(None))
+                        .where(col(PrintJob.finished_at).is_not(None))
+                        .where(PrintJob.finished_at < cutoff)
+                        .where(
+                            or_(
+                                col(PrintJob.finish_state).is_(None),
+                                PrintJob.finish_state != "ABANDONED",
+                            )
+                        )
                         .values(finish_state="ABANDONED")
                     )
-                    logger.warning(
-                        "Abandoning filament deduction for task %s after %s "
-                        "hours without a resolution",
-                        task_id,
-                        DEDUCTION_RETRY_HOURS,
-                    )
+                    if result.rowcount:
+                        logger.warning(
+                            "Abandoning filament deduction for task %s after "
+                            "%s hours without a resolution",
+                            task_id,
+                            DEDUCTION_RETRY_HOURS,
+                        )
                 if abandoned_rows:
                     session.commit()
 
@@ -1737,7 +1762,21 @@ class BambuClient:
                     job.ams_detail_mapping = json.dumps(mapping)
                 job.finish_requested_at = None
                 job.finish_attempts = 0
+                preserved_finish_state = (
+                    job.finish_state
+                    if job.finish_state in ("ABANDONED", "LEGACY")
+                    else None
+                )
+                # A late finish must not erase a terminal retry marker. The
+                # marker is restored below unless this pass deducts, and a
+                # real new run clears it through _clear_finish_request.
+                identity_unknown = (
+                    preserved_finish_state is not None
+                    and not job.deduction_spools
+                    and job.spool_id is None
+                )
                 job.finish_state = None
+                deducted = job.filament_deducted_at is not None
 
                 # Keep the spool and filament written at start; AMS slots
                 # already charged their own spools. Only fill blanks on the
@@ -1790,67 +1829,84 @@ class BambuClient:
                 if mapping:
                     has_persisted = bool(job.deduction_spools)
                     resolved_spools = self._load_deduction_spools(session, job)
-                    if not resolved_spools and not has_persisted:
-                        ams = self._current_status.get("ams")
-                        if not ams or not self._sync_ams_trays(
-                            ams, self._ams_signature_for(ams)
-                        ):
+                    if identity_unknown and not has_persisted:
+                        # The rolls loaded at finish were never recorded.
+                        # Resolving the historical slots against today's
+                        # trays would charge replacement rolls, so leave the
+                        # deduction unclaimed and keep the terminal marker.
+                        can_deduct = False
+                        logger.info(
+                            "Not deducting task %s: its original rolls were "
+                            "never recorded",
+                            cloud_task_id,
+                        )
+                    else:
+                        if not resolved_spools and not has_persisted:
+                            ams = self._current_status.get("ams")
+                            if not ams or not self._sync_ams_trays(
+                                ams, self._ams_signature_for(ams)
+                            ):
+                                can_deduct = False
+                                logger.warning(
+                                    "AMS sync did not complete for task %s; "
+                                    "leaving the deduction for a retry",
+                                    cloud_task_id,
+                                )
+                            else:
+                                # _sync_ams_trays committed a fresh remaining
+                                # weight in another session; keep our job
+                                # writes, then reload the spools before
+                                # deducting.
+                                session.flush()
+                                session.expire_all()
+                                resolved_spools = self._resolve_mapping_spools(
+                                    session, task
+                                )
+                                if len(mapping) == 1 and job.spool_id:
+                                    # One slot means the spool recorded at
+                                    # start is authoritative; a late finish
+                                    # may already see a swapped tray.
+                                    key = self._mapping_slot_key(mapping[0]) or (
+                                        -1,
+                                        0,
+                                    )
+                                    preferred = session.get(Spool, job.spool_id)
+                                    if preferred:
+                                        resolved_spools = {key: preferred}
+                                if resolved_spools:
+                                    job.deduction_spools = json.dumps(
+                                        {
+                                            f"{ams_id}:{slot_id}": str(spool.id)
+                                            for (ams_id, slot_id), spool in (
+                                                resolved_spools.items()
+                                            )
+                                        }
+                                    )
+                        elif has_persisted and not resolved_spools:
+                            # The rolls recorded at finish were deleted; do
+                            # not fall back to whatever is loaded now.
                             can_deduct = False
                             logger.warning(
-                                "AMS sync did not complete for task %s; leaving "
-                                "the deduction for a retry",
+                                "The spools recorded for task %s are gone; "
+                                "leaving the deduction unclaimed",
                                 cloud_task_id,
                             )
-                        else:
-                            # _sync_ams_trays committed a fresh remaining
-                            # weight in another session; keep our job writes,
-                            # then reload the spools before deducting.
-                            session.flush()
-                            session.expire_all()
-                            resolved_spools = self._resolve_mapping_spools(
-                                session, task
-                            )
-                            if len(mapping) == 1 and job.spool_id:
-                                # One slot means the spool recorded at start
-                                # is authoritative; a late finish may already
-                                # see a swapped tray.
-                                key = self._mapping_slot_key(mapping[0]) or (-1, 0)
-                                preferred = session.get(Spool, job.spool_id)
-                                if preferred:
-                                    resolved_spools = {key: preferred}
-                            if resolved_spools:
-                                job.deduction_spools = json.dumps(
-                                    {
-                                        f"{ams_id}:{slot_id}": str(spool.id)
-                                        for (ams_id, slot_id), spool in (
-                                            resolved_spools.items()
-                                        )
-                                    }
-                                )
-                    elif has_persisted and not resolved_spools:
-                        # The rolls recorded at finish were deleted; do not
-                        # fall back to whatever is loaded now.
-                        can_deduct = False
-                        logger.warning(
-                            "The spools recorded for task %s are gone; "
-                            "leaving the deduction unclaimed",
-                            cloud_task_id,
-                        )
 
-                    weighted = self._weighted_slot_keys(mapping or [])
-                    unresolved = not weighted <= set(resolved_spools)
-                    unknown = any(
-                        resolved_spools[key].remaining_unknown
-                        for key in weighted
-                        if key in resolved_spools
-                    )
-                    if unresolved or unknown:
-                        can_deduct = False
-                        logger.warning(
-                            "AMS slot(s) for task %s are unresolved or have "
-                            "unknown weight; leaving the deduction for a retry",
-                            cloud_task_id,
+                        weighted = self._weighted_slot_keys(mapping or [])
+                        unresolved = not weighted <= set(resolved_spools)
+                        unknown = any(
+                            resolved_spools[key].remaining_unknown
+                            for key in weighted
+                            if key in resolved_spools
                         )
+                        if unresolved or unknown:
+                            can_deduct = False
+                            logger.warning(
+                                "AMS slot(s) for task %s are unresolved or "
+                                "have unknown weight; leaving the deduction "
+                                "for a retry",
+                                cloud_task_id,
+                            )
 
                 usage: dict[str, dict[str, float | None]] = {}
                 if mapping:
@@ -1892,11 +1948,15 @@ class BambuClient:
                         resolved_spools or None,
                         job.spool_id,
                     )
+                    deducted = True
                 else:
                     logger.info(
                         "Skipped deduction for task %s: already claimed",
                         cloud_task_id,
                     )
+
+                if not deducted and preserved_finish_state:
+                    job.finish_state = preserved_finish_state
 
                 self._stale_job_counts.pop(cloud_task_id, None)
                 session.commit()

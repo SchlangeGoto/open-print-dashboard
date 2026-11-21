@@ -1,7 +1,7 @@
 """add filament default price
 
 Revision ID: t5a1c9e3b7d2
-Revises: o1f2a3b4c5d6
+Revises: s4e2b8f1c6a7
 """
 
 from collections.abc import Sequence
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "t5a1c9e3b7d2"
-down_revision: str | Sequence[str] | None = "o1f2a3b4c5d6"
+down_revision: str | Sequence[str] | None = "s4e2b8f1c6a7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

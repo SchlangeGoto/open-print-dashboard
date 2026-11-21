@@ -95,6 +95,25 @@ class UsersPublic(SQLModel):
     count: int
 
 
+class PushToken(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    token: str = Field(unique=True, index=True, max_length=255)
+    platform: str = Field(max_length=20)
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+
+
+class PushTokenPublic(SQLModel):
+    id: uuid.UUID
+    platform: str
+    created_at: datetime | None = None
+
+
+class PushTokenCreate(SQLModel):
+    token: str = Field(min_length=1, max_length=255)
+    platform: str = Field(default="unknown", max_length=20)
+
+
 class RefreshToken(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
@@ -393,6 +412,9 @@ class PrintJob(PrintJobBase, table=True):
     finish_requested_at: datetime | None = None
     finish_attempts: int = 0
     finish_state: str | None = Field(default=None, max_length=10)
+    # Set once when the terminal notification is claimed, so overlapping
+    # finish workers cannot send the same notification twice.
+    notified_at: datetime | None = None
     # JSON map of "ams:slot" -> spool UUID resolved at finish. A delayed
     # retry must charge those rolls, not whatever is loaded later.
     deduction_spools: str | None = None

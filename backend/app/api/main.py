@@ -6,6 +6,7 @@ from app.api.routes import (
     login,
     printers,
     prints,
+    push,
     setup,
     spools,
     users,
@@ -23,4 +24,5 @@ api_router.include_router(printers.router)
 api_router.include_router(prints.router)
 api_router.include_router(filaments.router)
 api_router.include_router(spools.router)
+api_router.include_router(push.router)
 api_router.include_router(settings_routes.router)

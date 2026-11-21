@@ -520,6 +520,23 @@ export class ApiClient {
     );
   }
 
+  registerPushToken(
+    token: string,
+    platform: string,
+  ): Promise<{ id: string; platform: string }> {
+    return this.request<{ id: string; platform: string }>("/push/register", {
+      method: "POST",
+      body: JSON.stringify({ token, platform }),
+    });
+  }
+
+  unregisterPushToken(token: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/push/${encodeURIComponent(token)}`,
+      { method: "DELETE" },
+    );
+  }
+
   getSpool(id: string): Promise<Spool> {
     return this.request<Spool>(`/spools/${id}`);
   }

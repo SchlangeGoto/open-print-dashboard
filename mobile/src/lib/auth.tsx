@@ -20,6 +20,7 @@ import {
   saveStoredSession,
   saveStoredTenantId,
 } from "./storage";
+import { registerPushToken, unregisterPushToken } from "./push";
 import type { TenantMembership, UserPublic } from "./types";
 
 export type AuthStatus =
@@ -151,6 +152,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [applyTenants]);
 
+  useEffect(() => {
+    if (status === "authenticated") {
+      void registerPushToken(apiClient);
+    }
+  }, [status]);
+
   const restore = useCallback(async () => {
     const epoch = ++restoreEpoch.current;
     try {
@@ -247,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     restoreEpoch.current += 1;
+    await unregisterPushToken(apiClient);
     try {
       await apiClient.logout();
     } finally {
@@ -274,6 +282,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // The token belongs to the old server; remove it before the URL changes.
+    await unregisterPushToken(apiClient);
     apiClient.invalidateSession();
     // Mutate the in-memory session synchronously before the first await, so
     // an in-flight refresh cannot persist the old server's session after the

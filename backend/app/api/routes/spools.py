@@ -1,3 +1,4 @@
+import threading
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -29,6 +30,7 @@ from app.services.bambu_catalog import (
     lookup_barcode,
     parse_bambu_sku,
 )
+from app.services.notifications import notify_spool_loaded
 
 router = APIRouter(
     prefix="/spools",
@@ -565,4 +567,14 @@ def activate_spool(
             detail="Another spool is already loaded in that printer",
         )
     session.refresh(spool)
+    filament = session.get(Filament, spool.filament_id) if spool.filament_id else None
+    threading.Thread(
+        target=notify_spool_loaded,
+        kwargs={
+            "filament": filament.color_name if filament else "Filament",
+            "printer": printer.name,
+            "spool_id": str(spool.id),
+        },
+        daemon=True,
+    ).start()
     return spool

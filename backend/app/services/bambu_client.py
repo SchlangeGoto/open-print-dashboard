@@ -22,6 +22,7 @@ from app.models import (
     Spool,
 )
 from app.services.bambu_catalog import BAMBU_COLOR_NAMES, catalog_series_for
+from app.services.notifications import notify_print_finished
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -1962,6 +1963,8 @@ class BambuClient:
 
                 self._stale_job_counts.pop(cloud_task_id, None)
                 session.commit()
+                if first_finish and job.status in (2, 3):
+                    notify_print_finished(title=job.title, failed=job.status == 3)
                 logger.info(
                     "PrintJob saved: %s — %sg used",
                     job.title,

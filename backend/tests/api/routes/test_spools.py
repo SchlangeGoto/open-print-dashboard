@@ -691,11 +691,18 @@ def test_saving_the_same_finish_twice_deducts_once(db: Session, monkeypatch) -> 
         "amsDetailMapping": [],
     }
     monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda task_id: task)
+    notified: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "app.services.bambu_client.notify_print_finished",
+        lambda **kwargs: notified.append(kwargs),
+    )
 
     client = BambuClient()
     client.serial = printer.serial
     client._save_print_job("task-deduct-1")
     client._save_print_job("task-deduct-1")
+
+    assert notified == [{"title": "Deduction test", "failed": True}]
 
     db.expire_all()
     stored = db.get(Spool, spool.id)

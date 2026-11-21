@@ -215,31 +215,31 @@ These open issues should be solved as part of the epic, not separately:
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| S-06 | `backend/app/api/routes/users.py` (`update_user`) | Deactivating a user does not revoke refresh tokens; re-activating resurrects every 30-day session. | Deferred to multi-tenancy (D-11): enforce at the membership level there. | Human #7 · 09 Nov 20:18 UTC |
-| S-07 | `frontend/lib/api.ts` | A transient 5xx/429 during the rotated-token retry clears both tabs. | Deferred to the auth overhaul. | Human #20 |
-| S-08 | `backend/app/api/routes/bambu.py`, `backend/app/services/printer_service.py` | Sign-out can be undone by a concurrent re-login. | Deferred to the auth overhaul. | Human #20 |
+| S-06 | `backend/app/api/routes/users.py` (`update_user`) | ~~Deactivating a user does not revoke refresh tokens.~~ | **Fixed #87:** deactivation revokes every session in the same transaction; re-activation cannot resurrect it. | Human #7 · 09 Nov 20:18 UTC |
+| S-07 | `frontend/lib/api.ts` | ~~A transient 5xx/429 during the rotated-token retry clears both tabs.~~ | **Fixed #87:** only 400/401/403 end the session. | Human #20 |
+| S-08 | `backend/app/api/routes/bambu.py`, `backend/app/services/printer_service.py` | ~~Sign-out can be undone by a concurrent re-login.~~ | **Fixed #87:** login, verification, re-auth and sign-out share a per-account lock. | Human #20 |
 
 ### 2.2 Printer and cloud backend
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
-| P-06 | `backend/app/services/bambu_client.py` | A slot that stays unresolved after `DEDUCTION_RETRY_HOURS` drops out of the retry query with no terminal log or marker. | Log the abandonment once per task (or add a terminal marker) in a follow-up. | Human #20 |
-| P-07 | `backend/app/services/bambu_client.py`, `printjob` data | Legacy finished jobs may have a terminal status with `finished_at` NULL, excluding them from `/prints/stats` and the deduction retry. The new code no longer creates this state, but old rows were not audited. | Audit real data; if present, backfill `finished_at` from `start_time`/`created_at` in a follow-up migration. | Human #20 |
-| P-08 | `backend/app/services/bambu_client.py` | If one recorded roll is deleted, the whole deduction is abandoned rather than charging the surviving rolls; partial charging needs per-slot claim tracking to avoid double-charging. | Add a per-slot claimed marker, or charge the resolvable slots and record the gap. | Human #20 |
-| P-09 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | `printer_id` is the single active/loaded association, so two untagged rolls in one printer cannot both resolve; the second slot is left unclaimed. | Add a separate loaded-printer/tray association instead of overloading `printer_id`. | Human #20 |
+| P-06 | `backend/app/services/bambu_client.py` | ~~An unresolved slot drops out after `DEDUCTION_RETRY_HOURS` with no marker.~~ | **Fixed #88/#95:** stale deductions are marked `ABANDONED` once and logged. | Human #20 |
+| P-07 | `backend/app/services/bambu_client.py`, `printjob` data | ~~Legacy terminal jobs may have `finished_at` NULL.~~ | **Fixed #88:** migration backfills it; #95 protects legacy rows from live-AMS resolution. | Human #20 |
+| P-08 | `backend/app/services/bambu_client.py` | If one recorded roll is deleted, the whole deduction is abandoned rather than charging the surviving rolls. | Deferred: safe partial charging needs a per-slot claim table/row lock. Current behavior under-counts stock but never charges the wrong roll. | Human #20 |
+| P-09 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | Two untagged rolls in one printer cannot both resolve, so the second slot is unclaimed. | Deferred: needs a separate printer/tray association instead of overloading `printer_id`. Workaround: use tagged AMS spools for multi-slot prints. | Human #20 |
 
 ### 2.3 Spools, barcodes and filaments
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| U-01 | `backend/app/models.py` (`PrintJob.filament_usage`) | Kept as a debug mirror for one release; `printjob_filament_usage` is authoritative and nothing reads the JSON. | Drop the column and its writes in the next release. | Human #20 |
+| U-01 | `backend/app/models.py` (`PrintJob.filament_usage`) | ~~Kept as a debug mirror for one release.~~ | **Done earlier:** migration `o1f2a3b4c5d6` dropped the column and its writes. | Human #20 |
 
 ### 2.4 Frontend
 
 | ID | Where | Issue | Fix | Found |
 | --- | --- | --- | --- | --- |
-| F-01 | `frontend/app/setup/page.tsx`, `frontend/app/dashboard/settings/page.tsx`, `frontend/lib/demo-api.ts` | Demo sign-out clears the stored settings, but `/setup` still redirects to the dashboard and `getCloudAccount`/`getPrinters` keep reporting a connected account and cloud printers. | Make the demo auth state consistent and decide whether the Bambu step is reachable; otherwise document the limitation. | Human #20 |
+| F-01 | `frontend/app/setup/page.tsx`, `frontend/app/dashboard/settings/page.tsx`, `frontend/lib/demo-api.ts` | ~~Demo sign-out leaves stale demo state.~~ | **Fixed #89:** exit clears demo edits and forces a full reload. | Human #20 |
 
 ### 2.5 Mobile
 
@@ -359,15 +359,11 @@ page scroll, no clipped actions, and at least one Playwright/mobile smoke test.
 **Goal:** a filament type carries its usual price per kilogram, so adding or
 scanning a spool does not require typing the price every time.
 
-- F-01: add `default_price_per_kg` to `Filament` (migration, create/update
-  forms, filament detail).
-- F-02: new and scanned spools inherit the filament default when
-  `price_per_kg` is omitted.
-- F-03: after a scan, show the inherited price in the confirm/edit step and let
-  the user override it for that spool.
-- F-04: mobile scan-confirm and spool detail expose the same field.
-- F-05: price edits only affect new spools; existing spools keep their recorded
-  purchase price.
+- F-01: **#90** — `default_price_per_kg` on `Filament`, migration and forms.
+- F-02: **#90** — new, scanned and AMS-created spools inherit it.
+- F-03: **#90** — scan stores the default; the spool can override it.
+- F-04: **#90** — mobile scan-confirm and spool detail expose the field.
+- F-05: **#90** — existing spools keep their recorded purchase price.
 
 **Acceptance:** scanning a known filament creates a spool with the default
 price, and the user can change that spool's price immediately without opening

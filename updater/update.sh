@@ -15,6 +15,7 @@ API_PREFIX="${API_V1_STR:-/api/v1}"
 HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000${API_PREFIX}/utils/health-check/}"
 FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
+READ_GID="${UPDATER_READ_GID:-1000}"
 ENV_FILE="$PROJECT_DIR/.env"
 ENV_BACKUP="$DATA_DIR/env.backup"
 JOURNAL_FILE="$DATA_DIR/journal"
@@ -40,9 +41,18 @@ write_status() {
     printf 'updated_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$tmp"
   # The backend runs as a non-root user and must be able to read this. Set the
-  # mode before the rename so readers never observe a 0600 file.
-  chmod 0644 "$tmp"
+  # owner group and mode before the rename so readers never observe an
+  # unreadable file.
+  publish_readable "$tmp"
   mv "$tmp" "$STATE_FILE"
+}
+
+publish_readable() {
+  if chgrp "$READ_GID" "$1" 2>/dev/null; then
+    chmod 0640 "$1"
+  else
+    chmod 0644 "$1"
+  fi
 }
 
 read_env() {
@@ -183,7 +193,8 @@ else
   write_status idle "" "Waiting for an update request"
 fi
 touch "$READY_FILE" "$HEARTBEAT_FILE"
-chmod 0644 "$READY_FILE" "$HEARTBEAT_FILE"
+publish_readable "$READY_FILE"
+publish_readable "$HEARTBEAT_FILE"
 [ -f "$JOURNAL_FILE" ] || rm -f "$ENV_BACKUP"
 while true; do
   touch "$HEARTBEAT_FILE"

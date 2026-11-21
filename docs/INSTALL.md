@@ -61,14 +61,32 @@ it restores the previous tag when the database revision did not move, and stops
 with the backup path when a migration already committed.
 
 The dump lives in the `updater_data` volume. Each attempt gets its own file, and
-the card shows the exact path. With the default project name:
+the card shows the exact path. With the default project name, restore into a
+fresh database so a failed migration cannot leave objects behind:
 
 ```bash
+# 1. Stop everything that writes to the database.
+docker compose -f compose.ghcr.yml stop backend updater
+
+# 2. Recreate an empty database.
+docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
+  -c 'DROP DATABASE IF EXISTS openprintdashboard'
+docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
+  -c 'CREATE DATABASE openprintdashboard TEMPLATE template0'
+
+# 3. Restore and stop on the first error.
 docker run --rm -v openprintdashboard_updater_data:/d alpine \
   sh -c 'gunzip -c /d/pre-update-X.Y.Z-*.sql.gz' > /tmp/opd-restore.sql
-docker compose -f compose.ghcr.yml exec -T db psql -U opd -d openprintdashboard < /tmp/opd-restore.sql
-# with an existing reverse proxy, add: -f compose.override.yml
+docker compose -f compose.ghcr.yml exec -T db psql -X -v ON_ERROR_STOP=1 \
+  -U opd -d openprintdashboard < /tmp/opd-restore.sql
+
+# 4. Set IMAGE_TAG and APP_VERSION in .env back to the previous release.
+docker compose -f compose.ghcr.yml up -d
 ```
+
+With an existing reverse proxy, add `-f compose.override.yml` to the Compose
+commands. The volume name follows the Compose project name; use
+`docker volume ls` if you changed it.
 
 The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;
 only the fixed updater image has it. The image accepts a single `X.Y.Z` tag and

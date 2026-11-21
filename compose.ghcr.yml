@@ -89,6 +89,7 @@ services:
       - API_V1_STR=${API_V1_STR:-/api/v1}
       - UPDATER_COMPOSE_TIMEOUT=${UPDATER_COMPOSE_TIMEOUT:-900}
       - UPDATER_HEALTH_ATTEMPTS=${UPDATER_HEALTH_ATTEMPTS:-60}
+      - UPDATER_READ_GID=${UPDATER_READ_GID:-1000}
     depends_on:
       - backend
     volumes:

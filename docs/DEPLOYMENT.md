@@ -369,6 +369,13 @@ print-failed and spool-loaded notifications through the Expo Push API.
 - The backend needs outbound HTTPS to `exp.host`. No server-side Expo token is
   required for the default public push service.
 - Tokens that Expo reports as `DeviceNotRegistered` are deleted automatically.
+- Android also needs Firebase: add the Firebase Android app for
+  `com.openprintdashboard.app`, download `google-services.json` into `mobile/`,
+  and point `expo.android.googleServicesFile` at it.
+- Upload an FCM V1 service account key to EAS (`eas credentials -p android`).
+  The Android signing keystore is not an FCM credential and cannot replace it.
+- iOS needs an APNs key uploaded to EAS. The signing certificate alone does not
+  enable remote push.
 - Re-test after changing the bundle id, package name or EAS project: the old
   tokens belong to the old app identity.
 

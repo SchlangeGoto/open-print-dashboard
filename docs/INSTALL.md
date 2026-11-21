@@ -65,25 +65,31 @@ the card shows the exact path. With the default project name, restore into a
 fresh database so a failed migration cannot leave objects behind:
 
 ```bash
-# 1. Stop everything that writes to the database.
-docker compose -f compose.ghcr.yml stop backend updater
+(
+  set -e
 
-# 2. Recreate an empty database.
-docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
-  -c 'DROP DATABASE IF EXISTS openprintdashboard'
-docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
-  -c 'CREATE DATABASE openprintdashboard TEMPLATE template0'
+  # 1. Verify and extract the exact dump shown in the update status.
+  BACKUP=pre-update-X.Y.Z-YYYYMMDDTHHMMSSZ-PID.sql.gz
+  docker run --rm -v openprintdashboard_updater_data:/d alpine \
+    sh -c "gunzip -t /d/$BACKUP"
+  docker run --rm -v openprintdashboard_updater_data:/d alpine \
+    sh -c "gunzip -c /d/$BACKUP" > /tmp/opd-restore.sql
 
-# 3. Verify and restore the exact dump shown in the update status.
-BACKUP=pre-update-X.Y.Z-YYYYMMDDTHHMMSSZ-PID.sql.gz
-docker run --rm -v openprintdashboard_updater_data:/d alpine \
-  sh -c "gunzip -t /d/$BACKUP"
-docker run --rm -v openprintdashboard_updater_data:/d alpine \
-  sh -c "gunzip -c /d/$BACKUP" > /tmp/opd-restore.sql
-docker compose -f compose.ghcr.yml exec -T db psql -X -v ON_ERROR_STOP=1 \
-  -U opd -d openprintdashboard < /tmp/opd-restore.sql
+  # 2. Stop everything that writes to the database.
+  docker compose -f compose.ghcr.yml stop backend updater
 
-# 4. Set IMAGE_TAG and APP_VERSION in .env back to the previous release.
+  # 3. Recreate an empty database.
+  docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
+    -c 'DROP DATABASE IF EXISTS openprintdashboard'
+  docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
+    -c 'CREATE DATABASE openprintdashboard TEMPLATE template0'
+
+  # 4. Restore and stop on the first error.
+  docker compose -f compose.ghcr.yml exec -T db psql -X -v ON_ERROR_STOP=1 \
+    -U opd -d openprintdashboard < /tmp/opd-restore.sql
+)
+
+# 5. Set IMAGE_TAG and APP_VERSION in .env back to the previous release.
 docker compose -f compose.ghcr.yml up -d
 ```
 

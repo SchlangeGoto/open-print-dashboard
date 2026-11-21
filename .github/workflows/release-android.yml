@@ -127,6 +127,22 @@ jobs:
       # The job has no checkout; gh needs the repository explicitly.
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: docs/release-notes
+          sparse-checkout-cone-mode: false
+
+      - name: Require concise release notes
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          test -f "docs/release-notes/${REF_NAME}.md" || {
+            echo "::error::Add docs/release-notes/${REF_NAME}.md before tagging."
+            exit 1
+          }
+
       - name: Download the APK artifact
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -140,5 +156,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes
+          if gh release view "$REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$REF_NAME" --notes-file "docs/release-notes/${REF_NAME}.md"
+          else
+            gh release create "$REF_NAME" --notes-file "docs/release-notes/${REF_NAME}.md"
+          fi
           gh release upload "$REF_NAME" artifacts/*.apk --clobber

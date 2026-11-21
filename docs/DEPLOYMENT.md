@@ -450,6 +450,8 @@ Set `expo.version` in `mobile/app.json` to the release version (for example
 numbers, not the user-facing version.
 
 ```bash
+# Add docs/release-notes/v0.2.0.md first; the tag workflow refuses to release
+# without it and uses it verbatim instead of the generated changelog.
 git tag v0.2.0
 git push origin v0.2.0
 ```

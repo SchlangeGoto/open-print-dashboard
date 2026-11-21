@@ -430,11 +430,15 @@ export default function SpoolDetailScreen() {
         transparent
         visible={priceOpen}
         animationType="fade"
-        onRequestClose={() => setPriceOpen(false)}
+        onRequestClose={() => {
+          if (!priceBusy) setPriceOpen(false);
+        }}
       >
         <Pressable
           style={styles.backdrop}
-          onPress={() => setPriceOpen(false)}
+          onPress={() => {
+            if (!priceBusy) setPriceOpen(false);
+          }}
         />
         <View style={styles.sheet}>
           <Card style={styles.sheetCard}>
@@ -456,6 +460,7 @@ export default function SpoolDetailScreen() {
                 title="Cancel"
                 variant="ghost"
                 size="sm"
+                disabled={priceBusy}
                 onPress={() => setPriceOpen(false)}
               />
               <AppButton

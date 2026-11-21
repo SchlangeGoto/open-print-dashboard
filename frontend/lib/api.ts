@@ -159,8 +159,21 @@ async function refreshAccessToken(force = false): Promise<string | null> {
             const retry = await exchange(latest);
             if (epoch !== tokenEpoch) return null;
             if (retry.ok) return await tokenFrom(retry);
+            if (
+              retry.status === 400 ||
+              retry.status === 401 ||
+              retry.status === 403
+            ) {
+              clearTokens();
+              notifySessionExpired();
+            }
+            // A 5xx/429 on the retry is transient. Keep the stored session
+            // so the next request can try again instead of signing out both
+            // tabs because one server response failed.
+            return null;
           } catch {
-            // Fall through to a local sign-out.
+            // Network failure on the retry: keep the session.
+            return null;
           }
         }
         clearTokens();

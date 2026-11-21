@@ -51,3 +51,16 @@ Before posting logs or screenshots, remove:
 This is a small, self-hosted project maintained on a best-effort basis. Reports
 will be acknowledged as soon as possible, and fixes will be released when they
 are ready.
+
+
+## Updater trust boundary
+
+The optional `updater` sidecar mounts `/var/run/docker.sock`, which is
+root-equivalent on the host. A dashboard superuser can queue only a validated
+release tag, and the sidecar runs a fixed Compose command, but the socket means
+a compromised sidecar image or host checkout is host-root. Disable the
+`updater` profile if that trade-off is not acceptable, and update manually.
+
+The status volume is root-owned. The backend can read status and heartbeat and
+write only inside the `request/` directory, so a compromised backend cannot
+rewrite `.env` or point the updater at another image registry.

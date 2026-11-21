@@ -12,12 +12,7 @@ export const metadata: Metadata = {
 };
 
 const commands = {
-  clone: `git clone https://github.com/SchlangeGoto/open-print-dashboard.git
-cd open-print-dashboard`,
-  env: `cp .env.example .env
-# set POSTGRES_PASSWORD; SECRET_KEY is generated on first start
-# set NEXT_PUBLIC_API_URL and FRONTEND_HOST for a non-localhost install`,
-  start: `docker compose -f compose.prod.yml up -d --build`,
+  install: `curl -fsSL https://raw.githubusercontent.com/SchlangeGoto/open-print-dashboard/main/install.sh | bash`,
 };
 
 const credentials = [
@@ -76,96 +71,47 @@ export default function InstallPage() {
 
       <div className="mt-12 grid gap-16 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-20">
         <div className="min-w-0">
-          <Step number="01" title="Clone the repository">
-            <p>The only requirement is Git and a terminal.</p>
+          <Step number="01" title="Run the installer">
+            <p>
+              The installer asks about your domain, whether you already have a
+              reverse proxy, and the first admin account. It downloads the
+              release Compose files and starts the published images. No clone
+              or build step is needed.
+            </p>
             <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--color-rule)] bg-[var(--color-code-bg)] px-4 py-2">
               <span className="text-sm text-[var(--color-muted)]">
                 Terminal
               </span>
-              <CopyButton value={commands.clone} />
+              <CopyButton value={commands.install} />
             </div>
             <pre className="code-block mt-2 p-4">
-              <code>{commands.clone}</code>
+              <code>{commands.install}</code>
             </pre>
           </Step>
 
-          <Step number="02" title="Create your environment file">
+          <Step number="02" title="Answer the installer">
             <p>
-              Copy the example file and set{" "}
-              <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
-                POSTGRES_PASSWORD
-              </code>
-              . A{" "}
-              <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
-                SECRET_KEY
-              </code>{" "}
-              is generated on first start and kept in the backend data volume,
-              or set one yourself with{" "}
-              <code className="rounded bg-[var(--color-surface-glass)] px-1.5 py-0.5 font-mono text-xs">
-                openssl rand -hex 32
-              </code>
-              .
+              Choose bundled Caddy for automatic TLS, or point the installer at
+              your existing reverse proxy. It prints the DNS record, port
+              forwarding and proxy routes for the choice you made, then waits
+              for the dashboard to become healthy.
             </p>
-            <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--color-rule)] bg-[var(--color-code-bg)] px-4 py-2">
-              <span className="text-sm text-[var(--color-muted)]">
-                Environment
-              </span>
-              <CopyButton value={commands.env} />
-            </div>
-            <pre className="code-block mt-2 p-4">
-              <code>{commands.env}</code>
-            </pre>
           </Step>
 
-          <Step number="03" title="Start the stack">
+          <Step number="03" title="Open the dashboard">
             <p>
-              Docker builds the frontend and backend and starts PostgreSQL.
-              Email is optional and configured separately in the environment
-              file.
+              Open the domain you entered. Sign in with the admin account the
+              installer created, connect your Bambu Lab account, and add the
+              printer.
             </p>
-            <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--color-rule)] bg-[var(--color-code-bg)] px-4 py-2">
-              <span className="text-sm text-[var(--color-muted)]">
-                Compose
-              </span>
-              <CopyButton value={commands.start} />
-            </div>
-            <pre className="code-block mt-2 p-4">
-              <code>{commands.start}</code>
-            </pre>
           </Step>
 
-          <Step number="04" title="Run the setup wizard">
+          <Step number="04" title="Connect Bambu Lab and add the printer">
             <p>
-              Open{" "}
-              <a
-                className="text-[var(--color-ink)] underline decoration-[var(--color-rule)] underline-offset-4 hover:decoration-[var(--color-rule-strong)]"
-                href="http://localhost:3000"
-              >
-                http://localhost:3000
-              </a>
-              . You will create the local admin account, connect your Bambu Lab
-              account, and add the printer.
+              Sign in with the admin account, connect the Bambu Lab account
+              used for printer and history sync, then pick the printer from the
+              list. Credentials are encrypted at rest.
             </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              {[
-                ["1", "Create account", "Your local admin. No external identity provider."],
-                ["2", "Connect Bambu Lab", "Used for account and history sync. Encrypted at rest."],
-                ["3", "Add printer", "Pick it from the list on your Bambu account."],
-              ].map(([number, title, body]) => (
-                <div
-                  key={number}
-                  className="rounded-lg border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-4"
-                >
-                  <span className="text-sm font-medium text-[var(--color-accent)]">
-                    {number}
-                  </span>
-                  <p className="mt-2 text-sm font-medium">{title}</p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
-                    {body}
-                  </p>
-                </div>
-              ))}
-            </div>
           </Step>
 
           <section className="border-t border-[var(--color-rule)] py-10">

@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "OpenPrintDashboard"
+    # Set by the released container. "dev" means a source checkout.
+    APP_VERSION: str = "dev"
+    # Host-mounted directory shared with the updater sidecar.
+    UPDATER_DIR: Path = Path("/app/updater")
+    UPDATE_REPO: str = "SchlangeGoto/open-print-dashboard"
+    UPDATE_GITHUB_TOKEN: str | None = None
     SECRET_KEY: str
     # Where an auto-generated key is persisted when none is configured.
     SECRET_KEY_FILE: Path = DEFAULT_SECRET_KEY_FILE

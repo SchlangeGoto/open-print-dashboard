@@ -58,6 +58,7 @@ jobs:
       - name: Validate GHCR compose
         env:
           POSTGRES_PASSWORD: ci-password
+          COMPOSE_PROFILES: updater
         run: docker compose -f compose.ghcr.yml config > /dev/null
 
       - name: Check pinned image tags

@@ -1,5 +1,5 @@
 # Production stack using published GHCR images.
-name: openprintdashboard
+name: ${COMPOSE_PROJECT_NAME:-openprintdashboard}
 #
 # The frontend image is built with NEXT_PUBLIC_API_URL="", so the browser calls
 # /api/v1 on the same origin and Caddy proxies it to the backend. No separate
@@ -60,16 +60,65 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - BAMBU_CLOUD_MQTT_HOST=${BAMBU_CLOUD_MQTT_HOST:-us.mqtt.bambulab.com}
       - BAMBU_CLOUD_MQTT_PORT=${BAMBU_CLOUD_MQTT_PORT:-8883}
+      - APP_VERSION=${APP_VERSION:-dev}
+      - UPDATE_GITHUB_TOKEN=${UPDATE_GITHUB_TOKEN:-}
+      - UPDATER_DIR=/app/updater
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000${API_V1_STR:-/api/v1}/utils/health-check/')\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     volumes:
       - backend_data:/app/data
+      - updater_status:/app/updater
+
+  updater:
+    # Optional sidecar. The guided installer enables the profile; manual
+    # deployments can omit it and update with the documented commands.
+    profiles: ["updater"]
+    image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/updater:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      - API_V1_STR=${API_V1_STR:-/api/v1}
+      - UPDATER_STATUS_DIR=/protocol
+      - UPDATER_PRIVATE_DIR=/private
+      - UPDATER_COMPOSE_TIMEOUT=${UPDATER_COMPOSE_TIMEOUT:-900}
+      - UPDATER_HEALTH_ATTEMPTS=${UPDATER_HEALTH_ATTEMPTS:-60}
+      - UPDATER_RECOVERY_ATTEMPTS=${UPDATER_RECOVERY_ATTEMPTS:-20}
+      - UPDATER_RECOVERY_ROUNDS=${UPDATER_RECOVERY_ROUNDS:-10}
+      - UPDATER_DB_ATTEMPTS=${UPDATER_DB_ATTEMPTS:-60}
+      - UPDATER_READ_GID=${UPDATER_READ_GID:-1000}
+    depends_on:
+      - backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/project
+      - updater_data:/data
+      - updater_status:/protocol
+      - updater_private:/private
 
   frontend:
     image: ${IMAGE_PREFIX:-ghcr.io/schlangegoto/open-print-dashboard}/frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - backend
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   caddy:
     image: caddy:2.11.9-alpine
@@ -90,5 +139,8 @@ services:
 volumes:
   postgres_data:
   backend_data:
+  updater_data:
+  updater_status:
+  updater_private:
   caddy_data:
   caddy_config:

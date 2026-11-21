@@ -76,6 +76,10 @@ jobs:
             context: site
             file: site/Dockerfile
             build_args: ""
+          - name: updater
+            context: .
+            file: updater/Dockerfile
+            build_args: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -194,7 +198,7 @@ jobs:
         if: steps.release_tag.outputs.eligible == 'true'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          for name in backend frontend demo site; do
+          for name in backend frontend demo site updater; do
             docker buildx imagetools create \
               -t "${IMAGE_PREFIX}/${name}:latest" \
               "${IMAGE_PREFIX}/${name}:${VERSION}"

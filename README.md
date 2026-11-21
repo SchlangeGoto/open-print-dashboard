@@ -84,6 +84,16 @@ say so plainly. Your dashboard data stays on your hardware.
 | Deploy | Docker · Docker Compose · GHCR |
 | Printer connection | Bambu Cloud account |
 
+## Install without cloning
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SchlangeGoto/open-print-dashboard/main/install.sh | bash
+```
+
+The installer uses the latest stable release images, asks whether you already
+have a reverse proxy, and prints the matching port-forwarding guide. See
+[`docs/INSTALL.md`](docs/INSTALL.md).
+
 ## Quick start
 
 You need Docker and Docker Compose, and a Bambu Lab account with your printer

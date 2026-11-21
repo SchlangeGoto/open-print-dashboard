@@ -252,12 +252,18 @@ export default function PrintsScreen() {
                 description={error}
                 action={<AppButton title="Try again" onPress={reload} />}
               />
-            ) : data?.activeFailed ? (
+            ) : data?.activeFailed && jobs.length === 0 ? (
               <EmptyState
                 icon="cloud-offline-outline"
                 title="Live jobs unavailable"
                 description="History is empty and the running-job request failed. Tap Try again."
                 action={<AppButton title="Try again" onPress={reload} />}
+              />
+            ) : data?.activeFailed ? (
+              <EmptyState
+                icon="cloud-offline-outline"
+                title="No matching jobs"
+                description="Live jobs are unavailable, so this filtered list may be incomplete."
               />
             ) : (
               <EmptyState

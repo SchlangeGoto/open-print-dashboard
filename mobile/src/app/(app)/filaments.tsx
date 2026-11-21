@@ -56,24 +56,28 @@ export default function FilamentsScreen() {
     if (!data) return [];
     const remaining = new Map<string, number>();
     const spoolCount = new Map<string, number>();
+    const incomplete = new Set<string>();
     for (const spool of data.spools) {
       if (!spool.filament_id) continue;
       spoolCount.set(
         spool.filament_id,
         (spoolCount.get(spool.filament_id) ?? 0) + 1,
       );
-      if (!spool.remaining_unknown) {
-        remaining.set(
-          spool.filament_id,
-          (remaining.get(spool.filament_id) ?? 0) + spool.remaining_g,
-        );
+      if (spool.remaining_unknown) {
+        incomplete.add(spool.filament_id);
+        continue;
       }
+      remaining.set(
+        spool.filament_id,
+        (remaining.get(spool.filament_id) ?? 0) + spool.remaining_g,
+      );
     }
     const needle = query.trim().toLowerCase();
     return data.filaments
       .map((filament) => ({
         filament,
         remaining: remaining.get(filament.id) ?? null,
+        incomplete: incomplete.has(filament.id),
         spools: spoolCount.get(filament.id) ?? 0,
       }))
       .filter((row) => {
@@ -99,7 +103,8 @@ export default function FilamentsScreen() {
       count: data?.filaments.length ?? 0,
       remaining: rows.reduce((sum, row) => sum + (row.remaining ?? 0), 0),
       low: rows.filter(
-        (row) => row.remaining != null && row.remaining < 250,
+        (row) =>
+          row.remaining != null && !row.incomplete && row.remaining < 250,
       ).length,
     }),
     [data, rows],
@@ -223,10 +228,16 @@ export default function FilamentsScreen() {
               </View>
               <View style={styles.value}>
                 <AppText variant="heading">
-                  {item.remaining == null ? "—" : formatWeight(item.remaining)}
+                  {item.remaining == null
+                    ? "—"
+                    : `${item.incomplete ? "≥" : ""}${formatWeight(item.remaining)}`}
                 </AppText>
                 <AppText variant="micro" muted>
-                  {item.remaining == null ? "not set" : "left"}
+                  {item.remaining == null
+                    ? "not set"
+                    : item.incomplete
+                      ? "partial"
+                      : "left"}
                 </AppText>
               </View>
               <Ionicons

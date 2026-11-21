@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 import requests
-from sqlmodel import Session, select
+from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
 from app.models import PushToken
@@ -49,9 +49,26 @@ def send_push_to_all(
                 EXPO_PUSH_URL, json=messages, timeout=TIMEOUT_SECONDS
             )
             response.raise_for_status()
-            sent += len(chunk)
-        except requests.RequestException as exc:
+            tickets = response.json().get("data") or []
+        except (requests.RequestException, ValueError) as exc:
             logger.warning("Could not send %s push messages: %s", len(chunk), exc)
+            continue
+
+        dead: list[str] = []
+        for token, ticket in zip(chunk, tickets):
+            if ticket.get("status") == "ok":
+                sent += 1
+                continue
+            details = ticket.get("details") or {}
+            logger.warning(
+                "Expo rejected a push message: %s", details.get("error", ticket)
+            )
+            if details.get("error") == "DeviceNotRegistered":
+                dead.append(token)
+        if dead:
+            with Session(engine) as session:
+                session.execute(delete(PushToken).where(col(PushToken.token).in_(dead)))
+                session.commit()
     return sent
 
 

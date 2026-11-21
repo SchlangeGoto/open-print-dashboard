@@ -6,6 +6,9 @@ import { Platform } from "react-native";
 import type { ApiClient } from "./api";
 
 let currentToken: string | null = null;
+// Bumped on logout and server switch. A registration that finishes under an
+// older generation removes itself instead of reviving the session.
+let generation = 0;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -24,6 +27,7 @@ Notifications.setNotificationHandler({
  */
 export async function registerPushToken(api: ApiClient): Promise<void> {
   if (currentToken || Platform.OS === "web") return;
+  const attempt = generation;
   try {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
@@ -45,7 +49,15 @@ export async function registerPushToken(api: ApiClient): Promise<void> {
     const token = (
       await Notifications.getExpoPushTokenAsync({ projectId })
     ).data;
+    if (attempt !== generation) {
+      await api.unregisterPushToken(token).catch(() => undefined);
+      return;
+    }
     await api.registerPushToken(token, Platform.OS);
+    if (attempt !== generation) {
+      await api.unregisterPushToken(token).catch(() => undefined);
+      return;
+    }
     currentToken = token;
   } catch {
     // No notification permission, no EAS project, or Expo Go: stay quiet.
@@ -53,6 +65,7 @@ export async function registerPushToken(api: ApiClient): Promise<void> {
 }
 
 export async function unregisterPushToken(api: ApiClient): Promise<void> {
+  generation += 1;
   const token = currentToken;
   currentToken = null;
   if (!token) return;

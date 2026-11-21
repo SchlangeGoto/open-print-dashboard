@@ -17,6 +17,8 @@ def register_push_token(
     if platform not in ("ios", "android", "unknown"):
         raise HTTPException(status_code=422, detail="Unsupported platform")
     token = payload.token.strip()
+    if not token:
+        raise HTTPException(status_code=422, detail="Push token is required")
     existing = session.exec(select(PushToken).where(PushToken.token == token)).first()
     if existing:
         existing.user_id = current_user.id

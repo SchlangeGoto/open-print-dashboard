@@ -78,6 +78,17 @@ def test_send_push_batches_tokens(db: Session, monkeypatch) -> None:
         def raise_for_status(self) -> None:
             return None
 
+        def json(self):
+            return {
+                "data": [
+                    {"status": "ok"},
+                    {
+                        "status": "error",
+                        "details": {"error": "DeviceNotRegistered"},
+                    },
+                ]
+            }
+
     def fake_post(url, json, timeout):
         calls.append((url, json, timeout))
         return Response()
@@ -85,9 +96,13 @@ def test_send_push_batches_tokens(db: Session, monkeypatch) -> None:
     monkeypatch.setattr("app.services.notifications.requests.post", fake_post)
 
     sent = send_push_to_all(title="Print finished", body="Benchy")
-    assert sent == 2
+    assert sent == 1
     assert len(calls) == 1
     assert [message["to"] for message in calls[0][1]] == [
         "ExponentPushToken[one]",
         "ExponentPushToken[two]",
+    ]
+    db.expire_all()
+    assert [row.token for row in db.exec(select(PushToken)).all()] == [
+        "ExponentPushToken[one]"
     ]

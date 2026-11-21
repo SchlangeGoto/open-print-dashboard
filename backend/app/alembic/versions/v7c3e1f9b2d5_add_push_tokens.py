@@ -29,9 +29,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_pushtoken_user_id", "pushtoken", ["user_id"])
     op.create_index("ix_pushtoken_token", "pushtoken", ["token"], unique=True)
+    op.add_column("printjob", sa.Column("notified_at", UTCDateTime(), nullable=True))
 
 
 def downgrade() -> None:
+    op.drop_column("printjob", "notified_at")
     op.drop_index("ix_pushtoken_token", table_name="pushtoken")
     op.drop_index("ix_pushtoken_user_id", table_name="pushtoken")
     op.drop_table("pushtoken")

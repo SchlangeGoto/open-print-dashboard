@@ -412,6 +412,9 @@ class PrintJob(PrintJobBase, table=True):
     finish_requested_at: datetime | None = None
     finish_attempts: int = 0
     finish_state: str | None = Field(default=None, max_length=10)
+    # Set once when the terminal notification is claimed, so overlapping
+    # finish workers cannot send the same notification twice.
+    notified_at: datetime | None = None
     # JSON map of "ams:slot" -> spool UUID resolved at finish. A delayed
     # retry must charge those rolls, not whatever is loaded later.
     deduction_spools: str | None = None

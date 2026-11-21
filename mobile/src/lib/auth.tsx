@@ -282,6 +282,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // The token belongs to the old server; remove it before the URL changes.
+    await unregisterPushToken(apiClient);
     apiClient.invalidateSession();
     // Mutate the in-memory session synchronously before the first await, so
     // an in-flight refresh cannot persist the old server's session after the

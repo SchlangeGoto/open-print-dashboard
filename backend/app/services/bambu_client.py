@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, or_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, desc, select
 
-from app.core.commands import GET_VERSION, PUSH_ALL, START_PUSH
+from app.core.commands import GET_VERSION, PAUSE, PUSH_ALL, RESUME, START_PUSH, STOP
 from app.core.db import engine
 from app.models import (
     Filament,
@@ -2226,6 +2226,15 @@ class BambuClient:
         elif event == "client.disconnected":
             logger.info("Printer went offline")
             self._connected = False
+
+    def pause_print(self) -> bool:
+        return self._publish(PAUSE)
+
+    def resume_print(self) -> bool:
+        return self._publish(RESUME)
+
+    def stop_print(self) -> bool:
+        return self._publish(STOP)
 
     def _publish(self, payload: dict) -> bool:
         if not self.client:

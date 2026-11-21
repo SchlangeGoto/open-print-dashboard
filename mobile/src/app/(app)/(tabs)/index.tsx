@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,7 +23,7 @@ import { ShelfRule } from "@/components/ui/shelf-rule";
 import { StatReadout } from "@/components/ui/stat-readout";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useAuth } from "@/lib/auth";
-import { formatDate, formatWeight } from "@/lib/format";
+import { formatDate, formatError, formatWeight } from "@/lib/format";
 import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
 import type {
@@ -83,6 +84,52 @@ export default function DashboardScreen() {
 
   const { data, loading, refreshing, error, reload, refresh } =
     useAsyncData(loader);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [controlError, setControlError] = useState<string | null>(null);
+
+  async function runControl(
+    job: PrintJob,
+    action: "pause" | "resume" | "stop",
+  ) {
+    const printer = data?.printers.find(
+      (item) => item.serial === job.device_id,
+    );
+    if (!printer?.id) {
+      setControlError("Add this printer to the dashboard before controlling it.");
+      return;
+    }
+    setBusyAction(`${job.id}:${action}`);
+    setControlError(null);
+    try {
+      await api.controlPrint(printer.id, action);
+      await reload();
+    } catch (err) {
+      setControlError(formatError(err));
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  function confirmControl(job: PrintJob, action: "pause" | "resume" | "stop") {
+    const isStop = action === "stop";
+    const isPause = action === "pause";
+    Alert.alert(
+      isStop ? "Cancel this print?" : isPause ? "Pause this print?" : "Resume print?",
+      isStop
+        ? "The printer stops immediately and the print cannot be resumed from here."
+        : isPause
+          ? "The nozzle stays hot and the print can be resumed."
+          : "The printer continues from where it paused.",
+      [
+        { text: "Keep printing", style: "cancel" },
+        {
+          text: isStop ? "Cancel print" : isPause ? "Pause" : "Resume",
+          style: isStop ? "destructive" : "default",
+          onPress: () => void runControl(job, action),
+        },
+      ],
+    );
+  }
 
   const summary = useMemo(() => {
     const spools = data?.spools ?? [];
@@ -272,6 +319,8 @@ export default function DashboardScreen() {
                 const printer = data.printers.find(
                   (item) => item.serial === job.device_id,
                 );
+                const paused = printer?.status?.gcode_state === "PAUSE";
+                const busy = busyAction?.startsWith(`${job.id}:`) ?? false;
                 return (
                   <View key={job.id} style={styles.job}>
                     <View style={styles.jobTop}>
@@ -293,6 +342,28 @@ export default function DashboardScreen() {
                         {formatWeight(job.weight)}
                       </AppText>
                     </View>
+                    <View style={styles.jobActions}>
+                      <AppButton
+                        title={paused ? "Resume" : "Pause"}
+                        variant="secondary"
+                        size="sm"
+                        disabled={busy || !printer?.online}
+                        loading={busyAction === `${job.id}:${paused ? "resume" : "pause"}`}
+                        onPress={() =>
+                          confirmControl(job, paused ? "resume" : "pause")
+                        }
+                        style={styles.jobAction}
+                      />
+                      <AppButton
+                        title="Cancel"
+                        variant="danger"
+                        size="sm"
+                        disabled={busy || !printer?.online}
+                        loading={busyAction === `${job.id}:stop`}
+                        onPress={() => confirmControl(job, "stop")}
+                        style={styles.jobAction}
+                      />
+                    </View>
                   </View>
                 );
               })}
@@ -302,6 +373,11 @@ export default function DashboardScreen() {
               Nothing is printing right now.
             </AppText>
           )}
+          {controlError ? (
+            <AppText variant="caption" color={theme.colors.danger}>
+              {controlError}
+            </AppText>
+          ) : null}
         </Card>
 
         <View style={styles.section}>
@@ -488,6 +564,14 @@ const styles = StyleSheet.create({
   jobMeta: {
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  jobActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  jobAction: {
+    flex: 1,
   },
   listCard: {
     paddingVertical: spacing.xs,

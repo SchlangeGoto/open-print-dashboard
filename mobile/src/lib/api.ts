@@ -509,6 +509,16 @@ export class ApiClient {
     return this.request<Printer[]>("/printers/");
   }
 
+  controlPrint(
+    printerId: string,
+    action: "pause" | "resume" | "stop",
+  ): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/printers/${printerId}/print/${action}`,
+      { method: "POST" },
+    );
+  }
+
   getSpool(id: string): Promise<Spool> {
     return this.request<Spool>(`/spools/${id}`);
   }

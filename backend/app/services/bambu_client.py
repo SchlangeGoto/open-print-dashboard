@@ -706,11 +706,10 @@ class BambuClient:
                 ).first()
                 if not job or job.status == 4 or job.filament_deducted_at is not None:
                     return
-                if (
-                    job.finish_state in ("LEGACY", "ABANDONED")
-                    and not job.deduction_spools
-                    and job.spool_id is None
-                ):
+                if job.finish_state in (
+                    "LEGACY",
+                    "ABANDONED",
+                ) and not self._has_reliable_identity(job):
                     # No roll identity was recorded for this finish. The
                     # trays loaded now may be different rolls, so never
                     # resolve the historical slots against them.
@@ -1772,8 +1771,7 @@ class BambuClient:
                 # real new run clears it through _clear_finish_request.
                 identity_unknown = (
                     preserved_finish_state is not None
-                    and not job.deduction_spools
-                    and job.spool_id is None
+                    and not self._has_reliable_identity(job)
                 )
                 job.finish_state = None
                 deducted = job.filament_deducted_at is not None
@@ -2147,6 +2145,22 @@ class BambuClient:
             used_spool_ids.add(spool.id)
             resolved[resolved_key] = spool
         return resolved
+
+    def _has_reliable_identity(self, job: PrintJob) -> bool:
+        """True when the finish recorded enough to charge the right rolls.
+
+        A start spool only identifies the roll for an unmapped or single-slot
+        print. A multi-slot mapping needs the per-slot map saved at finish.
+        """
+        if job.deduction_spools:
+            return True
+        if job.spool_id is None:
+            return False
+        try:
+            mapping = json.loads(job.ams_detail_mapping or "[]")
+        except json.JSONDecodeError:
+            return False
+        return isinstance(mapping, list) and len(mapping) <= 1
 
     def _recorded_slot_keys(self, job: PrintJob) -> set[tuple[int, int]]:
         """Return the slot keys persisted at finish, even if the spools are gone."""

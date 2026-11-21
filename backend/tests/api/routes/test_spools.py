@@ -4484,6 +4484,98 @@ def test_legacy_job_without_recorded_rolls_is_not_deducted(
     assert db.get(Spool, replacement_b.id).remaining_g == 1000  # type: ignore[union-attr]
 
 
+def test_multi_slot_job_with_only_a_start_spool_is_not_deducted(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Start spool only",
+        color_hex="#334455",
+        bambu_info_idx="GFL99",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    start = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="START-A",
+    )
+    other = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="START-B",
+    )
+    db.add(start)
+    db.add(other)
+    db.commit()
+    db.refresh(start)
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+    ]
+    job = PrintJob(
+        title="Multi slot start only",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="multi-slot-start-only",
+        finished_at=datetime.now(UTC),
+        ams_detail_mapping=json.dumps(mapping),
+        spool_id=start.id,
+        finish_state="LEGACY",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = {
+        "id": "multi-slot-start-only",
+        "title": "Multi slot start only",
+        "status": 2,
+        "weight": 150,
+        "amsDetailMapping": mapping,
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "START-A"},
+                        {"id": 1, "tag_uid": "START-B"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._deduct_persisted_job(
+        "multi-slot-start-only", {"id": "multi-slot-start-only", "status": 2}
+    )
+    client._save_print_job("multi-slot-start-only", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+    assert stored.finish_state == "LEGACY"
+    assert db.get(Spool, start.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, other.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
 def test_abandoned_marker_survives_a_late_finish(db: Session, monkeypatch) -> None:
     from app.services.bambu_client import BambuClient
     from app.services.printer_service import printer_service

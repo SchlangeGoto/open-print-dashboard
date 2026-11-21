@@ -1,6 +1,7 @@
 import uuid
 from typing import Any
 
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
@@ -18,6 +19,7 @@ from app.models import (
     PrinterCreate,
     PrinterUpdate,
     PrintJobFilamentUsage,
+    PushToken,
     RefreshToken,
     Spool,
     User,
@@ -41,6 +43,8 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
 
 
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
+    # Lock the user before touching tokens, matching the refresh path.
+    session.exec(select(User).where(User.id == db_user.id).with_for_update()).one()
     user_data = user_in.model_dump(exclude_unset=True)
     password_changed = "password" in user_data
     deactivated = user_data.get("is_active") is False and db_user.is_active
@@ -59,6 +63,11 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
         # Do it in the same transaction so a failure cannot leave the password
         # changed with live refresh tokens.
         revoke_user_refresh_tokens(session=session, user_id=db_user.id)
+        if deactivated:
+            # Do not keep sending print titles to a disabled account.
+            session.execute(
+                delete(PushToken).where(col(PushToken.user_id) == db_user.id)
+            )
     session.commit()
     session.refresh(db_user)
     return db_user
@@ -104,6 +113,9 @@ def revoke_user_refresh_tokens(*, session: Session, user_id: uuid.UUID) -> None:
         # Access tokens issued before this instant stop working too.
         user.sessions_revoked_at = now
         session.add(user)
+        # Flush the user update while its row is locked, before enumerating
+        # tokens. Do not rely on autoflush for the lock order.
+        session.flush()
     tokens = session.exec(
         select(RefreshToken).where(
             RefreshToken.user_id == user_id,

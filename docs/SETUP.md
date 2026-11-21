@@ -4,7 +4,8 @@
 
 - [uv](https://docs.astral.sh/uv/) for the Python backend
 - [Node.js](https://nodejs.org/) (22+) and npm for the Next.js frontend
-- [Docker](https://www.docker.com/) and Docker Compose (for PostgreSQL and Mailpit)
+- [Docker](https://www.docker.com/) and Docker Compose (for PostgreSQL 16+ and Mailpit).
+  The legacy-deduction migration uses `pg_input_is_valid`, which needs PostgreSQL 16.
 
 ## The `.env` File
 

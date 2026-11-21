@@ -3101,7 +3101,7 @@ def test_persist_filament_usage_upserts_the_same_filament(db: Session) -> None:
     assert [row.filament_id for row in rows] == [other.id]
 
 
-def test_partial_mapping_is_retried_instead_of_claimed(
+def test_partial_mapping_is_not_charged_to_a_later_tray(
     db: Session, monkeypatch
 ) -> None:
     from app.services.bambu_client import BambuClient
@@ -3177,7 +3177,8 @@ def test_partial_mapping_is_retried_instead_of_claimed(
     assert stored_job.filament_deducted_at is None
     assert db.get(Spool, roll_a.id).remaining_g == 1000  # type: ignore[union-attr]
 
-    # The missing slot becomes resolvable; the retry must deduct both.
+    # The missing slot becomes resolvable later. A deferred retry must not
+    # use the newly loaded tray: that roll did not print.
     filament_b = Filament(
         brand="Test",
         material="PLA",
@@ -3212,18 +3213,19 @@ def test_partial_mapping_is_retried_instead_of_claimed(
             ]
         }
     }
-    # The cloud task has caught up with no mapping; the stored mapping
-    # and the newly resolvable tray must still be used.
+    # The cloud task has caught up. The slot was never recorded, so the
+    # retry leaves the job for the abandonment window instead of charging
+    # the roll that was loaded later.
     client._deduct_persisted_job(
         "task-partial", {"id": "task-partial", "status": 2, "amsDetailMapping": []}
     )
 
     db.expire_all()
-    assert db.get(Spool, roll_a.id).remaining_g == 940  # type: ignore[union-attr]
-    assert db.get(Spool, roll_b.id).remaining_g == 960  # type: ignore[union-attr]
+    assert db.get(Spool, roll_a.id).remaining_g == 1000  # type: ignore[union-attr]
+    assert db.get(Spool, roll_b.id).remaining_g == 1000  # type: ignore[union-attr]
     stored_job = db.get(PrintJob, job.id)
     assert stored_job is not None
-    assert stored_job.filament_deducted_at is not None
+    assert stored_job.filament_deducted_at is None
 
 
 def test_finish_uses_the_ams_synced_remaining_weight(db: Session, monkeypatch) -> None:
@@ -4581,6 +4583,166 @@ def test_multi_slot_job_with_only_a_start_spool_is_not_deducted(
     assert stored.finish_state == "LEGACY"
     assert db.get(Spool, start.id).remaining_g == 1000  # type: ignore[union-attr]
     assert db.get(Spool, other.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
+def test_legacy_multi_slot_job_without_a_mapping_is_not_deducted(
+    db: Session, monkeypatch
+) -> None:
+    from app.services.bambu_client import BambuClient
+    from app.services.printer_service import printer_service
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Legacy mapping-less",
+        color_hex="#556677",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    start = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="LEGACY-NOMAP-A",
+    )
+    db.add(start)
+    db.commit()
+    db.refresh(start)
+
+    stored_mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+    ]
+    job = PrintJob(
+        title="Legacy mapping-less finish",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="legacy-mapping-less",
+        finished_at=datetime.now(UTC),
+        ams_detail_mapping=json.dumps(stored_mapping),
+        spool_id=start.id,
+        finish_state="LEGACY",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # The cloud finish report lost its mapping. The stored row still says
+    # two slots, so the start spool must not pay for the whole print.
+    task = {
+        "id": "legacy-mapping-less",
+        "title": "Legacy mapping-less finish",
+        "status": 2,
+        "weight": 150,
+        "amsDetailMapping": [],
+    }
+    monkeypatch.setattr(printer_service.cloud_client, "get_task", lambda _: task)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._save_print_job("legacy-mapping-less", "FINISH")
+    # A repeated finish payload is equally unusable and must stay that way.
+    client._save_print_job("legacy-mapping-less", "FINISH")
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is None
+    assert stored.finish_state == "LEGACY"
+    assert db.get(Spool, start.id).remaining_g == 1000  # type: ignore[union-attr]
+
+
+def test_deleted_roll_charges_the_surviving_recorded_roll(
+    db: Session,
+) -> None:
+    from app.services.bambu_client import BambuClient
+
+    printer = _create_printer(db)
+    filament = Filament(
+        brand="Test",
+        material="PLA",
+        color_name="Surviving slot",
+        color_hex="#667788",
+    )
+    db.add(filament)
+    db.commit()
+    db.refresh(filament)
+    surviving = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="SURVIVING",
+    )
+    deleted = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="DELETED",
+    )
+    replacement = Spool(
+        filament_id=filament.id,
+        printer_id=printer.id,
+        total_weight_g=1000,
+        remaining_g=1000,
+        tag_uid="REPLACEMENT",
+    )
+    db.add(surviving)
+    db.add(deleted)
+    db.add(replacement)
+    db.commit()
+    db.refresh(surviving)
+    db.refresh(deleted)
+
+    mapping = [
+        {"ams": 0, "slot": 0, "filamentId": "GFL99", "weight": 100},
+        {"ams": 0, "slot": 1, "filamentId": "GFL99", "weight": 50},
+    ]
+    job = PrintJob(
+        title="Partial deleted roll",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="partial-deleted",
+        finished_at=datetime.now(UTC),
+        ams_detail_mapping=json.dumps(mapping),
+        deduction_spools=json.dumps({"0:0": str(surviving.id), "0:1": str(deleted.id)}),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    db.delete(deleted)
+    db.commit()
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._current_status = {
+        "ams": {
+            "ams": [
+                {
+                    "id": 0,
+                    "tray": [
+                        {"id": 0, "tag_uid": "SURVIVING"},
+                        {"id": 1, "tag_uid": "REPLACEMENT"},
+                    ],
+                }
+            ]
+        }
+    }
+    client._deduct_persisted_job(
+        "partial-deleted",
+        {"id": "partial-deleted", "status": 2},
+    )
+
+    db.expire_all()
+    assert db.get(Spool, surviving.id).remaining_g == 900  # type: ignore[union-attr]
+    assert db.get(Spool, replacement.id).remaining_g == 1000  # type: ignore[union-attr]
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.filament_deducted_at is not None
 
 
 def test_abandoned_marker_survives_a_late_finish(db: Session, monkeypatch) -> None:

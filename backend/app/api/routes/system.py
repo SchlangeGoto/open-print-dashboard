@@ -1,5 +1,7 @@
 import logging
+import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -20,7 +22,7 @@ router = APIRouter(
 )
 
 _TAG_RE = re.compile(r"^\d+\.\d+\.\d+$")
-_latest_cache: tuple[float, str | None, str | None] = (0.0, None, None)
+_latest_cache: tuple[float | None, str | None, str | None] = (None, None, None)
 _LATEST_TTL_SECONDS = 300
 
 
@@ -49,7 +51,7 @@ def _latest_release() -> tuple[str | None, str | None]:
     global _latest_cache
     now = time.monotonic()
     cached_at, tag, url = _latest_cache
-    if now - cached_at < _LATEST_TTL_SECONDS:
+    if cached_at is not None and now - cached_at < _LATEST_TTL_SECONDS:
         return tag, url
 
     headers = {
@@ -68,6 +70,8 @@ def _latest_release() -> tuple[str | None, str | None]:
         data = response.json()
         tag = str(data.get("tag_name") or "").lstrip("v") or None
         url = data.get("html_url")
+        if not isinstance(url, str) or not url.startswith("https://github.com/"):
+            url = None
         if tag and not _TAG_RE.fullmatch(tag):
             tag = None
     except (requests.RequestException, ValueError) as exc:
@@ -81,15 +85,18 @@ def _read_updater_status() -> dict[str, str]:
     directory = Path(settings.UPDATER_DIR)
     if not (directory / "ready").exists():
         return {}
-    status: dict[str, str] = {}
+    heartbeat = directory / "heartbeat"
     try:
+        if time.time() - heartbeat.stat().st_mtime > 60:
+            return {}
+        status: dict[str, str] = {}
         for line in (directory / "status").read_text().splitlines():
             key, _, value = line.partition("=")
             if key:
                 status[key] = value
+        return status
     except OSError:
-        return {"state": "idle"}
-    return status
+        return {}
 
 
 @router.get("/update", response_model=UpdateStatus)
@@ -125,15 +132,26 @@ def request_update(payload: UpdateRequest) -> Any:
             status_code=503,
             detail="The updater sidecar is not installed for this deployment",
         )
+    current_version = _version_tuple(settings.APP_VERSION)
+    requested_version = _version_tuple(tag)
+    if current_version is not None and requested_version is not None:
+        if requested_version < current_version:
+            raise HTTPException(
+                status_code=409,
+                detail="Downgrades are not supported from the dashboard",
+            )
     request_file = directory / "request"
     if request_file.exists() or (directory / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")
-    tmp = directory / f".request.{tag}"
+    tmp_path: str | None = None
     try:
-        tmp.write_text(tag + "\n")
-        tmp.replace(request_file)
+        fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".request.")
+        with os.fdopen(fd, "w") as tmp:
+            tmp.write(tag + "\n")
+        Path(tmp_path).replace(request_file)
     except OSError as exc:
-        tmp.unlink(missing_ok=True)
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
         raise HTTPException(
             status_code=503, detail="Could not queue the update"
         ) from exc

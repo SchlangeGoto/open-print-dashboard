@@ -1,20 +1,25 @@
 #!/bin/sh
 # Watches /data/request for a release tag and updates only the backend and
-# frontend images. The database and named volumes are never touched.
+# frontend images. The database and named volumes are never recreated.
 set -eu
+umask 077
 
 DATA_DIR="${UPDATER_DATA_DIR:-/data}"
 PROJECT_DIR="${UPDATER_PROJECT_DIR:-/project}"
 STATE_FILE="$DATA_DIR/status"
 READY_FILE="$DATA_DIR/ready"
+HEARTBEAT_FILE="$DATA_DIR/heartbeat"
 REQUEST_FILE="$DATA_DIR/request"
 LOCK_DIR="$DATA_DIR/lock"
 HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000/api/v1/utils/health-check/}"
+FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
+ENV_FILE="$PROJECT_DIR/.env"
+ENV_BACKUP="/tmp/opd-env.backup"
 
 mkdir -p "$DATA_DIR"
-touch "$READY_FILE"
-rm -rf "$LOCK_DIR"
+touch "$READY_FILE" "$HEARTBEAT_FILE"
+rm -rf "$LOCK_DIR" "$ENV_BACKUP"
 
 write_status() {
   state="$1"
@@ -30,21 +35,27 @@ write_status() {
   mv "$tmp" "$STATE_FILE"
 }
 
+read_env() {
+  sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | head -n1 | sed "s/^'//;s/'$//"
+}
+
 compose() {
-  if grep -q '^OPD_PROXY_MODE=existing' "$PROJECT_DIR/.env" 2>/dev/null; then
-    docker compose --env-file "$PROJECT_DIR/.env" \
+  if [ -f "$PROJECT_DIR/compose.override.yml" ]; then
+    docker compose --env-file "$ENV_FILE" \
       -f "$PROJECT_DIR/compose.ghcr.yml" \
       -f "$PROJECT_DIR/compose.override.yml" "$@"
   else
-    docker compose --env-file "$PROJECT_DIR/.env" \
+    docker compose --env-file "$ENV_FILE" \
       -f "$PROJECT_DIR/compose.ghcr.yml" "$@"
   fi
 }
 
-wait_for_backend() {
+wait_for_url() {
+  url="$1"
+  attempts="$2"
   attempt=0
-  while [ "$attempt" -lt "$HEALTH_ATTEMPTS" ]; do
-    if wget -q -O /dev/null "$HEALTH_URL" 2>/dev/null; then
+  while [ "$attempt" -lt "$attempts" ]; do
+    if wget -T 5 -q -O /dev/null "$url" 2>/dev/null; then
       return 0
     fi
     attempt=$((attempt + 1))
@@ -53,8 +64,33 @@ wait_for_backend() {
   return 1
 }
 
+db_revision() {
+  user=$(read_env POSTGRES_USER)
+  database=$(read_env POSTGRES_DB)
+  user=${user:-opd}
+  database=${database:-openprintdashboard}
+  compose exec -T db psql -U "$user" -d "$database" -tAc \
+    'SELECT version_num FROM alembic_version' 2>/dev/null | tr -d '[:space:]'
+}
+
+backup_database() {
+  user=$(read_env POSTGRES_USER)
+  database=$(read_env POSTGRES_DB)
+  user=${user:-opd}
+  database=${database:-openprintdashboard}
+  backup="$DATA_DIR/pre-update-$1.sql.gz"
+  if compose exec -T db pg_dump -U "$user" -d "$database" \
+      --no-owner --clean --if-exists | gzip > "$backup"; then
+    printf '%s\n' "$backup"
+    return 0
+  fi
+  rm -f "$backup"
+  return 1
+}
+
 write_status idle "" "Waiting for an update request"
 while true; do
+  touch "$HEARTBEAT_FILE"
   if [ -f "$REQUEST_FILE" ] && mkdir "$LOCK_DIR" 2>/dev/null; then
     requested=$(head -n 1 "$REQUEST_FILE" | tr -d '[:space:]')
     rm -f "$REQUEST_FILE"
@@ -64,35 +100,84 @@ while true; do
       sleep 5
       continue
     fi
-
-    current=$(sed -n 's/^IMAGE_TAG=//p' "$PROJECT_DIR/.env" | head -n1)
-    write_status running "$requested" "Pulling $requested"
-    cp "$PROJECT_DIR/.env" "$DATA_DIR/env.backup"
-
-    if ! sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$requested/" "$PROJECT_DIR/.env" ||
-       ! sed -i "s/^APP_VERSION=.*/APP_VERSION=$requested/" "$PROJECT_DIR/.env"; then
-      cp "$DATA_DIR/env.backup" "$PROJECT_DIR/.env"
-      write_status error "$requested" "Could not update .env"
+    if [ ! -f "$ENV_FILE" ]; then
+      write_status error "$requested" "Install directory has no .env"
       rmdir "$LOCK_DIR"
       sleep 5
       continue
     fi
 
+    current=$(read_env IMAGE_TAG)
+    old_revision=$(db_revision)
+    if [ -z "$old_revision" ]; then
+      write_status error "$requested" "Could not read the database migration revision"
+      rmdir "$LOCK_DIR"
+      sleep 5
+      continue
+    fi
+
+    write_status running "$requested" "Backing up the database"
+    if ! backup_path=$(backup_database "$requested"); then
+      write_status error "$requested" "Database backup failed; update not started"
+      rmdir "$LOCK_DIR"
+      sleep 5
+      continue
+    fi
+
+    write_status running "$requested" "Pulling $requested"
+    cp "$ENV_FILE" "$ENV_BACKUP"
+    chmod 600 "$ENV_BACKUP"
+
+    grep -q '^IMAGE_TAG=' "$ENV_FILE" ||
+      printf 'IMAGE_TAG=%s\n' "$current" >> "$ENV_FILE"
+    grep -q '^APP_VERSION=' "$ENV_FILE" ||
+      printf 'APP_VERSION=%s\n' "$current" >> "$ENV_FILE"
+    if ! sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$requested/" "$ENV_FILE" ||
+       ! sed -i "s/^APP_VERSION=.*/APP_VERSION=$requested/" "$ENV_FILE" ||
+       ! grep -qx "IMAGE_TAG=$requested" "$ENV_FILE" ||
+       ! grep -qx "APP_VERSION=$requested" "$ENV_FILE"; then
+      cp "$ENV_BACKUP" "$ENV_FILE"
+      chmod 600 "$ENV_FILE"
+      write_status error "$requested" "Could not update .env"
+      rm -f "$ENV_BACKUP"
+      rmdir "$LOCK_DIR"
+      sleep 5
+      continue
+    fi
+    chmod 600 "$ENV_FILE"
+
+    failed=0
     if ! compose pull backend frontend ||
        ! compose up -d --no-deps backend frontend ||
-       ! wait_for_backend; then
-      write_status error "$requested" "Update failed; rolling back to $current"
-      if [ -n "$current" ]; then
-        sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$current/" "$PROJECT_DIR/.env"
-        sed -i "s/^APP_VERSION=.*/APP_VERSION=$current/" "$PROJECT_DIR/.env"
-        compose pull backend frontend >/dev/null 2>&1 || true
-        compose up -d --no-deps backend frontend >/dev/null 2>&1 || true
-        wait_for_backend || true
+       ! wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" ||
+       ! wait_for_url "$FRONTEND_URL" "$HEALTH_ATTEMPTS"; then
+      failed=1
+    fi
+
+    new_revision=$(db_revision)
+    if [ "$failed" = 1 ]; then
+      if [ "$new_revision" != "$old_revision" ]; then
+        write_status error "$requested" \
+          "Update failed after a database migration. Automatic rollback skipped; restore $backup_path or a database backup before downgrading."
+      elif [ -n "$current" ]; then
+        sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$current/" "$ENV_FILE"
+        sed -i "s/^APP_VERSION=.*/APP_VERSION=$current/" "$ENV_FILE"
+        chmod 600 "$ENV_FILE"
+        if compose pull backend frontend >/dev/null 2>&1 &&
+           compose up -d --no-deps backend frontend >/dev/null 2>&1 &&
+           wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" >/dev/null 2>&1; then
+          write_status error "$requested" "Update failed; previous version restored"
+        else
+          write_status error "$requested" \
+            "Update and rollback failed; manual intervention required"
+        fi
+      else
+        write_status error "$requested" "Update failed; no previous tag to restore"
       fi
-      write_status error "$requested" "Update failed; previous version restored"
     else
       write_status success "$requested" "Updated to $requested"
     fi
+    rm -f "$ENV_BACKUP"
     rmdir "$LOCK_DIR"
   fi
   sleep 5

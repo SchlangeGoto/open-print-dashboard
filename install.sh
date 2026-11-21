@@ -47,6 +47,7 @@ ADMIN_EMAIL=""
 ADMIN_PASSWORD=""
 INSTALL_DIR="${OPD_INSTALL_DIR:-$DEFAULT_DIR}"
 NON_INTERACTIVE=0
+FORCE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,6 +61,7 @@ while [ $# -gt 0 ]; do
     --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
     --admin-password) ADMIN_PASSWORD="$2"; shift 2 ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
+    --force) FORCE=1; shift ;;
     -h|--help)
       cat <<USAGE
 OpenPrintDash installer
@@ -75,6 +77,7 @@ OpenPrintDash installer
   --admin-email EMAIL   first superuser email
   --admin-password PASS first superuser password (default: generated)
   --non-interactive     fail instead of prompting for missing values
+  --force               reuse the existing install's secrets and admin
 
 Example:
   curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | bash
@@ -98,6 +101,24 @@ if [ -z "$TAG" ]; then
 fi
 TAG="v${TAG#v}"
 VERSION="${TAG#v}"
+printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || \
+  die "Release tag must be vX.Y.Z"
+case "$INSTALL_DIR" in
+  *"'"*|*'"'*|*'$'*|*'`'*|*'\'*|*[[:cntrl:]]*) die "Install directory contains unsupported characters" ;;
+esac
+mkdir -p "$INSTALL_DIR/deploy" 2>/dev/null || die "Cannot create $INSTALL_DIR (use sudo or --dir)"
+[ -w "$INSTALL_DIR" ] || die "$INSTALL_DIR is not writable (use sudo or --dir)"
+if [ -e "$INSTALL_DIR/.env" ] && [ "$FORCE" != 1 ]; then
+  die "Already installed in $INSTALL_DIR. Use --force to update the Compose files and keep its secrets."
+fi
+
+validate_safe() {
+  case "$1" in
+    *"'"*|*'"'*|*'$'*|*'`'*|*'\'*|*[[:cntrl:]]*)
+      die "$2 contains characters that cannot be stored safely in .env (quote, dollar, backtick or backslash)"
+      ;;
+  esac
+}
 
 if [ -z "$PROXY" ]; then
   if [ "$NON_INTERACTIVE" = 1 ]; then
@@ -123,6 +144,13 @@ if [ -z "$DOMAIN" ] && [ "$PROXY" = "bundled" ]; then
   DOMAIN=$(ask "Dashboard domain (for example print.example.com)")
   [ -n "$DOMAIN" ] || die "A domain is required for automatic TLS"
 fi
+if [ -z "$DOMAIN" ] && [ "$PROXY" = "existing" ] && [ "$NON_INTERACTIVE" = 0 ]; then
+  DOMAIN=$(ask "Public dashboard hostname for links (optional)" "")
+fi
+if [ -n "$DOMAIN" ]; then
+  printf '%s' "$DOMAIN" | grep -Eq '^[A-Za-z0-9.-]+$' || die "Domain contains unsupported characters"
+  validate_safe "$DOMAIN" "Domain"
+fi
 
 if [ "$PROXY" = "existing" ] && [ "$NON_INTERACTIVE" = 0 ]; then
   blue "Where does your reverse proxy run?"
@@ -136,12 +164,16 @@ if [ "$PROXY" = "existing" ] && [ "$NON_INTERACTIVE" = 0 ]; then
   APP_PORT=$(ask "Frontend port" "$APP_PORT")
   API_PORT=$(ask "Backend API port" "$API_PORT")
 fi
+for port in "$APP_PORT" "$API_PORT"; do
+  printf '%s' "$port" | grep -Eq '^[0-9]+$' || die "Ports must be numbers"
+  [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "Ports must be between 1 and 65535"
+done
 
 if [ -z "$ADMIN_EMAIL" ]; then
   if [ "$NON_INTERACTIVE" = 1 ]; then
-    ADMIN_EMAIL="admin@${DOMAIN:-localhost}"
+    ADMIN_EMAIL="admin@${DOMAIN:-example.com}"
   else
-    ADMIN_EMAIL=$(ask "Admin email" "admin@${DOMAIN:-localhost}")
+    ADMIN_EMAIL=$(ask "Admin email" "admin@${DOMAIN:-example.com}")
   fi
 fi
 if [ -z "$ADMIN_PASSWORD" ]; then
@@ -156,9 +188,12 @@ if [ -z "$ADMIN_PASSWORD" ]; then
   fi
 fi
 [ ${#ADMIN_PASSWORD} -ge 8 ] || die "Admin password must be at least 8 characters"
+printf '%s' "$ADMIN_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || \
+  die "Admin email must be a valid address with a domain"
+validate_safe "$ADMIN_EMAIL" "Admin email"
+validate_safe "$ADMIN_PASSWORD" "Admin password"
 
 blue "Installing OpenPrintDash $VERSION into $INSTALL_DIR"
-mkdir -p "$INSTALL_DIR/deploy"
 cd "$INSTALL_DIR"
 
 BASE_URL="${OPD_RELEASE_BASE_URL:-https://raw.githubusercontent.com/$REPO/$TAG}"
@@ -167,14 +202,29 @@ curl -fsSL "$BASE_URL/compose.ghcr.yml" -o compose.ghcr.yml || \
 curl -fsSL "$BASE_URL/deploy/Caddyfile" -o deploy/Caddyfile || \
   die "Could not download deploy/Caddyfile for $TAG"
 
-POSTGRES_PASSWORD=$(openssl rand -hex 24)
-SECRET_KEY=$(openssl rand -hex 32)
-BAMBU_KEY=$(openssl rand -hex 32)
+read_env() {
+  sed -n "s/^$1=//p" .env 2>/dev/null | head -n1 | sed "s/^'//;s/'$//"
+}
+
+if [ -e .env ] && [ "$FORCE" = 1 ]; then
+  cp .env ".env.bak.$(date +%s)"
+  POSTGRES_PASSWORD=$(read_env POSTGRES_PASSWORD)
+  SECRET_KEY=$(read_env SECRET_KEY)
+  BAMBU_KEY=$(read_env BAMBU_CREDENTIALS_KEY)
+  ADMIN_EMAIL=$(read_env FIRST_SUPERUSER)
+  ADMIN_PASSWORD=$(read_env FIRST_SUPERUSER_PASSWORD)
+  yellow "Reusing the existing secrets and admin account from .env."
+fi
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
+SECRET_KEY=${SECRET_KEY:-$(openssl rand -hex 32)}
+BAMBU_KEY=${BAMBU_KEY:-$(openssl rand -hex 32)}
 FRONTEND_HOST="http://localhost:${APP_PORT}"
 [ -n "$DOMAIN" ] && FRONTEND_HOST="https://${DOMAIN}"
 
+umask 077
 {
   printf 'PROJECT_NAME=OpenPrintDash\n'
+  printf 'COMPOSE_PROJECT_NAME=openprintdashboard\n'
   printf 'DOMAIN=%s\n' "$(env_quote "$DOMAIN")"
   printf 'IMAGE_PREFIX=%s\n' "$IMAGE_PREFIX"
   printf 'IMAGE_TAG=%s\n' "$VERSION"
@@ -195,6 +245,7 @@ FRONTEND_HOST="http://localhost:${APP_PORT}"
   fi
 } > .env
 chmod 600 .env
+umask 022
 
 if [ "$PROXY" = "existing" ]; then
   cat > compose.override.yml <<'YAML'
@@ -218,10 +269,10 @@ if [ "$PROXY" = "existing" ]; then
 fi
 
 blue "Pulling OpenPrintDash $VERSION images…"
-"${COMPOSE[@]}" pull "${SERVICES[@]}"
+"${COMPOSE[@]}" pull ${SERVICES[@]+"${SERVICES[@]}"}
 
 blue "Starting the stack…"
-"${COMPOSE[@]}" up -d "${SERVICES[@]}"
+"${COMPOSE[@]}" up -d --wait --wait-timeout 240 ${SERVICES[@]+"${SERVICES[@]}"}
 
 green "OpenPrintDash $VERSION is starting."
 printf '\n'
@@ -271,9 +322,9 @@ printf '\nData lives in the Compose volumes postgres_data and backend_data.\n'
 printf 'The admin password is stored in %s/.env; keep that file backed up.\n' "$INSTALL_DIR"
 printf 'To update later: change IMAGE_TAG (and APP_VERSION) in .env, then run\n'
 if [ "$PROXY" = "existing" ]; then
-  printf '  docker compose -f compose.ghcr.yml -f compose.override.yml pull db backend frontend\n'
-  printf '  docker compose -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend\n'
+  printf '  docker compose --env-file .env -f compose.ghcr.yml -f compose.override.yml pull db backend frontend updater\n'
+  printf '  docker compose --env-file .env -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend updater\n'
 else
-  printf '  docker compose -f compose.ghcr.yml pull\n'
-  printf '  docker compose -f compose.ghcr.yml up -d\n'
+  printf '  docker compose --env-file .env -f compose.ghcr.yml pull\n'
+  printf '  docker compose --env-file .env -f compose.ghcr.yml up -d\n'
 fi

@@ -198,7 +198,7 @@ jobs:
         if: steps.release_tag.outputs.eligible == 'true'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          for name in backend frontend demo site; do
+          for name in backend frontend demo site updater; do
             docker buildx imagetools create \
               -t "${IMAGE_PREFIX}/${name}:latest" \
               "${IMAGE_PREFIX}/${name}:${VERSION}"

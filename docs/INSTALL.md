@@ -8,15 +8,18 @@ It never runs a checkout from `main`.
 curl -fsSL https://raw.githubusercontent.com/SchlangeGoto/open-print-dashboard/main/install.sh | bash
 ```
 
-It asks for:
+The interactive prompts cover:
 
-- the install directory (default `/opt/openprintdashboard`),
-- the release tag (default: latest GitHub release),
 - the dashboard domain,
 - whether OpenPrintDash should run Caddy and obtain TLS, or you already have a
   reverse proxy,
 - the app ports when you already have a proxy,
 - the first admin email and password.
+
+The install directory (`--dir`, default `/opt/openprintdashboard`) and release
+tag (`--tag vX.Y.Z`, default: latest GitHub release) are optional flags. Adding
+`--force` reuses the existing secrets and admin account when updating an install
+in place.
 
 ## Bundled Caddy
 
@@ -45,8 +48,11 @@ and available version, and after confirmation updates only the backend and
 frontend containers to that release tag. The database and uploads stay in the
 named volumes.
 
-If the new backend does not become healthy, the updater restores the previous
-tag automatically. A failed update leaves a message in the card.
+If the new backend does not become healthy before a database migration, the
+updater restores the previous tag automatically. If the new image already
+migrated the database, automatic rollback is skipped and the card shows the
+database backup path; restore that backup before downgrading. A failed update
+leaves a message in the card.
 
 The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;
 only the fixed updater image has it. The image accepts a single `X.Y.Z` tag and
@@ -54,8 +60,9 @@ cannot run arbitrary commands.
 
 ### Manual fallback
 
-If the updater profile is disabled, change `IMAGE_TAG` and `APP_VERSION` in the
-install directory's `.env`, then pull and recreate:
+If the updater profile is disabled (remove `COMPOSE_PROFILES=updater` from
+`.env`), change `IMAGE_TAG` and `APP_VERSION` in the install directory's `.env`,
+then pull and recreate:
 
 ```bash
 # bundled Caddy

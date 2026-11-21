@@ -15,10 +15,7 @@ import {
   SPONSOR_URL,
 } from "@/lib/site";
 
-const installCommands = `git clone https://github.com/SchlangeGoto/open-print-dashboard.git
-cd open-print-dashboard
-cp .env.example .env
-docker compose -f compose.prod.yml up -d --build`;
+const installCommands = `curl -fsSL https://raw.githubusercontent.com/SchlangeGoto/open-print-dashboard/main/install.sh | bash`;
 
 const faqs = [
   {
@@ -43,7 +40,7 @@ const faqs = [
   },
   {
     q: "How do updates work?",
-    a: "Pull the new code and rebuild: git pull, then docker compose -f compose.prod.yml up -d --build. Your database lives in a Docker volume and survives updates.",
+    a: "Use Settings → Updates in the dashboard after a superuser confirms the latest release, or re-run the installer. The database lives in a Docker volume and survives updates.",
   },
 ];
 

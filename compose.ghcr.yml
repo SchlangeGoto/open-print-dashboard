@@ -1,5 +1,5 @@
 # Production stack using published GHCR images.
-name: openprintdashboard
+name: ${COMPOSE_PROJECT_NAME:-openprintdashboard}
 #
 # The frontend image is built with NEXT_PUBLIC_API_URL="", so the browser calls
 # /api/v1 on the same origin and Caddy proxies it to the backend. No separate

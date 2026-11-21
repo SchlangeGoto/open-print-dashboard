@@ -323,7 +323,9 @@ export default function SettingsPage() {
                         : "secondary"
                 }
               >
-                {update?.state ?? "checking"}
+                {update?.state === "unavailable"
+                  ? "not installed"
+                  : (update?.state ?? "checking")}
               </Badge>
             </CardAction>
           </CardHeader>
@@ -357,6 +359,12 @@ export default function SettingsPage() {
             {update?.message ? (
               <p className="text-xs text-muted-foreground">{update.message}</p>
             ) : null}
+            {update?.updated_at ? (
+              <p className="text-[11px] text-muted-foreground">
+                Last updater activity:{" "}
+                {new Date(update.updated_at).toLocaleString()}
+              </p>
+            ) : null}
             {updateError ? (
               <p className="text-xs text-destructive">{updateError}</p>
             ) : null}
@@ -388,7 +396,11 @@ export default function SettingsPage() {
                 <Download />
                 {update?.update_available && update.latest_version
                   ? `Update to ${update.latest_version}`
-                  : "Up to date"}
+                  : update?.current_version === "dev"
+                    ? "Development build"
+                    : update?.latest_version
+                      ? "Up to date"
+                      : "Check failed"}
               </Button>
             </div>
           </CardContent>

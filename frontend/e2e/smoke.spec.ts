@@ -56,6 +56,9 @@ test.describe("phone viewport", () => {
     test(`does not scroll sideways on ${path}`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(path);
+      await expect(
+        page.getByRole("heading", { level: 1 }).first(),
+      ).toBeVisible();
 
       const overflow = await page.evaluate(
         () =>
@@ -76,7 +79,9 @@ test.describe("phone viewport", () => {
     const box = await dialog.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(844);
   });
 
   test("keeps the spool dialog inside a phone screen", async ({ page }) => {
@@ -89,7 +94,9 @@ test.describe("phone viewport", () => {
     const box = await dialog.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(844);
   });
 });
 

@@ -233,8 +233,11 @@ reconcile_interrupted() {
     return 0
   fi
 
-  cp "$ENV_BACKUP" "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
+  if ! cp "$ENV_BACKUP" "$ENV_FILE" || ! chmod 600 "$ENV_FILE"; then
+    write_status error "$requested" \
+      "Could not restore .env from the recovery snapshot. Restore $ENV_BACKUP from the updater_private volume manually."
+    return 1
+  fi
   if compose pull backend frontend >/dev/null 2>&1 &&
      compose up -d --no-deps backend frontend >/dev/null 2>&1 &&
      wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" >/dev/null 2>&1 &&

@@ -92,8 +92,10 @@ fresh database so a failed migration cannot leave objects behind:
   docker compose -f compose.ghcr.yml stop backend updater
 
   # 3. Recreate an empty database. Read the names from .env if you changed them.
-  DB_USER=$(sed -n 's/^POSTGRES_USER=//p' .env | head -n1 | sed "s/^'//;s/'$//")
-  DB_NAME=$(sed -n 's/^POSTGRES_DB=//p' .env | head -n1 | sed "s/^'//;s/'$//")
+  DB_USER=$(sed -n 's/^POSTGRES_USER=//p' .env | head -n1 | \
+    sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//')
+  DB_NAME=$(sed -n 's/^POSTGRES_DB=//p' .env | head -n1 | \
+    sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//')
   DB_USER=${DB_USER:-opd}
   DB_NAME=${DB_NAME:-openprintdashboard}
   docker compose -f compose.ghcr.yml exec -T db psql -U "$DB_USER" -d postgres \

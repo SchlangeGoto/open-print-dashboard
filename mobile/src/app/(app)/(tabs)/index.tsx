@@ -84,8 +84,22 @@ export default function DashboardScreen() {
 
   const { data, loading, refreshing, error, reload, refresh } =
     useAsyncData(loader);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [pendingControls, setPendingControls] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [controlError, setControlError] = useState<string | null>(null);
+
+  function markPending(key: string, pending: boolean) {
+    setPendingControls((current) => {
+      const next = new Set(current);
+      if (pending) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+  }
 
   async function runControl(
     job: PrintJob,
@@ -98,19 +112,28 @@ export default function DashboardScreen() {
       setControlError("Add this printer to the dashboard before controlling it.");
       return;
     }
-    setBusyAction(`${job.id}:${action}`);
+    if (!job.bambu_task_id) {
+      setControlError("This job has no cloud task id to confirm against.");
+      return;
+    }
+    const key = `${job.id}:${action}`;
+    markPending(key, true);
     setControlError(null);
     try {
-      await api.controlPrint(printer.id, action);
+      await api.controlPrint(printer.id, action, job.bambu_task_id);
       await reload();
     } catch (err) {
       setControlError(formatError(err));
     } finally {
-      setBusyAction(null);
+      markPending(key, false);
     }
   }
 
   function confirmControl(job: PrintJob, action: "pause" | "resume" | "stop") {
+    if (!job.bambu_task_id) {
+      setControlError("This job has no cloud task id to confirm against.");
+      return;
+    }
     const isStop = action === "stop";
     const isPause = action === "pause";
     Alert.alert(
@@ -320,7 +343,10 @@ export default function DashboardScreen() {
                   (item) => item.serial === job.device_id,
                 );
                 const paused = printer?.status?.gcode_state === "PAUSE";
-                const busy = busyAction?.startsWith(`${job.id}:`) ?? false;
+                const busy = Array.from(pendingControls).some((key) =>
+                  key.startsWith(`${job.id}:`),
+                );
+                const canControl = Boolean(printer?.online && job.bambu_task_id);
                 return (
                   <View key={job.id} style={styles.job}>
                     <View style={styles.jobTop}>
@@ -347,8 +373,10 @@ export default function DashboardScreen() {
                         title={paused ? "Resume" : "Pause"}
                         variant="secondary"
                         size="sm"
-                        disabled={busy || !printer?.online}
-                        loading={busyAction === `${job.id}:${paused ? "resume" : "pause"}`}
+                        disabled={busy || !canControl}
+                        loading={pendingControls.has(
+                          `${job.id}:${paused ? "resume" : "pause"}`,
+                        )}
                         onPress={() =>
                           confirmControl(job, paused ? "resume" : "pause")
                         }
@@ -358,8 +386,8 @@ export default function DashboardScreen() {
                         title="Cancel"
                         variant="danger"
                         size="sm"
-                        disabled={busy || !printer?.online}
-                        loading={busyAction === `${job.id}:stop`}
+                        disabled={busy || !canControl}
+                        loading={pendingControls.has(`${job.id}:stop`)}
                         onPress={() => confirmControl(job, "stop")}
                         style={styles.jobAction}
                       />

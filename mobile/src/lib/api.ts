@@ -42,6 +42,7 @@ interface ApiClientOptions {
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
+export const PRINT_HISTORY_CAP = 2_000;
 
 function isIPv4(host: string): number[] | null {
   const parts = host.split(".");
@@ -552,14 +553,19 @@ export class ApiClient {
     return data.data;
   }
 
-  async getAllPrintJobs(pageSize = 500, maxJobs = 2_000): Promise<PrintJob[]> {
+  async getAllPrintJobs(
+    pageSize = 500,
+    maxJobs = PRINT_HISTORY_CAP,
+  ): Promise<{ jobs: PrintJob[]; truncated: boolean; limit: number }> {
     const byId = new Map<string, PrintJob>();
     let skip = 0;
     let received = 0;
+    let total = 0;
     for (;;) {
       const page = await this.request<ListResponse<PrintJob>>(
         `/prints/?skip=${skip}&limit=${pageSize}`,
       );
+      total = page.count;
       for (const job of page.data) {
         byId.set(job.id, job);
       }
@@ -573,7 +579,11 @@ export class ApiClient {
         break;
       }
     }
-    return [...byId.values()];
+    return {
+      jobs: [...byId.values()],
+      truncated: received >= maxJobs && byId.size < total,
+      limit: maxJobs,
+    };
   }
 
   async getActivePrints(): Promise<PrintJob[]> {

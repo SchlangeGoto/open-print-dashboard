@@ -30,6 +30,10 @@ interface FilamentsData {
   spools: Spool[];
 }
 
+function remainingRank(value: number | null): number {
+  return value ?? Number.POSITIVE_INFINITY;
+}
+
 export default function FilamentsScreen() {
   const { api } = useAuth();
   const router = useRouter();
@@ -84,9 +88,9 @@ export default function FilamentsScreen() {
           .some((value) => value!.toLowerCase().includes(needle));
       })
       .sort((a, b) => {
-        const rank = (value: number | null) =>
-          value ?? Number.POSITIVE_INFINITY;
-        return rank(a.remaining) - rank(b.remaining);
+        const left = remainingRank(a.remaining);
+        const right = remainingRank(b.remaining);
+        return left === right ? 0 : left - right;
       });
   }, [data, query]);
 

@@ -24,12 +24,15 @@ export default function SelectTenantScreen() {
   const activeTenants = tenants.filter((tenant) => tenant.is_active);
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
 
   async function checkAgain() {
     setChecking(true);
+    setCheckFailed(false);
     try {
-      await refreshTenants();
-      setChecked(true);
+      const result = await refreshTenants();
+      if (result === "ok") setChecked(true);
+      if (result === "failed") setCheckFailed(true);
     } finally {
       setChecking(false);
     }
@@ -63,9 +66,11 @@ export default function SelectTenantScreen() {
             icon="people-outline"
             title="No workspace access"
             description={
-              checked
-                ? "Still no workspace access. Ask an administrator to invite you."
-                : "Ask an administrator to invite you to a workspace, then check again."
+              checkFailed
+                ? "Couldn't reach the server. Check your connection and try again."
+                : checked
+                  ? "Still no workspace access. Ask an administrator to invite you."
+                  : "Ask an administrator to invite you to a workspace, then check again."
             }
             action={
               <AppButton

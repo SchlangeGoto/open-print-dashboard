@@ -27,6 +27,8 @@ import type { Filament, PrintJob } from "@/lib/types";
 interface AnalyticsData {
   jobs: PrintJob[];
   filaments: Filament[];
+  truncated: boolean;
+  limit: number;
 }
 
 function duration(totalSeconds: number): string {
@@ -55,7 +57,7 @@ export default function AnalyticsScreen() {
       api.getAllPrintJobs(),
       api.getFilaments(),
     ]);
-    return { jobs, filaments };
+    return { ...jobs, filaments };
   }, [api]);
 
   const { data, loading, refreshing, error, reload, refresh } =
@@ -150,8 +152,8 @@ export default function AnalyticsScreen() {
         <PageHeader
           title="Analytics"
           subtitle={
-            data && data.jobs.length >= 2_000
-              ? "Based on the 2,000 most recent jobs"
+            data?.truncated
+              ? `Based on the ${data.limit.toLocaleString()} most recent jobs`
               : "Print history and material use"
           }
           left={

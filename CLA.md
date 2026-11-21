@@ -7,7 +7,8 @@ include contributions accepted here.
 By submitting a pull request, patch, or other contribution, you agree that:
 
 1. You have the right to submit the contribution and it is your original work,
-   or you have permission from the copyright owner.
+   or you have permission from the copyright owner that covers the licenses
+   granted in items 2 and 3.
 2. You grant the maintainer a perpetual, worldwide, non-exclusive, royalty-free,
    irrevocable copyright license to reproduce, prepare derivative works of,
    publicly display, publicly perform, sublicense, and distribute your

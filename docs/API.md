@@ -15,3 +15,13 @@ Moving it to an httpOnly cookie is a follow-up.
 `PrintJob.status` is Bambu's `gcode_state` value. `4` means **running**:
 `GET /prints/active` filters on it and the print-job sync uses it to decide
 when a print has started or finished.
+
+## Updates
+
+`GET /system/update` reports the running version, the latest stable GitHub
+release and the updater sidecar state. `POST /system/update` with
+`{"tag": "X.Y.Z"}` queues that release. Both routes require a superuser.
+
+The sidecar pulls the tag, recreates only the backend and frontend containers,
+waits for the backend health check and restores the previous tag on failure.
+Database and upload volumes are never recreated.

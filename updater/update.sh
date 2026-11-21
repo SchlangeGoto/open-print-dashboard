@@ -19,6 +19,9 @@ FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
 RECOVERY_ATTEMPTS="${UPDATER_RECOVERY_ATTEMPTS:-20}"
 RECOVERY_ROUNDS="${UPDATER_RECOVERY_ROUNDS:-10}"
+case "$RECOVERY_ROUNDS" in
+  ''|*[!0-9]*) RECOVERY_ROUNDS=10 ;;
+esac
 READ_GID="${UPDATER_READ_GID:-1000}"
 ENV_FILE="$PROJECT_DIR/.env"
 PRIVATE_DIR="${UPDATER_PRIVATE_DIR:-/private}"
@@ -175,11 +178,6 @@ reconcile_interrupted() {
   requested=$(journal_get requested)
   phase=$(journal_phase)
 
-  if [ "$phase" = "stuck" ]; then
-    write_status error "$requested" \
-      "Manual intervention required. Restore $backup before downgrading, then remove the journal from the updater_private volume."
-    return 1
-  fi
   if [ "$phase" = "stuck" ]; then
     write_status error "$requested" \
       "Manual intervention required. Restore $backup before downgrading, then remove the journal from the updater_private volume."

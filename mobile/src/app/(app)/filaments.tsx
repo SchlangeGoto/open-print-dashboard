@@ -69,7 +69,7 @@ export default function FilamentsScreen() {
     return data.filaments
       .map((filament) => ({
         filament,
-        remaining: remaining.get(filament.id) ?? 0,
+        remaining: remaining.get(filament.id) ?? null,
         spools: spoolCount.get(filament.id) ?? 0,
       }))
       .filter((row) => {
@@ -83,14 +83,18 @@ export default function FilamentsScreen() {
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(needle));
       })
-      .sort((a, b) => a.remaining - b.remaining);
+      .sort(
+        (a, b) => (a.remaining ?? Number.POSITIVE_INFINITY) - (b.remaining ?? Number.POSITIVE_INFINITY),
+      );
   }, [data, query]);
 
   const summary = useMemo(
     () => ({
       count: data?.filaments.length ?? 0,
-      remaining: rows.reduce((sum, row) => sum + row.remaining, 0),
-      low: rows.filter((row) => row.remaining < 250).length,
+      remaining: rows.reduce((sum, row) => sum + (row.remaining ?? 0), 0),
+      low: rows.filter(
+        (row) => row.remaining != null && row.remaining < 250,
+      ).length,
     }),
     [data, rows],
   );
@@ -167,7 +171,10 @@ export default function FilamentsScreen() {
               }
             />
             {error && data ? (
-              <View
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLiveRegion="polite"
+                onPress={reload}
                 style={[
                   styles.errorBanner,
                   {
@@ -177,9 +184,9 @@ export default function FilamentsScreen() {
                 ]}
               >
                 <AppText variant="caption" color={theme.colors.danger}>
-                  Could not refresh: {error}
+                  Could not refresh: {error}. Tap to retry.
                 </AppText>
-              </View>
+              </Pressable>
             ) : null}
           </View>
         }
@@ -210,10 +217,10 @@ export default function FilamentsScreen() {
               </View>
               <View style={styles.value}>
                 <AppText variant="heading">
-                  {formatWeight(item.remaining)}
+                  {item.remaining == null ? "—" : formatWeight(item.remaining)}
                 </AppText>
                 <AppText variant="micro" muted>
-                  left
+                  {item.remaining == null ? "not set" : "left"}
                 </AppText>
               </View>
               <Ionicons

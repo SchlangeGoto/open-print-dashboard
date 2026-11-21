@@ -547,24 +547,26 @@ export class ApiClient {
     return data.data;
   }
 
-  async getAllPrintJobs(pageSize = 500, maxJobs = 10_000): Promise<PrintJob[]> {
-    const all: PrintJob[] = [];
+  async getAllPrintJobs(pageSize = 500, maxJobs = 2_000): Promise<PrintJob[]> {
+    const byId = new Map<string, PrintJob>();
     let skip = 0;
     for (;;) {
       const page = await this.request<ListResponse<PrintJob>>(
         `/prints/?skip=${skip}&limit=${pageSize}`,
       );
-      all.push(...page.data);
+      for (const job of page.data) {
+        byId.set(job.id, job);
+      }
       skip += page.data.length;
       if (
         page.data.length === 0 ||
-        all.length >= page.count ||
-        all.length >= maxJobs
+        byId.size >= page.count ||
+        byId.size >= maxJobs
       ) {
         break;
       }
     }
-    return all;
+    return [...byId.values()];
   }
 
   async getActivePrints(): Promise<PrintJob[]> {

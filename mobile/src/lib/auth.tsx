@@ -120,10 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await applyTenants(list);
       return true;
     } catch (error) {
-      if (
-        error instanceof ApiError &&
-        (error.status === 401 || error.status === 403)
-      ) {
+      // Only an expired/invalid session ends authentication. A 403 may be a
+      // WAF or proxy response and must stay retryable.
+      if (error instanceof ApiError && error.status === 401) {
         return false;
       }
       // A non-auth failure must not end the session. Single-tenant installs
@@ -172,6 +171,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [status]);
 
+  const clearExpiredSession = useCallback(async () => {
+    apiClient.invalidateSession();
+    forgetPushToken();
+    sessionTokens = null;
+    sessionTenantId = null;
+    setUser(null);
+    setTenants([]);
+    setActiveTenantId(null);
+    setNeedsTenantSelection(false);
+    try {
+      await clearStoredSession();
+      await clearStoredTenantId();
+    } catch {
+      // Storage cleanup is best effort; the in-memory state is already gone.
+    }
+    setStatus("logged-out");
+  }, []);
+
   const restore = useCallback(async () => {
     const epoch = ++restoreEpoch.current;
     try {
@@ -214,8 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(me);
         const tenantsOk = await loadTenants();
         if (epoch !== restoreEpoch.current) return;
-        if (!tenantsOk || !sessionTokens) {
-          setStatus("logged-out");
+        if (!tenantsOk) {
+          await clearExpiredSession();
           return;
         }
         setStatus("authenticated");
@@ -253,7 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (epoch !== restoreEpoch.current) return;
       setStatus("needs-server");
     }
-  }, [loadTenants]);
+  }, [clearExpiredSession, loadTenants]);
 
   useEffect(() => {
     // Session restoration is inherently an async external-system read.
@@ -267,13 +284,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await apiClient.login(email, password);
       setUser(me);
       const tenantsOk = await loadTenants();
-      if (!tenantsOk || !sessionTokens) {
-        setStatus("logged-out");
+      if (!tenantsOk) {
+        await clearExpiredSession();
         return;
       }
       setStatus("authenticated");
     },
-    [loadTenants],
+    [clearExpiredSession, loadTenants],
   );
 
   const logout = useCallback(async () => {

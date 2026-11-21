@@ -67,7 +67,7 @@ export default function PrintsScreen() {
   const loader = useCallback(async (): Promise<PrintJob[]> => {
     const [history, active] = await Promise.all([
       api.getPrintJobs(100),
-      api.getActivePrints(),
+      api.getActivePrints().catch(() => [] as PrintJob[]),
     ]);
     const seen = new Set(active.map((job) => job.id));
     return [...active, ...history.filter((job) => !seen.has(job.id))];

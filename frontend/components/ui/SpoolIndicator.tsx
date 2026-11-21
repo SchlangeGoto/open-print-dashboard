@@ -41,8 +41,16 @@ export function SpoolIndicator({
       setMounted(true);
       return;
     }
-    const frame = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(frame);
+    // Two frames: the first paints the empty radius, the second changes the
+    // target so the transition has a before-change style.
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setMounted(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
   }, [reduced]);
 
   return (

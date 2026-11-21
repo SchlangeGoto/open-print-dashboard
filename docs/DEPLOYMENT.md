@@ -354,6 +354,28 @@ The mobile app is not part of the dashboard deployment. Releases use
 [EAS Build](https://docs.expo.dev/build/introduction/), which compiles and signs
 the artifact in the cloud and stores the signing credentials.
 
+### Push notifications
+
+The mobile app registers an Expo push token after login and unregisters it on
+logout or when the server URL changes. The dashboard sends print-finished,
+print-failed and spool-loaded notifications through the Expo Push API.
+
+- The token requires the EAS project id in `mobile/app.json`
+  (`extra.eas.projectId`); `eas init` sets it.
+- Remote push needs a development or release build. Expo Go cannot receive
+  remote notifications, and the app silently stays unregistered there.
+- Android 13 asks for the notification permission at runtime; the app only
+  registers after it is granted.
+- The backend needs outbound HTTPS to `exp.host`. No server-side Expo token is
+  required for the default public push service.
+- Tokens that Expo reports as `DeviceNotRegistered` are deleted automatically.
+- Re-test after changing the bundle id, package name or EAS project: the old
+  tokens belong to the old app identity.
+
+A quick check: build two devices, sign in, finish a short print, and confirm
+both receive exactly one notification. Then sign out on one device and confirm
+it no longer receives the next one.
+
 ### Distribution model
 
 **Android ships as a signed APK. There is no Play Store step.** Sideloading an

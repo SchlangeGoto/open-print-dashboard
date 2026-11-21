@@ -23,6 +23,10 @@ class PrinterService:
         # Only the dict operations are guarded; connecting happens outside the
         # lock because it can block on the network.
         self._lock = threading.Lock()
+        # Bambu login and sign-out must not interleave. A sign-out that lands
+        # while a login request is in flight must either run before or after
+        # it, never halfway through.
+        self._auth_lock = threading.RLock()
         self._reconnect_timers: dict[str, threading.Timer] = {}
         # Only one automatic re-login may run at a time. A token that Bambu
         # rejects right after a successful login means the account needs a
@@ -40,6 +44,10 @@ class PrinterService:
 
     def get_token(self) -> str | None:
         return self.cloud_client.token
+
+    def auth_lock(self) -> threading.RLock:
+        """Serialize login, verification and sign-out for this account."""
+        return self._auth_lock
 
     def login(self, code: str | None = None) -> None:
         self.cloud_client.login(code)
@@ -78,7 +86,8 @@ class PrinterService:
 
         ok = False
         try:
-            self.login()
+            with self.auth_lock():
+                self.login()
             ok = True
         except Exception as exc:  # noqa: BLE001
             logger.error("Bambu Cloud re-login failed: %s", exc)

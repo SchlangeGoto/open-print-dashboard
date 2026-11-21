@@ -82,3 +82,56 @@ def test_normal_user_cannot_list_users(
     r = client.get(f"{settings.API_V1_STR}/users/", headers=normal_user_token_headers)
 
     assert r.status_code == 403
+
+
+def test_deactivating_a_user_revokes_every_session(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    email = random_email()
+    password = random_lower_string()
+    user = crud.create_user(
+        session=db, user_create=UserCreate(email=email, password=password)
+    )
+
+    login = client.post(
+        f"{settings.API_V1_STR}/login/access-token",
+        data={"username": email, "password": password},
+    )
+    assert login.status_code == 200, login.text
+    tokens = login.json()
+    session_headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    assert (
+        client.get(
+            f"{settings.API_V1_STR}/users/me", headers=session_headers
+        ).status_code
+        == 200
+    )
+
+    deactivated = client.patch(
+        f"{settings.API_V1_STR}/users/{user.id}",
+        headers=superuser_token_headers,
+        json={"is_active": False},
+    )
+    assert deactivated.status_code == 200, deactivated.text
+
+    # The stateless access token dies immediately. While disabled the API
+    # returns "Inactive user"; after re-activation the revoked access token
+    # is rejected with 401.
+    assert client.get(
+        f"{settings.API_V1_STR}/users/me", headers=session_headers
+    ).status_code in (400, 401)
+
+    # Re-activation must not resurrect the refresh token. Submit it only
+    # after re-activation: a refresh while disabled would revoke the token
+    # on its own and hide a missing deactivation revocation.
+    reactivated = client.patch(
+        f"{settings.API_V1_STR}/users/{user.id}",
+        headers=superuser_token_headers,
+        json={"is_active": True},
+    )
+    assert reactivated.status_code == 200, reactivated.text
+    reuse = client.post(
+        f"{settings.API_V1_STR}/login/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert reuse.status_code == 401, reuse.text

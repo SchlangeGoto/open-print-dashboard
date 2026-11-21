@@ -43,6 +43,7 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
     user_data = user_in.model_dump(exclude_unset=True)
     password_changed = "password" in user_data
+    deactivated = user_data.get("is_active") is False and db_user.is_active
     extra_data = {}
     if password_changed:
         password = user_data["password"]
@@ -50,11 +51,13 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
         extra_data["hashed_password"] = hashed_password
     db_user.sqlmodel_update(user_data, update=extra_data)
     session.add(db_user)
-    if password_changed:
+    if password_changed or deactivated:
         # A password change must invalidate every existing session, including
-        # when an admin resets another user's password. Do it in the same
-        # transaction so a failure cannot leave the password changed with live
-        # refresh tokens.
+        # when an admin resets another user's password. Deactivation must also
+        # revoke now: otherwise re-activating the account resurrects every
+        # refresh token that was issued before it was disabled.
+        # Do it in the same transaction so a failure cannot leave the password
+        # changed with live refresh tokens.
         revoke_user_refresh_tokens(session=session, user_id=db_user.id)
     session.commit()
     session.refresh(db_user)

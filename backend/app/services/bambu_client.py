@@ -1789,7 +1789,9 @@ class BambuClient:
                     and not self._has_reliable_identity(job)
                 )
                 mapping = task.get("amsDetailMapping")
-                if mapping:
+                if mapping and not identity_unknown:
+                    # Once the identity is declared unusable, a later payload
+                    # must not replace the evidence the migration saw.
                     job.ams_detail_mapping = json.dumps(mapping)
                 job.finish_requested_at = None
                 job.finish_attempts = 0

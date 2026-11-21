@@ -4644,6 +4644,8 @@ def test_legacy_multi_slot_job_without_a_mapping_is_not_deducted(
     client = BambuClient()
     client.serial = printer.serial
     client._save_print_job("legacy-mapping-less", "FINISH")
+    # A repeated finish payload is equally unusable and must stay that way.
+    client._save_print_job("legacy-mapping-less", "FINISH")
 
     db.expire_all()
     stored = db.get(PrintJob, job.id)

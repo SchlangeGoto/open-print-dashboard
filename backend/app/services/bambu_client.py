@@ -484,6 +484,10 @@ class BambuClient:
             logger.info(f"Print finished with state: {new_state}")
             self._on_print_finished(new_state, self._current_task_id())
 
+    def current_task_id(self) -> str | None:
+        """Return the task id the printer is executing right now."""
+        return self._current_task_id()
+
     def _current_task_id(self) -> str | None:
         """Return the cloud task id reported by the printer, if any."""
         task_id = self._current_status.get("task_id")

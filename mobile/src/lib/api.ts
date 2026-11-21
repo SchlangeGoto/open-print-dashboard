@@ -512,10 +512,11 @@ export class ApiClient {
   controlPrint(
     printerId: string,
     action: "pause" | "resume" | "stop",
+    taskId: string,
   ): Promise<{ message: string }> {
     return this.request<{ message: string }>(
       `/printers/${printerId}/print/${action}`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify({ task_id: taskId }) },
     );
   }
 

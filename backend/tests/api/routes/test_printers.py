@@ -148,6 +148,9 @@ def test_print_control_sends_pause_resume_and_stop(
     class FakeClient:
         is_configured = True
 
+        def current_task_id(self) -> str:
+            return "task-current"
+
         def pause_print(self) -> bool:
             sent.append("pause")
             return True
@@ -166,11 +169,48 @@ def test_print_control_sends_pause_resume_and_stop(
         response = client.post(
             f"{settings.API_V1_STR}/printers/{printer_id}/print/{action}",
             headers=superuser_token_headers,
+            json={"task_id": "task-current"},
         )
         assert response.status_code == 200, response.text
         assert action in response.json()["message"]
 
     assert sent == ["pause", "resume", "stop"]
+
+
+def test_print_control_refuses_a_replaced_job(
+    client: TestClient, superuser_token_headers: dict[str, str], monkeypatch
+) -> None:
+    from app.services.printer_service import printer_service
+
+    created = client.post(
+        f"{settings.API_V1_STR}/printers/",
+        headers=superuser_token_headers,
+        json={"name": "Replaced", "serial": _serial()},
+    )
+    assert created.status_code == 200, created.text
+    printer_id = created.json()["id"]
+
+    sent: list[str] = []
+
+    class FakeClient:
+        is_configured = True
+
+        def current_task_id(self) -> str:
+            return "task-new"
+
+        def stop_print(self) -> bool:
+            sent.append("stop")
+            return True
+
+    monkeypatch.setattr(printer_service, "get_client", lambda serial: FakeClient())
+
+    response = client.post(
+        f"{settings.API_V1_STR}/printers/{printer_id}/print/stop",
+        headers=superuser_token_headers,
+        json={"task_id": "task-confirmed"},
+    )
+    assert response.status_code == 409
+    assert sent == []
 
 
 def test_print_control_rejects_an_unconnected_printer(
@@ -191,11 +231,13 @@ def test_print_control_rejects_an_unconnected_printer(
     response = client.post(
         f"{settings.API_V1_STR}/printers/{printer_id}/print/pause",
         headers=superuser_token_headers,
+        json={"task_id": "task-current"},
     )
     assert response.status_code == 409
 
     missing = client.post(
         f"{settings.API_V1_STR}/printers/{uuid.uuid4()}/print/pause",
         headers=superuser_token_headers,
+        json={"task_id": "task-current"},
     )
     assert missing.status_code == 404

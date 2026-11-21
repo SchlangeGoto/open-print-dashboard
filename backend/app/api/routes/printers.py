@@ -5,7 +5,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import SQLModel
+from sqlmodel import Field, SQLModel
 
 from app import crud
 from app.api.deps import SessionDep, get_current_user
@@ -34,6 +34,12 @@ class CloudStatus(SQLModel):
 
 
 PrintControlAction = Literal["pause", "resume", "stop"]
+
+
+class PrintControlRequest(SQLModel):
+    # The job the user confirmed. A print that started while the
+    # confirmation dialog was open must not receive this command.
+    task_id: str = Field(min_length=1, max_length=100)
 
 
 def _cloud_devices() -> list[dict[str, Any]]:
@@ -275,7 +281,11 @@ def reconnect_printer(*, session: SessionDep, printer_id: uuid.UUID) -> Any:
 
 @router.post("/{printer_id}/print/{action}", response_model=Message)
 def control_print(
-    *, session: SessionDep, printer_id: uuid.UUID, action: PrintControlAction
+    *,
+    session: SessionDep,
+    printer_id: uuid.UUID,
+    action: PrintControlAction,
+    payload: PrintControlRequest,
 ) -> Any:
     """Pause, resume or cancel the current print on a connected printer."""
     printer = crud.get_printer(session=session, printer_id=printer_id)
@@ -285,6 +295,14 @@ def control_print(
     if client is None or not client.is_configured:
         raise HTTPException(status_code=409, detail="Printer is not connected")
 
+    current = client.current_task_id()
+    if current is None or current != payload.task_id:
+        # The job the user confirmed is no longer on the printer.
+        raise HTTPException(
+            status_code=409,
+            detail="The printer is no longer on that print",
+        )
+
     handlers = {
         "pause": client.pause_print,
         "resume": client.resume_print,
@@ -292,6 +310,17 @@ def control_print(
     }
     if not handlers[action]():
         raise HTTPException(status_code=503, detail="Could not reach the printer")
+    after = client.current_task_id()
+    if after is not None and after != payload.task_id:
+        # Publish is not atomic with the check. Never undo a stop, but make
+        # the rare interleaving visible in the log.
+        logger.warning(
+            "Task changed from %s to %s while sending %s to %s",
+            payload.task_id,
+            after,
+            action,
+            printer.serial,
+        )
     logger.info("Print %s sent to %s", action, printer.serial)
     return Message(message=f"Print {action} sent")
 

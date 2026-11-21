@@ -153,7 +153,7 @@ export default function AnalyticsScreen() {
           title="Analytics"
           subtitle={
             data?.truncated
-              ? `Based on the ${data.limit.toLocaleString()} most recent jobs`
+              ? `Partial history · ${data.jobs.length.toLocaleString()} jobs`
               : "Print history and material use"
           }
           left={

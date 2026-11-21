@@ -256,8 +256,12 @@ export class ApiClient {
       if (accessToken) {
         if (this.options.getTenantId() !== tenantId) {
           // The user switched tenants while the token refreshed. Replaying a
-          // request built for the old tenant would act on the wrong one.
-          return res;
+          // request built for the old tenant would act on the wrong one, and
+          // returning the 401 would clear a session that just refreshed.
+          throw new ApiError(
+            0,
+            "Active tenant changed during the request. Try again.",
+          );
         }
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
@@ -557,6 +561,7 @@ export class ApiClient {
     pageSize = 500,
     maxJobs = PRINT_HISTORY_CAP,
   ): Promise<{ jobs: PrintJob[]; truncated: boolean; limit: number }> {
+    const tenantId = this.options.getTenantId();
     const byId = new Map<string, PrintJob>();
     let skip = 0;
     let received = 0;
@@ -565,6 +570,12 @@ export class ApiClient {
       const page = await this.request<ListResponse<PrintJob>>(
         `/prints/?skip=${skip}&limit=${pageSize}`,
       );
+      if (this.options.getTenantId() !== tenantId) {
+        throw new ApiError(
+          0,
+          "Active tenant changed while loading print history. Try again.",
+        );
+      }
       total = page.count;
       for (const job of page.data) {
         byId.set(job.id, job);
@@ -581,7 +592,9 @@ export class ApiClient {
     }
     return {
       jobs: [...byId.values()],
-      truncated: received >= maxJobs && byId.size < total,
+      // A job can shift pages between requests, so compare unique rows with
+      // the server total instead of trusting the received count.
+      truncated: byId.size < total,
       limit: maxJobs,
     };
   }

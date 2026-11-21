@@ -98,6 +98,10 @@ fresh database so a failed migration cannot leave objects behind:
     sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//')
   DB_USER=${DB_USER:-opd}
   DB_NAME=${DB_NAME:-openprintdashboard}
+  printf '%s' "$DB_USER" | grep -Eq '^[A-Za-z0-9_]+$' || \
+    { echo "POSTGRES_USER must contain only letters, digits and underscores" >&2; exit 1; }
+  printf '%s' "$DB_NAME" | grep -Eq '^[A-Za-z0-9_]+$' || \
+    { echo "POSTGRES_DB must contain only letters, digits and underscores" >&2; exit 1; }
   docker compose -f compose.ghcr.yml exec -T db psql -U "$DB_USER" -d postgres \
     -c "DROP DATABASE IF EXISTS \"$DB_NAME\""
   docker compose -f compose.ghcr.yml exec -T db psql -U "$DB_USER" -d postgres \

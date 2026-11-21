@@ -39,6 +39,20 @@ export default function AppLayout() {
       <Stack.Screen name="select-tenant" />
       <Stack.Screen name="spool/[id]" />
       <Stack.Screen
+        name="filament/edit"
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="spool/edit"
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
         name="scan-confirm"
         options={{
           presentation: "modal",

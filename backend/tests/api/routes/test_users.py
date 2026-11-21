@@ -114,19 +114,16 @@ def test_deactivating_a_user_revokes_every_session(
     )
     assert deactivated.status_code == 200, deactivated.text
 
-    # Both the stateless access token and the rotating refresh token die now.
-    # While disabled the API returns "Inactive user"; after re-activation the
-    # revoked access token is rejected with 401.
+    # The stateless access token dies immediately. While disabled the API
+    # returns "Inactive user"; after re-activation the revoked access token
+    # is rejected with 401.
     assert client.get(
         f"{settings.API_V1_STR}/users/me", headers=session_headers
     ).status_code in (400, 401)
-    refresh = client.post(
-        f"{settings.API_V1_STR}/login/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
-    )
-    assert refresh.status_code == 401, refresh.text
 
-    # Re-activation must not resurrect the old refresh token.
+    # Re-activation must not resurrect the refresh token. Submit it only
+    # after re-activation: a refresh while disabled would revoke the token
+    # on its own and hide a missing deactivation revocation.
     reactivated = client.patch(
         f"{settings.API_V1_STR}/users/{user.id}",
         headers=superuser_token_headers,

@@ -894,6 +894,36 @@ class BambuClient:
                     .where(col(PrintJob.finished_at).is_not(None))
                     .where(col(PrintJob.finished_at) >= cutoff)
                 ).all()
+                abandoned_rows = session.exec(
+                    select(PrintJob.id, PrintJob.bambu_task_id)
+                    .where(PrintJob.device_id == self.serial)
+                    .where(PrintJob.status != 4)
+                    .where(col(PrintJob.status).is_not(None))
+                    .where(col(PrintJob.filament_deducted_at).is_(None))
+                    .where(col(PrintJob.bambu_task_id).is_not(None))
+                    .where(col(PrintJob.finished_at).is_not(None))
+                    .where(col(PrintJob.finished_at) < cutoff)
+                    .where(
+                        or_(
+                            col(PrintJob.finish_state).is_(None),
+                            PrintJob.finish_state != "ABANDONED",
+                        )
+                    )
+                ).all()
+                for job_id, task_id in abandoned_rows:
+                    session.execute(
+                        update(PrintJob)
+                        .where(PrintJob.id == job_id)
+                        .values(finish_state="ABANDONED")
+                    )
+                    logger.warning(
+                        "Abandoning filament deduction for task %s after %s "
+                        "hours without a resolution",
+                        task_id,
+                        DEDUCTION_RETRY_HOURS,
+                    )
+                if abandoned_rows:
+                    session.commit()
 
             pending_set = set(pending_ids)
             for task_id in dict.fromkeys([*open_ids, *pending_ids]):

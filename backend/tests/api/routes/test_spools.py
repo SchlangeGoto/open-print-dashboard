@@ -4311,3 +4311,35 @@ def test_timeout_does_not_persist_usage_when_unclaimed(
     stored_spool = db.get(Spool, spool.id)
     assert stored_spool is not None
     assert stored_spool.remaining_g == 1000
+
+
+def test_stale_pending_deduction_is_marked_abandoned(db: Session) -> None:
+    from app.services.bambu_client import DEDUCTION_RETRY_HOURS, BambuClient
+
+    printer = _create_printer(db)
+    job = PrintJob(
+        title="Stale deduction",
+        status=2,
+        device_id=printer.serial,
+        bambu_task_id="stale-deduction",
+        finished_at=datetime.now(UTC) - timedelta(hours=DEDUCTION_RETRY_HOURS + 1),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    client = BambuClient()
+    client.serial = printer.serial
+    client._reconcile_open_jobs()
+
+    db.expire_all()
+    stored = db.get(PrintJob, job.id)
+    assert stored is not None
+    assert stored.finish_state == "ABANDONED"
+
+    # A second pass must not log or touch it again.
+    client._reconcile_open_jobs()
+    db.expire_all()
+    repeated = db.get(PrintJob, job.id)
+    assert repeated is not None
+    assert repeated.finish_state == "ABANDONED"

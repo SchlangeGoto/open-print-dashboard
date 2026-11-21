@@ -143,10 +143,11 @@ export default function SettingsPage() {
     setUpdateBusy(true);
     setUpdateError(null);
     try {
-      await api.startUpdate(update.latest_version);
+      const queued = await api.startUpdate(update.latest_version);
       setConfirmUpdate(false);
       toast.success(`Update to ${update.latest_version} queued`);
-      setUpdate(await api.getUpdateStatus());
+      // Keep the synthetic queued state until the sidecar's next poll.
+      setUpdate(queued);
     } catch (error) {
       setUpdateError(
         error instanceof Error ? error.message : "Could not start the update",

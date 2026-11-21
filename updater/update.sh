@@ -22,6 +22,7 @@ mkdir -p "$DATA_DIR"
 touch "$READY_FILE" "$HEARTBEAT_FILE"
 chmod 0644 "$READY_FILE" "$HEARTBEAT_FILE"
 rm -rf "$LOCK_DIR" "$ENV_BACKUP"
+rm -f "$DATA_DIR"/.pre-update-*.sql
 # Keep the heartbeat fresh while a pull, dump or health loop blocks the main
 # loop; the backend treats a stale heartbeat as "updater not responding".
 ( while :; do touch "$HEARTBEAT_FILE"; sleep 5; done ) &
@@ -49,11 +50,11 @@ read_env() {
 
 compose() {
   if [ -f "$PROJECT_DIR/compose.override.yml" ]; then
-    docker compose --env-file "$ENV_FILE" \
+    timeout "${UPDATER_COMPOSE_TIMEOUT:-900}" docker compose --env-file "$ENV_FILE" \
       -f "$PROJECT_DIR/compose.ghcr.yml" \
       -f "$PROJECT_DIR/compose.override.yml" "$@"
   else
-    docker compose --env-file "$ENV_FILE" \
+    timeout "${UPDATER_COMPOSE_TIMEOUT:-900}" docker compose --env-file "$ENV_FILE" \
       -f "$PROJECT_DIR/compose.ghcr.yml" "$@"
   fi
 }
@@ -170,9 +171,12 @@ while true; do
 
     new_revision=$(db_revision)
     if [ "$failed" = 1 ]; then
-      if [ "$new_revision" != "$old_revision" ]; then
+      if [ -z "$new_revision" ]; then
         write_status error "$requested" \
-          "Update failed after a database migration. Automatic rollback skipped; restore $backup_path or a database backup before downgrading."
+          "Update failed and the database revision could not be verified. Automatic rollback skipped; restore $backup_path if needed."
+      elif [ "$new_revision" != "$old_revision" ]; then
+        write_status error "$requested" \
+          "Update failed after a database migration. Automatic rollback skipped; restore $backup_path before downgrading."
       elif [ -n "$current" ]; then
         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$current/" "$ENV_FILE"
         sed -i "s/^APP_VERSION=.*/APP_VERSION=$current/" "$ENV_FILE"

@@ -9,6 +9,7 @@ let currentToken: string | null = null;
 // Bumped on logout and server switch. A registration that finishes under an
 // older generation removes itself instead of reviving the session.
 let generation = 0;
+let pendingUnregister: Promise<void> | null = null;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,7 +27,13 @@ Notifications.setNotificationHandler({
  * them. Every failure is silent because notifications are optional.
  */
 export async function registerPushToken(api: ApiClient): Promise<void> {
-  if (currentToken || Platform.OS === "web") return;
+  if (Platform.OS === "web") return;
+  if (pendingUnregister) {
+    // A logout/server switch is still removing the old token. Registering
+    // before it settles would let that request delete the new binding.
+    await pendingUnregister;
+  }
+  if (currentToken) return;
   const attempt = generation;
   try {
     if (Platform.OS === "android") {
@@ -50,12 +57,15 @@ export async function registerPushToken(api: ApiClient): Promise<void> {
       await Notifications.getExpoPushTokenAsync({ projectId })
     ).data;
     if (attempt !== generation) {
-      await api.unregisterPushToken(token).catch(() => undefined);
+      // A newer session may already be registering this device. Do not
+      // unregister its token just because this attempt became stale.
       return;
     }
     await api.registerPushToken(token, Platform.OS);
     if (attempt !== generation) {
-      await api.unregisterPushToken(token).catch(() => undefined);
+      if (currentToken !== token) {
+        await api.unregisterPushToken(token).catch(() => undefined);
+      }
       return;
     }
     currentToken = token;
@@ -77,9 +87,18 @@ export async function unregisterPushToken(api: ApiClient): Promise<void> {
   const token = currentToken;
   currentToken = null;
   if (!token) return;
-  try {
-    await api.unregisterPushToken(token);
-  } catch {
-    // The session may already be gone; the server drops tokens with the user.
-  }
+  const operation = (async () => {
+    try {
+      await api.unregisterPushToken(token);
+    } catch {
+      // The session may already be gone; the server drops tokens with the user.
+    }
+  })();
+  const cleanup = operation.finally(() => {
+    if (pendingUnregister === cleanup) {
+      pendingUnregister = null;
+    }
+  });
+  pendingUnregister = cleanup;
+  await cleanup;
 }

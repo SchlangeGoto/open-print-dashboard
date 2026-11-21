@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -21,6 +22,18 @@ export default function SelectTenantScreen() {
     logout,
   } = useAuth();
   const activeTenants = tenants.filter((tenant) => tenant.is_active);
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  async function checkAgain() {
+    setChecking(true);
+    try {
+      await refreshTenants();
+      setChecked(true);
+    } finally {
+      setChecking(false);
+    }
+  }
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -49,12 +62,17 @@ export default function SelectTenantScreen() {
           <EmptyState
             icon="people-outline"
             title="No workspace access"
-            description="Ask an administrator to invite you to a workspace, then check again."
+            description={
+              checked
+                ? "Still no workspace access. Ask an administrator to invite you."
+                : "Ask an administrator to invite you to a workspace, then check again."
+            }
             action={
               <AppButton
                 title="Check again"
                 variant="secondary"
-                onPress={() => void refreshTenants()}
+                loading={checking}
+                onPress={() => void checkAgain()}
               />
             }
           />

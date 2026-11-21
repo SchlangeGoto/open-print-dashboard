@@ -253,6 +253,11 @@ export class ApiClient {
     if (isAuthChallenge && retry) {
       const accessToken = await this.refreshAccessToken(true);
       if (accessToken) {
+        if (this.options.getTenantId() !== tenantId) {
+          // The user switched tenants while the token refreshed. Replaying a
+          // request built for the old tenant would act on the wrong one.
+          return res;
+        }
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
         if (tenantId) {
@@ -550,6 +555,7 @@ export class ApiClient {
   async getAllPrintJobs(pageSize = 500, maxJobs = 2_000): Promise<PrintJob[]> {
     const byId = new Map<string, PrintJob>();
     let skip = 0;
+    let received = 0;
     for (;;) {
       const page = await this.request<ListResponse<PrintJob>>(
         `/prints/?skip=${skip}&limit=${pageSize}`,
@@ -557,11 +563,12 @@ export class ApiClient {
       for (const job of page.data) {
         byId.set(job.id, job);
       }
+      received += page.data.length;
       skip += page.data.length;
       if (
         page.data.length === 0 ||
-        byId.size >= page.count ||
-        byId.size >= maxJobs
+        received >= page.count ||
+        received >= maxJobs
       ) {
         break;
       }

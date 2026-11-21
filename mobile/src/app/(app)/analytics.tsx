@@ -149,7 +149,11 @@ export default function AnalyticsScreen() {
       >
         <PageHeader
           title="Analytics"
-          subtitle="Print history and material use"
+          subtitle={
+            data && data.jobs.length >= 2_000
+              ? "Based on the 2,000 most recent jobs"
+              : "Print history and material use"
+          }
           left={
             <Pressable
               accessibilityRole="button"

@@ -83,9 +83,11 @@ export default function FilamentsScreen() {
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(needle));
       })
-      .sort(
-        (a, b) => (a.remaining ?? Number.POSITIVE_INFINITY) - (b.remaining ?? Number.POSITIVE_INFINITY),
-      );
+      .sort((a, b) => {
+        const rank = (value: number | null) =>
+          value ?? Number.POSITIVE_INFINITY;
+        return rank(a.remaining) - rank(b.remaining);
+      });
   }, [data, query]);
 
   const summary = useMemo(

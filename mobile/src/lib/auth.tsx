@@ -114,6 +114,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearStoredTenantId();
   }, []);
 
+  const clearExpiredSession = useCallback(async () => {
+    apiClient.invalidateSession();
+    forgetPushToken();
+    sessionTokens = null;
+    sessionTenantId = null;
+    setUser(null);
+    setTenants([]);
+    setActiveTenantId(null);
+    setNeedsTenantSelection(false);
+    try {
+      await clearStoredSession();
+      await clearStoredTenantId();
+    } catch {
+      // Storage cleanup is best effort; the in-memory state is already gone.
+    }
+    setStatus("logged-out");
+  }, []);
+
   const loadTenants = useCallback(async (): Promise<boolean> => {
     try {
       const list = await apiClient.getMeTenants();
@@ -123,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Only an expired/invalid session ends authentication. A 403 may be a
       // WAF or proxy response and must stay retryable.
       if (error instanceof ApiError && error.status === 401) {
+        await clearExpiredSession();
         return false;
       }
       // A non-auth failure must not end the session. Single-tenant installs
@@ -131,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveTenantId(sessionTenantId);
       return true;
     }
-  }, [applyTenants]);
+  }, [applyTenants, clearExpiredSession]);
 
   useEffect(() => {
     sessionExpiredHandler = () => {
@@ -170,24 +189,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void registerPushToken(apiClient);
     }
   }, [status]);
-
-  const clearExpiredSession = useCallback(async () => {
-    apiClient.invalidateSession();
-    forgetPushToken();
-    sessionTokens = null;
-    sessionTenantId = null;
-    setUser(null);
-    setTenants([]);
-    setActiveTenantId(null);
-    setNeedsTenantSelection(false);
-    try {
-      await clearStoredSession();
-      await clearStoredTenantId();
-    } catch {
-      // Storage cleanup is best effort; the in-memory state is already gone.
-    }
-    setStatus("logged-out");
-  }, []);
 
   const restore = useCallback(async () => {
     const epoch = ++restoreEpoch.current;
@@ -231,10 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(me);
         const tenantsOk = await loadTenants();
         if (epoch !== restoreEpoch.current) return;
-        if (!tenantsOk) {
-          await clearExpiredSession();
-          return;
-        }
+        if (!tenantsOk) return;
         setStatus("authenticated");
       } catch (error) {
         if (epoch !== restoreEpoch.current) return;
@@ -270,7 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (epoch !== restoreEpoch.current) return;
       setStatus("needs-server");
     }
-  }, [clearExpiredSession, loadTenants]);
+  }, [loadTenants]);
 
   useEffect(() => {
     // Session restoration is inherently an async external-system read.
@@ -284,13 +282,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await apiClient.login(email, password);
       setUser(me);
       const tenantsOk = await loadTenants();
-      if (!tenantsOk) {
-        await clearExpiredSession();
-        return;
-      }
+      if (!tenantsOk) return;
       setStatus("authenticated");
     },
-    [clearExpiredSession, loadTenants],
+    [loadTenants],
   );
 
   const logout = useCallback(async () => {

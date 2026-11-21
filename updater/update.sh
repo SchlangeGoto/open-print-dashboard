@@ -18,6 +18,7 @@ HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000${API_PREFIX}/utils/health-
 FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
 RECOVERY_ATTEMPTS="${UPDATER_RECOVERY_ATTEMPTS:-20}"
+RECOVERY_ROUNDS="${UPDATER_RECOVERY_ROUNDS:-10}"
 READ_GID="${UPDATER_READ_GID:-1000}"
 ENV_FILE="$PROJECT_DIR/.env"
 PRIVATE_DIR="${UPDATER_PRIVATE_DIR:-/private}"
@@ -207,8 +208,17 @@ reconcile_interrupted() {
       fi
       # The new images are still starting. Keep the journal so the loop can
       # retry instead of sending the operator to an older dump.
-      write_status error "$requested" \
-        "The updated stack is still starting; recovery will retry."
+      attempts=$(journal_get recovery_attempts)
+      attempts=$(( ${attempts:-0} + 1 ))
+      sed -i '/^recovery_attempts=/d' "$JOURNAL_FILE" 2>/dev/null || true
+      printf 'recovery_attempts=%s\n' "$attempts" >> "$JOURNAL_FILE"
+      if [ "$attempts" -ge "$RECOVERY_ROUNDS" ]; then
+        write_status error "$requested" \
+          "The updated stack did not become healthy after $attempts recovery attempts. Remove the journal from the updater_private volume or restore $backup."
+      else
+        write_status error "$requested" \
+          "The updated stack is still starting; recovery will retry."
+      fi
       return 1
     fi
     write_status error "$requested" \

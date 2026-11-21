@@ -134,7 +134,6 @@ def request_update(payload: UpdateRequest) -> Any:
     tag = payload.tag.strip().lstrip("v")
     if not _TAG_RE.fullmatch(tag):
         raise HTTPException(status_code=422, detail="Release tag must be X.Y.Z")
-    directory = Path(settings.UPDATER_DIR)
     protocol = _protocol_dir()
     updater = _read_updater_status()
     if not updater or updater.get("state") == "stale":
@@ -150,7 +149,7 @@ def request_update(payload: UpdateRequest) -> Any:
                 status_code=409,
                 detail="Downgrades are not supported from the dashboard",
             )
-    request_dir = directory / "request"
+    request_dir = protocol / "request"
     request_file = request_dir / "request"
     if request_file.exists() or (protocol / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")

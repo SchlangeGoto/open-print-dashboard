@@ -62,6 +62,15 @@ with the backup path when a migration already committed. The recovery journal
 and `.env` snapshot live in the root-only `updater_private` volume, so the
 application container cannot rewrite them.
 
+If the updated stack never becomes healthy, the card retries ten times and then
+asks for manual intervention. To clear the journal without touching the data
+volumes (default project name):
+
+```bash
+docker run --rm -v openprintdashboard_updater_private:/p alpine \
+  rm -f /p/journal /p/env.backup
+```
+
 The dump lives in the `updater_data` volume. Each attempt gets its own file, and
 the card shows the exact path. With the default project name, restore into a
 fresh database so a failed migration cannot leave objects behind:

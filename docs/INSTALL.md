@@ -67,13 +67,15 @@ fresh database so a failed migration cannot leave objects behind:
 ```bash
 (
   set -e
+  RESTORE_SQL=$(mktemp /tmp/opd-restore.XXXXXX)
+  trap 'rm -f "$RESTORE_SQL"' EXIT
 
   # 1. Verify and extract the exact dump shown in the update status.
   BACKUP=pre-update-X.Y.Z-YYYYMMDDTHHMMSSZ-PID.sql.gz
   docker run --rm -v openprintdashboard_updater_data:/d alpine \
     sh -c "gunzip -t /d/$BACKUP"
   docker run --rm -v openprintdashboard_updater_data:/d alpine \
-    sh -c "gunzip -c /d/$BACKUP" > /tmp/opd-restore.sql
+    sh -c "gunzip -c /d/$BACKUP" > "$RESTORE_SQL"
 
   # 2. Stop everything that writes to the database.
   docker compose -f compose.ghcr.yml stop backend updater
@@ -86,7 +88,7 @@ fresh database so a failed migration cannot leave objects behind:
 
   # 4. Restore and stop on the first error.
   docker compose -f compose.ghcr.yml exec -T db psql -X -v ON_ERROR_STOP=1 \
-    -U opd -d openprintdashboard < /tmp/opd-restore.sql
+    -U opd -d openprintdashboard < "$RESTORE_SQL"
 )
 
 # 5. Set IMAGE_TAG and APP_VERSION in .env back to the previous release.

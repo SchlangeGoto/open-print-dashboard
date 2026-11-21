@@ -15,6 +15,7 @@ Keep it to roughly one screen:
 - a two-sentence summary,
 - 3–6 highlights,
 - only fixes a user can notice,
-- upgrade steps (migrations, image tags, app builds).
+- upgrade steps (migrations, image tags, app builds),
+- a required `compare/<previous>...<this>` link at the bottom.
 
-The full commit list stays available through the compare link at the bottom.
+The full commit list stays available through that compare link.

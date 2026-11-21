@@ -371,7 +371,8 @@ print-failed and spool-loaded notifications through the Expo Push API.
 - Tokens that Expo reports as `DeviceNotRegistered` are deleted automatically.
 - Android also needs Firebase: add the Firebase Android app for
   `com.openprintdashboard.app`, download `google-services.json` into `mobile/`,
-  and point `expo.android.googleServicesFile` at it.
+  commit it (it contains no secrets), and point
+  `expo.android.googleServicesFile` at it. EAS only uploads committed files.
 - Upload an FCM V1 service account key to EAS (`eas credentials -p android`).
   The Android signing keystore is not an FCM credential and cannot replace it.
 - iOS needs an APNs key uploaded to EAS. The signing certificate alone does not
@@ -459,6 +460,8 @@ numbers, not the user-facing version.
 ```bash
 # Add docs/release-notes/v0.2.0.md first; the tag workflow refuses to release
 # without it and uses it verbatim instead of the generated changelog.
+# Add docs/release-notes/v0.2.0.md and push it to main first. Both release
+# workflows refuse a tag without it.
 git tag v0.2.0
 git push origin v0.2.0
 ```

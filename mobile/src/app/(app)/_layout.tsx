@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 
 export default function AppLayout() {
-  const { status } = useAuth();
+  const { status, needsTenantSelection } = useAuth();
   const pathname = usePathname();
   const theme = useTheme();
 
@@ -21,6 +21,12 @@ export default function AppLayout() {
   if (status !== "authenticated") {
     return <Redirect href={{ pathname: "/login", params: { next: pathname } }} />;
   }
+  if (needsTenantSelection && pathname !== "/select-tenant") {
+    return <Redirect href="/select-tenant" />;
+  }
+  if (!needsTenantSelection && pathname === "/select-tenant") {
+    return <Redirect href="/" />;
+  }
 
   return (
     <Stack
@@ -30,6 +36,7 @@ export default function AppLayout() {
       }}
     >
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="select-tenant" />
       <Stack.Screen name="spool/[id]" />
       <Stack.Screen
         name="scan-confirm"

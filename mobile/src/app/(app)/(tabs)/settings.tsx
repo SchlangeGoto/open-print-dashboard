@@ -23,15 +23,27 @@ import { PageHeader, Screen } from "@/components/ui/screen";
 import { testServerConnection } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getBuildInfo } from "@/lib/build-info";
+import { isHostedServer } from "@/lib/config";
 import { formatError, getInitials } from "@/lib/format";
 import { TAB_BAR_HEIGHT } from "@/lib/layout";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function SettingsScreen() {
-  const { user, serverUrl, logout } = useAuth();
+  const {
+    user,
+    serverUrl,
+    tenants,
+    activeTenantId,
+    switchTenant,
+    logout,
+  } = useAuth();
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const activeTenant = tenants.find((tenant) => tenant.id === activeTenantId);
+  const canManageMembers =
+    activeTenant?.role === "owner" || activeTenant?.role === "admin";
+  const hosted = isHostedServer(serverUrl);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<
     { ok: boolean; message: string } | null
@@ -129,6 +141,125 @@ export default function SettingsScreen() {
           ) : null}
         </Card>
 
+        {tenants.length > 1 ? (
+          <Card style={styles.section}>
+            <View style={styles.sectionTitle}>
+              <View
+                style={[
+                  styles.iconWrap,
+                  { backgroundColor: `${theme.colors.accent}18` },
+                ]}
+              >
+                <Ionicons
+                  name="business-outline"
+                  size={18}
+                  color={theme.colors.accentText}
+                />
+              </View>
+              <AppText variant="heading">Tenant</AppText>
+            </View>
+            {tenants.map((tenant) => (
+              <Pressable
+                key={tenant.id}
+                accessibilityRole="button"
+                accessibilityState={{
+                  selected: tenant.id === activeTenantId,
+                  disabled: !tenant.is_active,
+                }}
+                disabled={!tenant.is_active}
+                onPress={() => {
+                  void switchTenant(tenant.id).then(() => router.replace("/"));
+                }}
+                style={[
+                  styles.tenantRow,
+                  !tenant.is_active ? styles.tenantInactive : null,
+                ]}
+              >
+                <AppText
+                  numberOfLines={1}
+                  color={
+                    tenant.id === activeTenantId
+                      ? theme.colors.accentText
+                      : theme.colors.text
+                  }
+                  style={styles.tenantName}
+                >
+                  {tenant.name}
+                </AppText>
+                <Badge label={tenant.role} />
+                {tenant.id === activeTenantId ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={18}
+                    color={theme.colors.accentText}
+                  />
+                ) : null}
+              </Pressable>
+            ))}
+          </Card>
+        ) : null}
+
+        <Card style={styles.section}>
+          <View style={styles.sectionTitle}>
+            <View
+              style={[
+                styles.iconWrap,
+                { backgroundColor: `${theme.colors.info}18` },
+              ]}
+            >
+              <Ionicons
+                name="analytics-outline"
+                size={18}
+                color={theme.colors.info}
+              />
+            </View>
+            <AppText variant="heading">Workspace</AppText>
+          </View>
+          <AppButton
+            title="Analytics"
+            variant="secondary"
+            size="sm"
+            onPress={() => router.push("/analytics")}
+            icon={
+              <Ionicons
+                name="stats-chart-outline"
+                size={16}
+                color={theme.colors.text}
+              />
+            }
+          />
+          {canManageMembers ? (
+            <AppButton
+              title="Members"
+              variant="secondary"
+              size="sm"
+              onPress={() => router.push("/members")}
+              icon={
+                <Ionicons
+                  name="people-outline"
+                  size={16}
+                  color={theme.colors.text}
+                />
+              }
+            />
+          ) : null}
+          {user?.is_superuser && tenants.length > 0 ? (
+            <AppButton
+              title="Tenants"
+              variant="secondary"
+              size="sm"
+              onPress={() => router.push("/tenants")}
+              icon={
+                <Ionicons
+                  name="business-outline"
+                  size={16}
+                  color={theme.colors.text}
+                />
+              }
+            />
+          ) : null}
+        </Card>
+
         <Card style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitle}>
@@ -162,8 +293,13 @@ export default function SettingsScreen() {
           </View>
 
           <AppText variant="mono" muted numberOfLines={2} selectable>
-            {serverUrl}
+            {hosted ? "OpenPrintDash Cloud" : serverUrl}
           </AppText>
+          {hosted ? (
+            <AppText variant="caption" muted>
+              Server, updates and backups are managed for you.
+            </AppText>
+          ) : null}
 
           <AppButton
             title="Test connection"
@@ -396,6 +532,18 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     lineHeight: 21,
+  },
+  tenantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  tenantInactive: {
+    opacity: 0.45,
+  },
+  tenantName: {
+    flex: 1,
   },
   aboutRow: {
     flexDirection: "row",

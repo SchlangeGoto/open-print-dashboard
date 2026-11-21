@@ -4,7 +4,13 @@ import type {
   FilamentInput,
   ListResponse,
   Printer,
+  PrintJob,
   Spool,
+  TenantInvite,
+  TenantInviteCreated,
+  TenantMember,
+  TenantMembership,
+  TenantSummary,
   TokenResponse,
   UserPublic,
 } from "./types";
@@ -28,9 +34,11 @@ export interface AuthTokens {
 interface ApiClientOptions {
   getServerUrl: () => string | null;
   getTokens: () => AuthTokens | null;
+  getTenantId: () => string | null;
   setTokens: (tokens: AuthTokens) => Promise<void>;
   clearTokens: () => Promise<void>;
   onSessionExpired: () => void;
+  onTenantInvalid: () => void;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -187,6 +195,18 @@ export class ApiClient {
       const detail = Array.isArray(body?.detail)
         ? (body.detail[0] as { msg?: string } | undefined)?.msg
         : body?.detail;
+      const code =
+        detail && typeof detail === "object" && "code" in detail
+          ? (detail as { code?: string }).code
+          : undefined;
+      if (
+        (res.status === 404 && detail === "Tenant not found") ||
+        (res.status === 403 &&
+          detail === "The user is not a member of an active tenant") ||
+        (res.status === 400 && code === "tenant_required")
+      ) {
+        this.options.onTenantInvalid();
+      }
       throw new ApiError(
         res.status,
         typeof detail === "string"
@@ -211,6 +231,10 @@ export class ApiClient {
     if (tokens?.accessToken) {
       headers.set("Authorization", `Bearer ${tokens.accessToken}`);
     }
+    const tenantId = this.options.getTenantId();
+    if (tenantId) {
+      headers.set("X-Tenant-ID", tenantId);
+    }
     if (init.body && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
@@ -231,6 +255,10 @@ export class ApiClient {
       if (accessToken) {
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${accessToken}`);
+        const tenantId = this.options.getTenantId();
+        if (tenantId) {
+          retryHeaders.set("X-Tenant-ID", tenantId);
+        }
         if (init.body && !retryHeaders.has("Content-Type")) {
           retryHeaders.set("Content-Type", "application/json");
         }
@@ -378,6 +406,95 @@ export class ApiClient {
     return this.request<UserPublic>("/users/me");
   }
 
+  async getMeTenants(): Promise<TenantMembership[]> {
+    const data = await this.request<ListResponse<TenantMembership>>(
+      "/me/tenants",
+    );
+    return data.data;
+  }
+
+  async getTenantMembers(): Promise<TenantMember[]> {
+    const data = await this.request<ListResponse<TenantMember>>(
+      "/tenants/current/members",
+    );
+    return data.data;
+  }
+
+  updateTenantMember(userId: string, role: string): Promise<TenantMember> {
+    return this.request<TenantMember>(
+      `/tenants/current/members/${userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      },
+    );
+  }
+
+  removeTenantMember(userId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/tenants/current/members/${userId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async getTenantInvites(): Promise<TenantInvite[]> {
+    const data = await this.request<ListResponse<TenantInvite>>(
+      "/tenants/current/invites",
+    );
+    return data.data;
+  }
+
+  createTenantInvite(
+    email: string,
+    role: string,
+  ): Promise<TenantInviteCreated> {
+    return this.request<TenantInviteCreated>(
+      "/tenants/current/invites",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
+      },
+    );
+  }
+
+  revokeTenantInvite(inviteId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/tenants/current/invites/${inviteId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async getTenants(): Promise<TenantSummary[]> {
+    return this.request<TenantSummary[]>("/tenants");
+  }
+
+  createTenant(name: string, slug: string): Promise<TenantSummary> {
+    return this.request<TenantSummary>("/tenants", {
+      method: "POST",
+      body: JSON.stringify({ name, slug }),
+    });
+  }
+
+  updateTenant(
+    tenantId: string,
+    data: { name?: string; slug?: string; is_active?: boolean },
+  ): Promise<TenantSummary> {
+    return this.request<TenantSummary>(`/tenants/${tenantId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteTenant(
+    tenantId: string,
+    slug: string,
+  ): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/tenants/${tenantId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ slug }),
+    });
+  }
+
   async getSpools(): Promise<Spool[]> {
     const data = await this.request<ListResponse<Spool>>("/spools/");
     return data.data;
@@ -396,8 +513,28 @@ export class ApiClient {
     return this.request<Spool>(`/spools/${id}`);
   }
 
+  async getPrintJobs(limit = 50): Promise<PrintJob[]> {
+    const data = await this.request<ListResponse<PrintJob>>(
+      `/prints/?limit=${limit}`,
+    );
+    return data.data;
+  }
+
+  async getActivePrints(): Promise<PrintJob[]> {
+    const data =
+      await this.request<ListResponse<PrintJob>>("/prints/active");
+    return data.data;
+  }
+
   getFilament(id: string): Promise<Filament> {
     return this.request<Filament>(`/filaments/${id}`);
+  }
+
+  async getFilamentSpools(id: string): Promise<Spool[]> {
+    const data = await this.request<ListResponse<Spool>>(
+      `/filaments/${id}/spools`,
+    );
+    return data.data;
   }
 
   scanBarcode(

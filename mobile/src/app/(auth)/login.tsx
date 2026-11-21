@@ -17,6 +17,7 @@ import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/lib/auth";
+import { isHostedServer } from "@/lib/config";
 import { formatError } from "@/lib/format";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
@@ -26,6 +27,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const target = (next && next.startsWith("/") ? next : "/") as Href;
   const theme = useTheme();
+  const hosted = isHostedServer(serverUrl);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -74,10 +76,12 @@ export default function LoginScreen() {
         <BrandLockup size={64} />
         <View style={styles.heading}>
           <AppText variant="display" style={styles.center}>
-            Welcome back
+            {hosted ? "Welcome to OpenPrintDash Cloud" : "Welcome back"}
           </AppText>
           <AppText muted style={styles.center}>
-            Sign in to manage spools, printers, and filament.
+            {hosted
+              ? "Sign in with the account from your subscription."
+              : "Sign in to manage spools, printers, and filament."}
           </AppText>
         </View>
 

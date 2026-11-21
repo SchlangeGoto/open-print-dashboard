@@ -7,10 +7,50 @@ export interface UserPublic {
   created_at: string | null;
 }
 
+export interface TenantMembership {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  role: string;
+}
+
+export interface TenantSummary {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  created_at: string | null;
+}
+
+export interface TenantMember {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  role: string;
+  created_at: string | null;
+}
+
+export interface TenantInvite {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  created_at: string | null;
+  invited_by: string | null;
+}
+
+export interface TenantInviteCreated extends TenantInvite {
+  token: string | null;
+  accept_url: string | null;
+}
+
 export interface Filament {
   id: string;
   brand: string;
   material: string;
+  series: string | null;
   color_name: string;
   color_hex: string;
   nozzle_temp_min: number | null;
@@ -63,6 +103,26 @@ export interface Printer {
   created_at: string | null;
   updated_at: string | null;
 }
+
+export interface PrintJob {
+  id: string;
+  title: string;
+  cover: string | null;
+  weight: number | null;
+  estimated_cost: number | null;
+  duration_seconds: number | null;
+  start_time: string | null;
+  finished_at: string | null;
+  status: number | null;
+  bambu_task_id: string | null;
+  device_id: string | null;
+  ams_detail_mapping?: string | null;
+  filament_id: string | null;
+  spool_id: string | null;
+  created_at: string | null;
+}
+
+export type PrintJobStatus = "printing" | "finished" | "failed" | "unknown";
 
 export interface ListResponse<T> {
   data: T[];

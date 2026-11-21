@@ -273,7 +273,7 @@ These open issues should be solved as part of the epic, not separately:
 | D-15 | `:latest` moves only when the tag is plain `vX.Y.Z`, the newest semver on `main`, and the `main` tip at guard time. Version tags still publish from any main commit. Pin `IMAGE_TAG` in production. | Release containers |
 | D-13 | AMS adoption is weight-aware: a partial tray never adopts a full spool; only untagged spools on no printer whose remaining weight is within max(50 g, 15 %) are candidates, FIFO breaks ties. A tray with no percentage creates a `remaining_unknown` spool (nominal capacity as placeholder), never 0 g or a fake full weight. Entering the remaining grams clears the flag. | AMS sync, spool UI |
 | D-16 | The public repo stays **AGPL-3.0 and single-tenant**. Tenancy, hosted onboarding, platform-admin tenant tools and the provisioning API live in the private hosted edition; billing and the control plane live in the private `opd-cloud` repo. | Repo split, 2026-11-20 |
-| D-17 | The public mobile app is the self-hosted client. The hosted app is a separate build/repo with the tenant picker and hosted-only admin screens. General mobile features sync back through the upstream workflow. | Repo split, mobile |
+| D-17 | One public mobile app supports both modes: **OpenPrintDash Cloud** and **my own server**. Cloud mode presets the hosted backend and uses the subscription email/password; self-hosted mode keeps the server URL setup. Hosted tenant/member links are feature-detected, so self-hosted servers do not see them. | Repo split, mobile |
 | D-18 | The public marketing site stays in this repo and markets the free self-hosted product. Pricing, checkout, account and admin pages live in the private hosted site. | Site split |
 
 ---
@@ -326,16 +326,18 @@ that the spool page renders the final values after the animation.
 the same operational picture as the web dashboard and make the common actions
 reachable in one or two taps.
 
-**Planned public work (ported from the closed mobile branches):**
+**Implemented on `feat/mobile-unified`:**
 
-- **M-00:** Port the general mobile dashboard, print jobs, filaments and
-  analytics screens back into the public self-host client **without** tenant
-  picker, member or tenant-admin code.
+- First-launch choice: **OpenPrintDash Cloud** or **my own server**.
+- Cloud mode presets the hosted backend; login uses the subscription
+  email/password. Self-hosted mode keeps the URL setup.
 - Mobile **Dashboard** tab: online/loaded/filament/printing stats, active print
   progress, recent history, low-filament list and quick actions.
 - Mobile **Print jobs** screen with status filters and history.
 - Mobile **Filaments** screen with remaining stock and a filament detail page.
 - Mobile **Analytics** screen with totals, seven-day activity and top filaments.
+- Hosted-only **Members** and **Tenants** screens, hidden when the server has
+  no tenant context.
 - Web small-screen fixes: card layouts instead of clipped tables, phone-safe
   filament cards, responsive stock chart.
 

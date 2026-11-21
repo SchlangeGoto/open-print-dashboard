@@ -204,8 +204,10 @@ eas build --platform android --profile preview
 The separate `Build Mobile APK` GitHub workflow produces a debug APK for
 testing. It is not a store artifact.
 
-Set `EXPO_PUBLIC_*` values only for non-secret configuration. The server URL is
-configured per device in the app, not baked into the build.
+Set `EXPO_PUBLIC_*` values only for non-secret configuration. The app supports
+both the hosted service and a self-hosted server. `EXPO_PUBLIC_HOSTED_URL`
+selects the hosted backend (default `https://app.openprintdash.app`); a
+self-hosted server URL is entered per device and is never baked into the build.
 
 ## Dependency updates
 

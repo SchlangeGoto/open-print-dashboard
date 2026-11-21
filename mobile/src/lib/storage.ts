@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 
 const SERVER_URL_KEY = "opd.serverUrl";
 const SESSION_KEY = "opd.session";
+const TENANT_KEY = "opd.tenantId";
 
 export interface StoredSession {
   accessToken: string;
@@ -90,4 +91,16 @@ export async function saveStoredSession(session: StoredSession): Promise<void> {
 
 export async function clearStoredSession(): Promise<void> {
   await removeItem(SESSION_KEY);
+}
+
+export async function loadStoredTenantId(): Promise<string | null> {
+  return readItem(TENANT_KEY);
+}
+
+export async function saveStoredTenantId(tenantId: string): Promise<void> {
+  await writeItem(TENANT_KEY, tenantId);
+}
+
+export async function clearStoredTenantId(): Promise<void> {
+  await removeItem(TENANT_KEY);
 }

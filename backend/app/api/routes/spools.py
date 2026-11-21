@@ -549,6 +549,7 @@ def activate_spool(
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
 
+    already_active = spool.active and spool.printer_id == payload.printer_id
     _unload_other_spools(
         session=session, printer_id=payload.printer_id, keep_id=spool.id
     )
@@ -567,14 +568,17 @@ def activate_spool(
             detail="Another spool is already loaded in that printer",
         )
     session.refresh(spool)
-    filament = session.get(Filament, spool.filament_id) if spool.filament_id else None
-    threading.Thread(
-        target=notify_spool_loaded,
-        kwargs={
-            "filament": filament.color_name if filament else "Filament",
-            "printer": printer.name,
-            "spool_id": str(spool.id),
-        },
-        daemon=True,
-    ).start()
+    if not already_active:
+        filament = (
+            session.get(Filament, spool.filament_id) if spool.filament_id else None
+        )
+        threading.Thread(
+            target=notify_spool_loaded,
+            kwargs={
+                "filament": filament.color_name if filament else "Filament",
+                "printer": printer.name,
+                "spool_id": str(spool.id),
+            },
+            daemon=True,
+        ).start()
     return spool

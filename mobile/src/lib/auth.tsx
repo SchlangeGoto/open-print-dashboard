@@ -20,7 +20,11 @@ import {
   saveStoredSession,
   saveStoredTenantId,
 } from "./storage";
-import { registerPushToken, unregisterPushToken } from "./push";
+import {
+  forgetPushToken,
+  registerPushToken,
+  unregisterPushToken,
+} from "./push";
 import type { TenantMembership, UserPublic } from "./types";
 
 export type AuthStatus =
@@ -123,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     sessionExpiredHandler = () => {
+      forgetPushToken();
       sessionTokens = null;
       sessionTenantId = null;
       setUser(null);
@@ -176,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedSession = await loadStoredSession();
       if (epoch !== restoreEpoch.current) return;
       if (!storedSession) {
+        forgetPushToken();
         sessionTokens = null;
         setStatus("logged-out");
         return;
@@ -220,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // instead of looping back to the server screen.
           }
           if (epoch !== restoreEpoch.current) return;
+          forgetPushToken();
           setUser(null);
           setTenants([]);
           setActiveTenantId(null);
@@ -254,7 +261,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     restoreEpoch.current += 1;
-    await unregisterPushToken(apiClient);
+    // Do not let an unreachable push endpoint hold the logout button.
+    await Promise.race([
+      unregisterPushToken(apiClient),
+      new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+    ]);
     try {
       await apiClient.logout();
     } finally {

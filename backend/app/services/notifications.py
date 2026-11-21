@@ -5,7 +5,7 @@ import requests
 from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
-from app.models import PushToken
+from app.models import PushToken, User
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -24,7 +24,11 @@ def send_push_to_all(
     """
     try:
         with Session(engine) as session:
-            tokens = session.exec(select(PushToken.token)).all()
+            tokens = session.exec(
+                select(PushToken.token)
+                .join(User, User.id == PushToken.user_id)
+                .where(User.is_active)
+            ).all()
     except Exception as exc:  # noqa: BLE001
         logger.error("Could not load push tokens: %s", exc)
         return 0
@@ -40,18 +44,28 @@ def send_push_to_all(
                 "title": title,
                 "body": body,
                 "sound": "default",
+                "channelId": "default",
                 "data": data or {},
             }
             for token in chunk
         ]
+        response = None
+        for attempt in range(2):
+            try:
+                response = requests.post(
+                    EXPO_PUSH_URL, json=messages, timeout=TIMEOUT_SECONDS
+                )
+                response.raise_for_status()
+                break
+            except (requests.RequestException, ValueError) as exc:
+                if attempt == 0:
+                    continue
+                logger.warning("Could not send %s push messages: %s", len(chunk), exc)
+        if response is None:
+            continue
         try:
-            response = requests.post(
-                EXPO_PUSH_URL, json=messages, timeout=TIMEOUT_SECONDS
-            )
-            response.raise_for_status()
             tickets = response.json().get("data") or []
-        except (requests.RequestException, ValueError) as exc:
-            logger.warning("Could not send %s push messages: %s", len(chunk), exc)
+        except ValueError:
             continue
 
         dead: list[str] = []

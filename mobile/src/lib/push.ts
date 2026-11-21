@@ -59,9 +59,17 @@ export async function registerPushToken(api: ApiClient): Promise<void> {
       return;
     }
     currentToken = token;
-  } catch {
-    // No notification permission, no EAS project, or Expo Go: stay quiet.
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("Push registration failed", error);
+    }
   }
+}
+
+/** Drop local push state after the session ended without a logout call. */
+export function forgetPushToken(): void {
+  generation += 1;
+  currentToken = null;
 }
 
 export async function unregisterPushToken(api: ApiClient): Promise<void> {

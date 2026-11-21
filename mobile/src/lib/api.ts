@@ -530,6 +530,35 @@ export class ApiClient {
     return this.request<Filament>(`/filaments/${id}`);
   }
 
+  createFilament(data: FilamentInput): Promise<Filament> {
+    return this.request<Filament>("/filaments/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateFilament(
+    id: string,
+    data: Partial<FilamentInput>,
+  ): Promise<Filament> {
+    return this.request<Filament>(`/filaments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteFilament(id: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/filaments/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  deleteSpool(id: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/spools/${id}`, {
+      method: "DELETE",
+    });
+  }
+
   async getFilamentSpools(id: string): Promise<Spool[]> {
     const data = await this.request<ListResponse<Spool>>(
       `/filaments/${id}/spools`,

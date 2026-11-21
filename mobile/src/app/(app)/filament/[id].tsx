@@ -112,6 +112,31 @@ export default function FilamentDetailScreen() {
               />
             </Pressable>
           }
+          right={
+            data ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Edit filament"
+                hitSlop={8}
+                onPress={() =>
+                  router.push({
+                    pathname: "/filament/edit",
+                    params: { id: data.filament.id },
+                  })
+                }
+                style={[
+                  styles.backButton,
+                  { backgroundColor: theme.colors.surfaceAlt },
+                ]}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={20}
+                  color={theme.colors.text}
+                />
+              </Pressable>
+            ) : undefined
+          }
         />
 
         {error ? (

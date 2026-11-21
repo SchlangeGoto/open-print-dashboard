@@ -226,7 +226,7 @@ These open issues should be solved as part of the epic, not separately:
 | P-05 | `backend/app/services/printer_service.py` | Each cloud printer gets its own MQTT session with the same `u_<uid>`/token. The review worried about a per-account limit, but there is no evidence of one (D-08); the REST fallback was removed. | Keep one client per printer for now. If printers start evicting each other, switch to one account-level client on `device/+/report`. | Human #9 · 09 Nov 20:18 UTC |
 | P-06 | `backend/app/services/bambu_client.py` | ~~An unresolved slot drops out after `DEDUCTION_RETRY_HOURS` with no marker.~~ | **Fixed #88/#95:** stale deductions are marked `ABANDONED` once and logged. | Human #20 |
 | P-07 | `backend/app/services/bambu_client.py`, `printjob` data | ~~Legacy terminal jobs may have `finished_at` NULL.~~ | **Fixed #88:** migration backfills it; #95 protects legacy rows from live-AMS resolution. | Human #20 |
-| P-08 | `backend/app/services/bambu_client.py` | If one recorded roll is deleted, the whole deduction is abandoned rather than charging the surviving rolls. | Deferred: safe partial charging needs a per-slot claim table/row lock. Current behavior overstates remaining stock but never charges the wrong roll. | Human #20 |
+| P-08 | `backend/app/services/bambu_client.py` | If one recorded roll is deleted, the whole deduction is abandoned rather than charging the surviving rolls. | **Partially fixed #104:** deleted recorded rolls charge the surviving recorded rolls. Slots that were never recorded still go to the abandonment window instead of being charged to a tray loaded later. | Human #20 |
 | P-09 | `backend/app/api/routes/spools.py`, `backend/app/services/bambu_client.py` | Two untagged rolls in one printer cannot both resolve, so the second slot is unclaimed. | Deferred: needs a separate printer/tray association instead of overloading `printer_id`. Workaround: use tagged AMS spools for multi-slot prints. | Human #20 |
 
 ### 2.3 Spools, barcodes and filaments
@@ -287,24 +287,24 @@ first load and meaningful state changes, never on background polling.
 where it fits. Add `motion` (Framer Motion successor) only if shared layout
 animations justify the dependency.
 
-#### A-01 — Motion primitives
+#### A-01 — Motion primitives — **#92**
 - Shared duration/easing tokens (fast 120 ms, normal 200 ms, slow 350 ms).
 - A `useReducedMotion` hook and a global `prefers-reduced-motion` fallback.
 - One rule: polled refreshes update values in place; only mount, navigation and
   explicit actions animate.
 
-#### A-02 — Spools
+#### A-02 — Spools — **#92**
 - Stagger spool cards on first load.
 - Animate the remaining-filament fill and spool ring from 0 to the real value.
 - Animate load/unload transitions and the active-spool indicator.
 - Keep the animation short so a poll does not replay it.
 
-#### A-03 — Dashboard and analytics
+#### A-03 — Dashboard and analytics — **partial #92** (count-up and progress motion)
 - Count up the stat cards on first mount.
 - Grow chart bars/lines from the baseline when the range or data changes.
 - Crossfade skeleton → content instead of a hard swap.
 
-#### A-04 — Navigation and overlays
+#### A-04 — Navigation and overlays — **partial #92** (page enter, cards)
 - Subtle page-enter transition on dashboard routes.
 - Animate the sidebar active pill, dropdowns, dialogs and sheets.
 - Animate the spool/filament load and save transitions.

@@ -255,8 +255,18 @@ while true; do
     chmod 600 "$ENV_FILE"
 
     failed=0
-    if ! compose pull backend frontend ||
-       ! compose up -d --no-deps backend frontend ||
+    if ! compose pull backend frontend; then
+      # Nothing was replaced, so leave the working backend alone.
+      cp "$ENV_BACKUP" "$ENV_FILE"
+      chmod 600 "$ENV_FILE"
+      write_status error "$requested" \
+        "Could not pull the release images; update not started"
+      rm -f "$ENV_BACKUP" "$JOURNAL_FILE"
+      rmdir "$LOCK_DIR"
+      sleep 5
+      continue
+    fi
+    if ! compose up -d --no-deps backend frontend ||
        ! wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" ||
        ! wait_for_url "$FRONTEND_URL" "$HEALTH_ATTEMPTS"; then
       failed=1

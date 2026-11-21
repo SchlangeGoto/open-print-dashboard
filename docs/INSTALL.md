@@ -74,9 +74,12 @@ docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
 docker compose -f compose.ghcr.yml exec -T db psql -U opd -d postgres \
   -c 'CREATE DATABASE openprintdashboard TEMPLATE template0'
 
-# 3. Restore and stop on the first error.
+# 3. Verify and restore the exact dump shown in the update status.
+BACKUP=pre-update-X.Y.Z-YYYYMMDDTHHMMSSZ-PID.sql.gz
 docker run --rm -v openprintdashboard_updater_data:/d alpine \
-  sh -c 'gunzip -c /d/pre-update-X.Y.Z-*.sql.gz' > /tmp/opd-restore.sql
+  sh -c "gunzip -t /d/$BACKUP"
+docker run --rm -v openprintdashboard_updater_data:/d alpine \
+  sh -c "gunzip -c /d/$BACKUP" > /tmp/opd-restore.sql
 docker compose -f compose.ghcr.yml exec -T db psql -X -v ON_ERROR_STOP=1 \
   -U opd -d openprintdashboard < /tmp/opd-restore.sql
 
@@ -86,7 +89,9 @@ docker compose -f compose.ghcr.yml up -d
 
 With an existing reverse proxy, add `-f compose.override.yml` to the Compose
 commands. The volume name follows the Compose project name; use
-`docker volume ls` if you changed it.
+`docker volume ls` if you changed it. Use the exact backup filename from the
+status, not a wildcard: a retry for the same release keeps the previous dump
+too.
 
 The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;
 only the fixed updater image has it. The image accepts a single `X.Y.Z` tag and

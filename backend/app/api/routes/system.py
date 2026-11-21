@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -147,8 +148,16 @@ def request_update(payload: UpdateRequest) -> Any:
     request_file = directory / "request"
     if request_file.exists() or (directory / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=".request.")
+    tmp_path = Path(tmp_name)
     try:
-        fd = os.open(request_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        with os.fdopen(fd, "w") as tmp:
+            tmp.write(tag + "\n")
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        # A hard link publishes the finished file atomically and fails if a
+        # request already exists, so the worker never reads a partial tag.
+        os.link(tmp_path, request_file)
     except FileExistsError as exc:
         raise HTTPException(
             status_code=409, detail="An update is already queued"
@@ -157,14 +166,8 @@ def request_update(payload: UpdateRequest) -> Any:
         raise HTTPException(
             status_code=503, detail="Could not queue the update"
         ) from exc
-    try:
-        with os.fdopen(fd, "w") as tmp:
-            tmp.write(tag + "\n")
-    except OSError as exc:
-        request_file.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=503, detail="Could not queue the update"
-        ) from exc
+    finally:
+        tmp_path.unlink(missing_ok=True)
     logger.warning("Queued OpenPrintDash update to %s", tag)
     status = read_update_status()
     status.state = "queued"

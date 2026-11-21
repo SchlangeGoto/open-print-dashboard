@@ -11,7 +11,8 @@ READY_FILE="$DATA_DIR/ready"
 HEARTBEAT_FILE="$DATA_DIR/heartbeat"
 REQUEST_FILE="$DATA_DIR/request"
 LOCK_DIR="$DATA_DIR/lock"
-HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000/api/v1/utils/health-check/}"
+API_PREFIX="${API_V1_STR:-/api/v1}"
+HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000${API_PREFIX}/utils/health-check/}"
 FRONTEND_URL="${UPDATER_FRONTEND_URL:-http://frontend:3000/}"
 HEALTH_ATTEMPTS="${UPDATER_HEALTH_ATTEMPTS:-60}"
 ENV_FILE="$PROJECT_DIR/.env"
@@ -19,7 +20,13 @@ ENV_BACKUP="/tmp/opd-env.backup"
 
 mkdir -p "$DATA_DIR"
 touch "$READY_FILE" "$HEARTBEAT_FILE"
+chmod 0644 "$READY_FILE" "$HEARTBEAT_FILE"
 rm -rf "$LOCK_DIR" "$ENV_BACKUP"
+# Keep the heartbeat fresh while a pull, dump or health loop blocks the main
+# loop; the backend treats a stale heartbeat as "updater not responding".
+( while :; do touch "$HEARTBEAT_FILE"; sleep 5; done ) &
+HEARTBEAT_PID=$!
+trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT INT TERM
 
 write_status() {
   state="$1"
@@ -33,6 +40,7 @@ write_status() {
     printf 'updated_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$tmp"
   mv "$tmp" "$STATE_FILE"
+  chmod 0644 "$STATE_FILE"
 }
 
 read_env() {
@@ -79,12 +87,18 @@ backup_database() {
   user=${user:-opd}
   database=${database:-openprintdashboard}
   backup="$DATA_DIR/pre-update-$1.sql.gz"
+  raw="$DATA_DIR/.pre-update-$1.sql"
   if compose exec -T db pg_dump -U "$user" -d "$database" \
-      --no-owner --clean --if-exists | gzip > "$backup"; then
+      --no-owner --clean --if-exists > "$raw" &&
+     [ -s "$raw" ] &&
+     gzip -c "$raw" > "$backup"; then
+    rm -f "$raw"
+    # Keep only the two newest dumps.
+    ls -1t "$DATA_DIR"/pre-update-*.sql.gz 2>/dev/null | tail -n +3 | xargs -r rm -f
     printf '%s\n' "$backup"
     return 0
   fi
-  rm -f "$backup"
+  rm -f "$raw" "$backup"
   return 1
 }
 
@@ -165,7 +179,8 @@ while true; do
         chmod 600 "$ENV_FILE"
         if compose pull backend frontend >/dev/null 2>&1 &&
            compose up -d --no-deps backend frontend >/dev/null 2>&1 &&
-           wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" >/dev/null 2>&1; then
+           wait_for_url "$HEALTH_URL" "$HEALTH_ATTEMPTS" >/dev/null 2>&1 &&
+           wait_for_url "$FRONTEND_URL" "$HEALTH_ATTEMPTS" >/dev/null 2>&1; then
           write_status error "$requested" "Update failed; previous version restored"
         else
           write_status error "$requested" \

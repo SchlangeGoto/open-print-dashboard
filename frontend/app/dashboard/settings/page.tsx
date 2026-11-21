@@ -314,7 +314,7 @@ export default function SettingsPage() {
             <CardAction>
               <Badge
                 variant={
-                  update?.state === "running"
+                  update?.state === "running" || update?.state === "queued"
                     ? "warning"
                     : update?.state === "success"
                       ? "success"
@@ -351,8 +351,9 @@ export default function SettingsPage() {
 
             {update && !update.updater_available ? (
               <p className="text-xs text-muted-foreground">
-                This deployment has no updater sidecar. Use the install
-                directory&apos;s documented update commands instead.
+                {update.state === "stale"
+                  ? "The updater sidecar is installed but not responding. Check docker compose ps updater."
+                  : "This deployment has no updater sidecar. Use the install directory's documented update commands instead."}
               </p>
             ) : null}
 
@@ -389,6 +390,7 @@ export default function SettingsPage() {
                   !update.updater_available ||
                   updateBusy ||
                   update.state === "running" ||
+                  update.state === "queued" ||
                   !update.latest_version
                 }
                 onClick={() => setConfirmUpdate(true)}

@@ -55,6 +55,8 @@ def test_update_request_is_written_once(
     monkeypatch.setattr(settings, "APP_VERSION", "1.2.3")
     monkeypatch.setattr(system, "_latest_release", lambda: ("1.3.0", None))
     (tmp_path / "ready").touch()
+    (tmp_path / "heartbeat").touch()
+    (tmp_path / "status").write_text("state=idle\n")
 
     response = client.post(
         f"{settings.API_V1_STR}/system/update",

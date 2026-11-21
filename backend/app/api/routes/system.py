@@ -88,7 +88,10 @@ def _read_updater_status() -> dict[str, str]:
     heartbeat = directory / "heartbeat"
     try:
         if time.time() - heartbeat.stat().st_mtime > 60:
-            return {}
+            return {
+                "state": "stale",
+                "message": "The updater sidecar is not responding",
+            }
         status: dict[str, str] = {}
         for line in (directory / "status").read_text().splitlines():
             key, _, value = line.partition("=")
@@ -104,6 +107,7 @@ def read_update_status() -> Any:
     current = settings.APP_VERSION
     latest, url = _latest_release()
     status = _read_updater_status()
+    updater_available = bool(status) and status.get("state") != "stale"
     available = False
     latest_tuple = _version_tuple(latest) if latest else None
     current_tuple = _version_tuple(current)
@@ -114,7 +118,7 @@ def read_update_status() -> Any:
         latest_version=latest,
         update_available=available,
         release_url=url,
-        updater_available=bool(status),
+        updater_available=updater_available,
         state=status.get("state", "idle" if status else "unavailable"),
         message=status.get("message") or None,
         updated_at=status.get("updated_at") or None,
@@ -127,10 +131,11 @@ def request_update(payload: UpdateRequest) -> Any:
     if not _TAG_RE.fullmatch(tag):
         raise HTTPException(status_code=422, detail="Release tag must be X.Y.Z")
     directory = Path(settings.UPDATER_DIR)
-    if not (directory / "ready").exists():
+    updater = _read_updater_status()
+    if not updater or updater.get("state") == "stale":
         raise HTTPException(
             status_code=503,
-            detail="The updater sidecar is not installed for this deployment",
+            detail="The updater sidecar is not installed or not responding",
         )
     current_version = _version_tuple(settings.APP_VERSION)
     requested_version = _version_tuple(tag)
@@ -156,4 +161,7 @@ def request_update(payload: UpdateRequest) -> Any:
             status_code=503, detail="Could not queue the update"
         ) from exc
     logger.warning("Queued OpenPrintDash update to %s", tag)
-    return read_update_status()
+    status = read_update_status()
+    status.state = "queued"
+    status.message = f"Update to {tag} queued"
+    return status

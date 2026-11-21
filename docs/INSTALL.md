@@ -51,8 +51,14 @@ named volumes.
 If the new backend does not become healthy before a database migration, the
 updater restores the previous tag automatically. If the new image already
 migrated the database, automatic rollback is skipped and the card shows the
-database backup path; restore that backup before downgrading. A failed update
-leaves a message in the card.
+database backup path; restore that backup before downgrading.
+
+The dump lives in the `updater_data` volume. With the default project name:
+
+```bash
+docker run --rm -v openprintdashboard_updater_data:/d alpine   sh -c 'gunzip -c /d/pre-update-X.Y.Z.sql.gz' > /tmp/opd-restore.sql
+docker compose exec -T db psql -U opd -d openprintdashboard < /tmp/opd-restore.sql
+```
 
 The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;
 only the fixed updater image has it. The image accepts a single `X.Y.Z` tag and

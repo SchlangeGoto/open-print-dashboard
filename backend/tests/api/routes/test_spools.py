@@ -92,6 +92,16 @@ def test_create_and_activate_spool(
         "app.api.routes.spools.notify_spool_loaded",
         lambda **kwargs: notified.append(kwargs),
     )
+
+    class ImmediateThread:
+        def __init__(self, *, target, kwargs=None, daemon=None):
+            self._target = target
+            self._kwargs = kwargs or {}
+
+        def start(self) -> None:
+            self._target(**self._kwargs)
+
+    monkeypatch.setattr("app.api.routes.spools.threading.Thread", ImmediateThread)
     filament_id = _create_filament(client, superuser_token_headers)
     printer = _create_printer(db)
     data = {

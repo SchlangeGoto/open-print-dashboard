@@ -41,6 +41,58 @@ test.describe("demo dashboard", () => {
   });
 });
 
+test.describe("phone viewport", () => {
+  const routes = [
+    "/dashboard",
+    "/dashboard/printers",
+    "/dashboard/prints",
+    "/dashboard/filaments",
+    "/dashboard/spools",
+    "/dashboard/analytics",
+    "/dashboard/settings",
+  ] as const;
+
+  for (const path of routes) {
+    test(`does not scroll sideways on ${path}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(path);
+
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(1);
+    });
+  }
+
+  test("keeps the filament dialog inside a phone screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/dashboard/filaments");
+    await page.getByRole("button", { name: "Add Filament" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.width).toBeLessThanOrEqual(390);
+  });
+
+  test("keeps the spool dialog inside a phone screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/dashboard/spools");
+    await page.getByRole("button", { name: "Add Spool" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.width).toBeLessThanOrEqual(390);
+  });
+});
+
 test.describe("auth screen", () => {
   test("shows the login form when demo is opted out", async ({ page }) => {
     await page.addInitScript(() => {

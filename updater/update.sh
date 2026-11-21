@@ -175,6 +175,16 @@ reconcile_interrupted() {
   requested=$(journal_get requested)
   phase=$(journal_phase)
 
+  if [ "$phase" = "stuck" ]; then
+    write_status error "$requested" \
+      "Manual intervention required. Restore $backup before downgrading, then remove the journal from the updater_private volume."
+    return 1
+  fi
+  if [ "$phase" = "stuck" ]; then
+    write_status error "$requested" \
+      "Manual intervention required. Restore $backup before downgrading, then remove the journal from the updater_private volume."
+    return 1
+  fi
   if [ "$phase" = "healthy" ] && [ -n "$requested" ]; then
     write_status success "$requested" "Updated to $requested"
     rm -f "$JOURNAL_FILE" "$ENV_BACKUP"
@@ -213,8 +223,9 @@ reconcile_interrupted() {
       sed -i '/^recovery_attempts=/d' "$JOURNAL_FILE" 2>/dev/null || true
       printf 'recovery_attempts=%s\n' "$attempts" >> "$JOURNAL_FILE"
       if [ "$attempts" -ge "$RECOVERY_ROUNDS" ]; then
+        printf 'phase=stuck\n' >> "$JOURNAL_FILE"
         write_status error "$requested" \
-          "The updated stack did not become healthy after $attempts recovery attempts. Remove the journal from the updater_private volume or restore $backup."
+          "The updated stack did not become healthy after $attempts recovery attempts. Restore $backup before downgrading, then remove the journal from the updater_private volume."
       else
         write_status error "$requested" \
           "The updated stack is still starting; recovery will retry."

@@ -1963,7 +1963,7 @@ class BambuClient:
 
                 self._stale_job_counts.pop(cloud_task_id, None)
                 notify_claimed = False
-                if job.status in (2, 3):
+                if first_finish and job.status in (2, 3):
                     claim = session.execute(
                         update(PrintJob)
                         .where(PrintJob.id == job.id)

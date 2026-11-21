@@ -360,15 +360,15 @@ The mobile app registers an Expo push token after login and unregisters it on
 logout or when the server URL changes. The dashboard sends print-finished,
 print-failed and spool-loaded notifications through the Expo Push API.
 
-- The token requires the EAS project id in \`mobile/app.json\`
-  (\`extra.eas.projectId\`); \`eas init\` sets it.
+- The token requires the EAS project id in `mobile/app.json`
+  (`extra.eas.projectId`); `eas init` sets it.
 - Remote push needs a development or release build. Expo Go cannot receive
   remote notifications, and the app silently stays unregistered there.
 - Android 13 asks for the notification permission at runtime; the app only
   registers after it is granted.
-- The backend needs outbound HTTPS to \`exp.host\`. No server-side Expo token is
+- The backend needs outbound HTTPS to `exp.host`. No server-side Expo token is
   required for the default public push service.
-- Tokens that Expo reports as \`DeviceNotRegistered\` are deleted automatically.
+- Tokens that Expo reports as `DeviceNotRegistered` are deleted automatically.
 - Re-test after changing the bundle id, package name or EAS project: the old
   tokens belong to the old app identity.
 

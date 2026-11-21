@@ -69,6 +69,10 @@ The updater needs `/var/run/docker.sock`. That is root-equivalent on the host;
 only the fixed updater image has it. The image accepts a single `X.Y.Z` tag and
 cannot run arbitrary commands.
 
+Releases before the updater image existed are installed without the sidecar. In
+that case the installer removes `COMPOSE_PROFILES=updater` and prints the manual
+update commands instead.
+
 ### Manual fallback
 
 If the updater profile is disabled (remove `COMPOSE_PROFILES=updater` from
@@ -81,8 +85,8 @@ docker compose -f compose.ghcr.yml pull
 docker compose -f compose.ghcr.yml up -d
 
 # existing proxy
-docker compose -f compose.ghcr.yml -f compose.override.yml pull db backend frontend updater
-docker compose -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend updater
+docker compose -f compose.ghcr.yml -f compose.override.yml pull db backend frontend
+docker compose -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend
 ```
 
 The named volumes `postgres_data` and `backend_data` are never removed by these

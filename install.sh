@@ -306,6 +306,21 @@ if [ "$PROXY" = "existing" ]; then
   SERVICES=(db backend frontend updater)
 fi
 
+UPDATER_DISABLED=0
+if grep -qx 'COMPOSE_PROFILES=updater' .env; then
+  # Older releases predate the updater image. Install them without the
+  # sidecar instead of failing the whole install on a missing image.
+  if ! "${COMPOSE[@]}" --profile updater pull updater >/dev/null 2>&1; then
+    sed -i '/^COMPOSE_PROFILES=updater$/d' .env
+    chmod 600 .env
+    UPDATER_DISABLED=1
+    yellow "$VERSION has no updater image; dashboard updates are disabled."
+  fi
+fi
+if [ "$UPDATER_DISABLED" = 1 ] && [ "$PROXY" = "existing" ]; then
+  SERVICES=(db backend frontend)
+fi
+
 blue "Pulling OpenPrintDash $VERSION images…"
 "${COMPOSE[@]}" pull ${SERVICES[@]+"${SERVICES[@]}"}
 
@@ -373,9 +388,14 @@ fi
 printf '\nData lives in the Compose volumes postgres_data and backend_data.\n'
 printf 'The admin password is stored in %s/.env; keep that file backed up.\n' "$INSTALL_DIR"
 printf 'To update later: change IMAGE_TAG (and APP_VERSION) in .env, then run\n'
+if [ "$UPDATER_DISABLED" = 1 ]; then
+  UPDATE_SERVICES="db backend frontend"
+else
+  UPDATE_SERVICES="db backend frontend updater"
+fi
 if [ "$PROXY" = "existing" ]; then
-  printf '  docker compose --env-file .env -f compose.ghcr.yml -f compose.override.yml pull db backend frontend updater\n'
-  printf '  docker compose --env-file .env -f compose.ghcr.yml -f compose.override.yml up -d db backend frontend updater\n'
+  printf '  docker compose --env-file .env -f compose.ghcr.yml -f compose.override.yml pull %s\n' "$UPDATE_SERVICES"
+  printf '  docker compose --env-file .env -f compose.ghcr.yml -f compose.override.yml up -d %s\n' "$UPDATE_SERVICES"
 else
   printf '  docker compose --env-file .env -f compose.ghcr.yml pull\n'
   printf '  docker compose --env-file .env -f compose.ghcr.yml up -d\n'

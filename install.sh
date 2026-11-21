@@ -52,6 +52,7 @@ EXISTING_ENV=0
 PROJECT_NAME="openprintdashboard"
 ADMIN_EMAIL_SET=0
 ADMIN_PASSWORD_SET=0
+PROJECT_NAME_SET=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -66,7 +67,7 @@ while [ $# -gt 0 ]; do
     --admin-password) ADMIN_PASSWORD="$2"; ADMIN_PASSWORD_SET=1; shift 2 ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
     --force) FORCE=1; shift ;;
-    --project-name) PROJECT_NAME="$2"; shift 2 ;;
+    --project-name) PROJECT_NAME="$2"; PROJECT_NAME_SET=1; shift 2 ;;
     -h|--help)
       cat <<USAGE
 OpenPrintDash installer
@@ -236,13 +237,17 @@ if [ "$EXISTING_ENV" = 1 ]; then
   if [ "$ADMIN_PASSWORD_SET" = 0 ]; then
     ADMIN_PASSWORD=$(read_env FIRST_SUPERUSER_PASSWORD)
   fi
-  PROJECT_NAME=$(read_env COMPOSE_PROJECT_NAME)
-  PROJECT_NAME=${PROJECT_NAME:-openprintdashboard}
+  existing_project=$(read_env COMPOSE_PROJECT_NAME)
+  existing_project=${existing_project:-openprintdashboard}
+  if [ "$PROJECT_NAME_SET" = 1 ] && [ "$PROJECT_NAME" != "$existing_project" ]; then
+    die "Cannot change the Compose project name on an existing install; its volumes live under $existing_project"
+  fi
+  PROJECT_NAME=$existing_project
   if [ -n "$ADMIN_EMAIL" ] || [ -n "$ADMIN_PASSWORD" ]; then
     printf '%s' "$ADMIN_EMAIL" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || \
-      die "Existing admin email is invalid; rerun with --force --admin-email you@example.com"
+      die "Admin email is invalid; fix .env or pass a valid --admin-email"
     [ ${#ADMIN_PASSWORD} -ge 8 ] || \
-      die "Existing admin password is invalid; set FIRST_SUPERUSER_PASSWORD in .env or pass --admin-password"
+      die "Admin password is invalid; fix FIRST_SUPERUSER_PASSWORD in .env or pass --admin-password"
     validate_safe "$ADMIN_EMAIL" "Admin email"
     validate_safe "$ADMIN_PASSWORD" "Admin password"
   fi
@@ -315,7 +320,9 @@ green "OpenPrintDash $VERSION is starting."
 printf '\n'
 if [ "$PROXY" = "bundled" ]; then
   printf 'Dashboard: https://%s\n' "$DOMAIN"
-  printf 'Admin:     %s\n' "$ADMIN_EMAIL"
+  if [ -n "$ADMIN_EMAIL" ]; then
+    printf 'Admin:     %s\n' "$ADMIN_EMAIL"
+  fi
   cat <<'GUIDE'
 
 Port forwarding

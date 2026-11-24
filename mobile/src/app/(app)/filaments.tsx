@@ -30,6 +30,10 @@ interface FilamentsData {
   spools: Spool[];
 }
 
+function remainingRank(value: number | null): number {
+  return value ?? Number.POSITIVE_INFINITY;
+}
+
 export default function FilamentsScreen() {
   const { api } = useAuth();
   const router = useRouter();
@@ -52,24 +56,28 @@ export default function FilamentsScreen() {
     if (!data) return [];
     const remaining = new Map<string, number>();
     const spoolCount = new Map<string, number>();
+    const incomplete = new Set<string>();
     for (const spool of data.spools) {
       if (!spool.filament_id) continue;
       spoolCount.set(
         spool.filament_id,
         (spoolCount.get(spool.filament_id) ?? 0) + 1,
       );
-      if (!spool.remaining_unknown) {
-        remaining.set(
-          spool.filament_id,
-          (remaining.get(spool.filament_id) ?? 0) + spool.remaining_g,
-        );
+      if (spool.remaining_unknown) {
+        incomplete.add(spool.filament_id);
+        continue;
       }
+      remaining.set(
+        spool.filament_id,
+        (remaining.get(spool.filament_id) ?? 0) + spool.remaining_g,
+      );
     }
     const needle = query.trim().toLowerCase();
     return data.filaments
       .map((filament) => ({
         filament,
-        remaining: remaining.get(filament.id) ?? 0,
+        remaining: remaining.get(filament.id) ?? null,
+        incomplete: incomplete.has(filament.id),
         spools: spoolCount.get(filament.id) ?? 0,
       }))
       .filter((row) => {
@@ -83,15 +91,21 @@ export default function FilamentsScreen() {
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(needle));
       })
-      .sort((a, b) => a.remaining - b.remaining);
+      .sort((a, b) => {
+        const left = remainingRank(a.remaining);
+        const right = remainingRank(b.remaining);
+        return left === right ? 0 : left - right;
+      });
   }, [data, query]);
 
   const summary = useMemo(
     () => ({
       count: data?.filaments.length ?? 0,
-      remaining: rows.reduce((sum, row) => sum + row.remaining, 0),
-      low: rows.filter((row) => row.remaining > 0 && row.remaining < 250)
-        .length,
+      remaining: rows.reduce((sum, row) => sum + (row.remaining ?? 0), 0),
+      low: rows.filter(
+        (row) =>
+          row.remaining != null && !row.incomplete && row.remaining < 250,
+      ).length,
     }),
     [data, rows],
   );
@@ -167,6 +181,24 @@ export default function FilamentsScreen() {
                 ) : undefined
               }
             />
+            {error && data ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLiveRegion="polite"
+                onPress={reload}
+                style={[
+                  styles.errorBanner,
+                  {
+                    backgroundColor: `${theme.colors.danger}18`,
+                    borderColor: `${theme.colors.danger}55`,
+                  },
+                ]}
+              >
+                <AppText variant="caption" color={theme.colors.danger}>
+                  Could not refresh: {error}. Tap to retry.
+                </AppText>
+              </Pressable>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => (
@@ -196,10 +228,16 @@ export default function FilamentsScreen() {
               </View>
               <View style={styles.value}>
                 <AppText variant="heading">
-                  {formatWeight(item.remaining)}
+                  {item.remaining == null
+                    ? "—"
+                    : `${item.incomplete ? "≥" : ""}${formatWeight(item.remaining)}`}
                 </AppText>
                 <AppText variant="micro" muted>
-                  left
+                  {item.remaining == null
+                    ? "not set"
+                    : item.incomplete
+                      ? "partial"
+                      : "left"}
                 </AppText>
               </View>
               <Ionicons
@@ -295,5 +333,11 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     paddingTop: spacing.lg,
+  },
+  errorBanner: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderCurve: "continuous",
+    padding: spacing.md,
   },
 });

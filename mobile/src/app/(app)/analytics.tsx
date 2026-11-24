@@ -27,6 +27,8 @@ import type { Filament, PrintJob } from "@/lib/types";
 interface AnalyticsData {
   jobs: PrintJob[];
   filaments: Filament[];
+  truncated: boolean;
+  limit: number;
 }
 
 function duration(totalSeconds: number): string {
@@ -52,10 +54,10 @@ export default function AnalyticsScreen() {
 
   const loader = useCallback(async (): Promise<AnalyticsData> => {
     const [jobs, filaments] = await Promise.all([
-      api.getPrintJobs(200),
+      api.getAllPrintJobs(),
       api.getFilaments(),
     ]);
-    return { jobs, filaments };
+    return { ...jobs, filaments };
   }, [api]);
 
   const { data, loading, refreshing, error, reload, refresh } =
@@ -149,7 +151,11 @@ export default function AnalyticsScreen() {
       >
         <PageHeader
           title="Analytics"
-          subtitle="Print history and material use"
+          subtitle={
+            data?.truncated
+              ? `Partial history · ${data.jobs.length.toLocaleString()} jobs`
+              : "Print history and material use"
+          }
           left={
             <Pressable
               accessibilityRole="button"

@@ -1,18 +1,45 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader, Screen } from "@/components/ui/screen";
 import { useAuth } from "@/lib/auth";
 import { radius, spacing, useTheme } from "@/lib/theme";
 
 export default function SelectTenantScreen() {
-  const { tenants, activeTenantId, switchTenant, logout } = useAuth();
+  const {
+    tenants,
+    activeTenantId,
+    switchTenant,
+    refreshTenants,
+    logout,
+  } = useAuth();
+  const activeTenants = tenants.filter((tenant) => tenant.is_active);
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
+
+  async function checkAgain() {
+    setChecking(true);
+    setCheckFailed(false);
+    try {
+      const result = await refreshTenants();
+      if (result === "ok") setChecked(true);
+      if (result === "failed") setCheckFailed(true);
+    } finally {
+      setChecking(false);
+    }
+  }
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   async function choose(tenantId: string) {
     await switchTenant(tenantId);
@@ -21,13 +48,40 @@ export default function SelectTenantScreen() {
 
   return (
     <Screen>
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + spacing.xxl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <PageHeader
           brand
           title="Choose a tenant"
           subtitle="Pick the workspace you want to open"
         />
 
+        {activeTenants.length === 0 ? (
+          <EmptyState
+            icon="people-outline"
+            title="No workspace access"
+            description={
+              checkFailed
+                ? "Couldn't reach the server. Check your connection and try again."
+                : checked
+                  ? "Still no workspace access. Ask an administrator to invite you."
+                  : "Ask an administrator to invite you to a workspace, then check again."
+            }
+            action={
+              <AppButton
+                title="Check again"
+                variant="secondary"
+                loading={checking}
+                onPress={() => void checkAgain()}
+              />
+            }
+          />
+        ) : (
         <View style={styles.list}>
           {tenants.map((tenant) => (
             <Pressable
@@ -71,6 +125,7 @@ export default function SelectTenantScreen() {
             </Pressable>
           ))}
         </View>
+        )}
 
         <Pressable
           accessibilityRole="button"
@@ -81,14 +136,14 @@ export default function SelectTenantScreen() {
             Sign out
           </AppText>
         </Pressable>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
     gap: spacing.xl,

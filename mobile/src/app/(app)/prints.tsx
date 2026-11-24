@@ -57,6 +57,11 @@ function statusMeta(job: PrintJob): {
   }
 }
 
+interface PrintsData {
+  jobs: PrintJob[];
+  activeFailed: boolean;
+}
+
 export default function PrintsScreen() {
   const { api } = useAuth();
   const router = useRouter();
@@ -64,14 +69,28 @@ export default function PrintsScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>("all");
 
-  const loader = useCallback(async (): Promise<PrintJob[]> => {
-    return api.getPrintJobs(100);
+  const loader = useCallback(async (): Promise<PrintsData> => {
+    const [history, activeResult] = await Promise.all([
+      api.getPrintJobs(100),
+      api
+        .getActivePrints()
+        .then((active) => ({ active, failed: false }))
+        .catch(() => ({ active: [] as PrintJob[], failed: true })),
+    ]);
+    const seen = new Set(activeResult.active.map((job) => job.id));
+    return {
+      jobs: [
+        ...activeResult.active,
+        ...history.filter((job) => !seen.has(job.id)),
+      ],
+      activeFailed: activeResult.failed,
+    };
   }, [api]);
 
   const { data, loading, refreshing, error, reload, refresh } =
     useAsyncData(loader);
 
-  const jobs = useMemo(() => data ?? [], [data]);
+  const jobs = useMemo(() => data?.jobs ?? [], [data]);
   const counts = useMemo(
     () => ({
       printing: jobs.filter((job) => statusOf(job) === "printing").length,
@@ -126,6 +145,25 @@ export default function PrintsScreen() {
               ]}
               size="sm"
             />
+
+            {data?.activeFailed ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLiveRegion="polite"
+                onPress={reload}
+                style={[
+                  styles.liveError,
+                  {
+                    backgroundColor: `${theme.colors.danger}18`,
+                    borderColor: `${theme.colors.danger}55`,
+                  },
+                ]}
+              >
+                <AppText variant="caption" color={theme.colors.danger}>
+                  Live print jobs could not be loaded. Tap to retry.
+                </AppText>
+              </Pressable>
+            ) : null}
 
             <View style={styles.filters}>
               {FILTERS.map((item) => {
@@ -214,6 +252,19 @@ export default function PrintsScreen() {
                 description={error}
                 action={<AppButton title="Try again" onPress={reload} />}
               />
+            ) : data?.activeFailed && jobs.length === 0 ? (
+              <EmptyState
+                icon="cloud-offline-outline"
+                title="Live jobs unavailable"
+                description="History is empty and the running-job request failed. Tap Try again."
+                action={<AppButton title="Try again" onPress={reload} />}
+              />
+            ) : data?.activeFailed ? (
+              <EmptyState
+                icon="cloud-offline-outline"
+                title="No matching jobs"
+                description="Live jobs are unavailable, so this filtered list may be incomplete."
+              />
             ) : (
               <EmptyState
                 icon="time-outline"
@@ -249,6 +300,12 @@ const styles = StyleSheet.create({
   headerBlock: {
     gap: spacing.md,
     paddingBottom: spacing.lg,
+  },
+  liveError: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderCurve: "continuous",
+    padding: spacing.md,
   },
   backButton: {
     width: 38,

@@ -110,6 +110,8 @@ derives it from `DOMAIN`.
 | `POSTGRES_PASSWORD` | Required for anything public; change the default |
 | `DOMAIN` | Public dashboard hostname for `compose.ghcr.yml` |
 | `IMAGE_PREFIX`, `IMAGE_TAG` | GHCR image prefix and release tag |
+| `APP_VERSION` | Running release shown in Settings → Updates; the installer sets it |
+| `COMPOSE_PROFILES=updater` | Enables the optional updater sidecar in `compose.ghcr.yml` |
 | `NEXT_PUBLIC_API_URL` | Source-build only. **Build-time** value; rebuild after changing it |
 | `FRONTEND_HOST` | Backend CORS allowlist. Set it to the public frontend URL; `.env.example` defaults to localhost |
 | `SMTP_*`, `EMAILS_FROM_EMAIL` | Optional. If you are not using SMTP, set `EMAILS_FROM_EMAIL=` and `SMTP_HOST=` empty to skip email |
@@ -153,6 +155,24 @@ docker compose -f compose.ghcr.yml up -d
 
 The database lives in the `postgres_data` Docker volume and survives rebuilds.
 Migrations run automatically in `backend/scripts/start.sh`.
+
+### Dashboard updates
+
+The guided installer enables the `updater` profile. A superuser sees
+Settings → Updates, which checks the latest stable GitHub release and updates
+backend/frontend after confirmation. The sidecar takes a `pg_dump` first. If a
+new image migrated the database, automatic rollback is skipped and the status
+points at the backup; restore it before downgrading. If the sidecar restarts
+mid-update, it restores the previous tag when the database revision did not
+move, and otherwise stops with the backup path. The updater mounts
+`/var/run/docker.sock` (host-root trust boundary). To disable it, stop the
+sidecar before removing the profile:
+
+```bash
+docker compose -f compose.ghcr.yml stop updater
+docker compose -f compose.ghcr.yml rm -f updater
+# then remove COMPOSE_PROFILES=updater from .env
+```
 
 ## Automatic deployment on tags (optional)
 

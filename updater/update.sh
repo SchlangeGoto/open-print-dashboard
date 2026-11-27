@@ -73,9 +73,9 @@ publish_readable() {
 read_env() {
   # Strip one layer of matching quotes, as Compose does: a value wrapped in
   # single quotes keeps inner double quotes, so the result is the same string
-  # Compose uses for the container.
+  # Compose uses for the container. The `t` stops after the first match.
   sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | head -n1 | \
-    sed -e 's/^"\([^"]*\)"$/\1/' -e "s/^'\([^']*\)'$/\1/"
+    sed -e 's/^"\([^"]*\)"$/\1/' -e 't' -e "s/^'\([^']*\)'$/\1/"
 }
 
 journal_get() {
@@ -289,6 +289,13 @@ while true; do
   elif grep -q '^state=blocked$' "$STATE_FILE" 2>/dev/null; then
     # The operator cleared the stuck journal by hand; accept requests again.
     write_status idle "" "Waiting for an update request"
+  fi
+  # A publisher that died between reserving and publishing leaves a marker
+  # with no request. The publish window is milliseconds, so anything older than
+  # a minute is an orphan and would otherwise block every later request until
+  # the sidecar restarts.
+  if [ ! -f "$REQUEST_FILE" ] && [ ! -d "$LOCK_DIR" ]; then
+    find "$REQUEST_DIR" -maxdepth 1 -name queued -mmin +1 -delete 2>/dev/null || true
   fi
   if [ -f "$REQUEST_FILE" ] && mkdir "$LOCK_DIR" 2>/dev/null; then
     requested=$(head -n 1 "$REQUEST_FILE" | tr -d '[:space:]')

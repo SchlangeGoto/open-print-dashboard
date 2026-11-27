@@ -94,9 +94,9 @@ fresh database so a failed migration cannot leave objects behind:
   # matching quotes only, the way Compose does, so a value such as
   # POSTGRES_DB='"prod"' is rejected instead of silently becoming "prod".
   DB_USER=$(sed -n 's/^POSTGRES_USER=//p' .env | head -n1 | \
-    sed -e 's/^"\([^"]*\)"$/\1/' -e "s/^'\([^']*\)'$/\1/")
+    sed -e 's/^"\([^"]*\)"$/\1/' -e 't' -e "s/^'\([^']*\)'$/\1/")
   DB_NAME=$(sed -n 's/^POSTGRES_DB=//p' .env | head -n1 | \
-    sed -e 's/^"\([^"]*\)"$/\1/' -e "s/^'\([^']*\)'$/\1/")
+    sed -e 's/^"\([^"]*\)"$/\1/' -e 't' -e "s/^'\([^']*\)'$/\1/")
   DB_USER=${DB_USER:-opd}
   DB_NAME=${DB_NAME:-openprintdashboard}
   printf '%s' "$DB_USER" | grep -Eq '^[A-Za-z0-9_]+$' || \

@@ -77,50 +77,7 @@ def test_update_request_is_written_once(
     assert duplicate.status_code == 409
 
 
-def test_update_request_reclaims_an_abandoned_reservation(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(settings, "UPDATER_DIR", tmp_path)
-    monkeypatch.setattr(settings, "APP_VERSION", "1.2.3")
-    monkeypatch.setattr(system, "_latest_release", lambda: ("1.3.0", None))
-    (tmp_path / "request").mkdir()
-    (tmp_path / "ready").touch()
-    (tmp_path / "heartbeat").touch()
-    (tmp_path / "status").write_text("state=idle\n")
-
-    response = client.post(
-        f"{settings.API_V1_STR}/system/update",
-        headers=superuser_token_headers,
-        json={"tag": "1.3.0"},
-    )
-    assert response.status_code == 200, response.text
-    assert (tmp_path / "request" / "queued").exists()
-
-    # The worker has not consumed the request yet: the marker blocks a second
-    # publish even though the first publisher already released its lock.
-    duplicate = client.post(
-        f"{settings.API_V1_STR}/system/update",
-        headers=superuser_token_headers,
-        json={"tag": "1.3.0"},
-    )
-    assert duplicate.status_code == 409
-
-    # No request and no lock with an unlocked marker is a publisher that died
-    # before publishing. The next request may reclaim the marker.
-    (tmp_path / "request" / "request").unlink()
-    reclaimed = client.post(
-        f"{settings.API_V1_STR}/system/update",
-        headers=superuser_token_headers,
-        json={"tag": "1.3.0"},
-    )
-    assert reclaimed.status_code == 200, reclaimed.text
-    assert (tmp_path / "request" / "request").read_text().strip() == "1.3.0"
-
-
-def test_update_request_waits_for_a_live_publisher(
+def test_update_request_waits_for_a_publisher_holding_the_lock(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     monkeypatch,
@@ -133,12 +90,11 @@ def test_update_request_waits_for_a_live_publisher(
     (tmp_path / "heartbeat").touch()
     (tmp_path / "status").write_text("state=idle\n")
 
-    marker = tmp_path / "request" / "queued"
-    fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    # A publisher that is slow but alive holds the protocol lock. Its slot must
+    # not be stolen, even though no request has been published yet.
+    fd = os.open(tmp_path / "request" / "update.lock", os.O_CREAT | os.O_RDWR, 0o600)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
-        # A publisher that is slow but alive holds the lock; its marker must
-        # not be stolen or reclaimed.
         blocked = client.post(
             f"{settings.API_V1_STR}/system/update",
             headers=superuser_token_headers,
@@ -149,8 +105,8 @@ def test_update_request_waits_for_a_live_publisher(
     finally:
         os.close(fd)
 
-    # Once the publisher is gone the kernel released the lock and the marker
-    # can be reclaimed.
+    # Once the publisher is gone the kernel released the lock, so the queue is
+    # free again: a terminated publisher cannot wedge updates.
     allowed = client.post(
         f"{settings.API_V1_STR}/system/update",
         headers=superuser_token_headers,

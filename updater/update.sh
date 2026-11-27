@@ -12,7 +12,7 @@ READY_FILE="$STATUS_DIR/ready"
 HEARTBEAT_FILE="$STATUS_DIR/heartbeat"
 REQUEST_DIR="$STATUS_DIR/request"
 REQUEST_FILE="$REQUEST_DIR/request"
-QUEUE_FILE="$REQUEST_DIR/queued"
+QUEUE_LOCK="$REQUEST_DIR/update.lock"
 LOCK_DIR="$STATUS_DIR/lock"
 API_PREFIX="${API_V1_STR:-/api/v1}"
 HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000${API_PREFIX}/utils/health-check/}"
@@ -186,7 +186,7 @@ reconcile_interrupted() {
     # Nothing may be queued while the operator resolves the stuck update, and
     # a request that was published before the journal got stuck must not run
     # later without a fresh confirmation.
-    rm -f "$REQUEST_FILE" "$QUEUE_FILE"
+    rm -f "$REQUEST_FILE"
     write_status blocked "$requested" \
       "Manual intervention required. Restore $backup before downgrading, then remove the journal from the updater_private volume."
     return 1
@@ -290,8 +290,15 @@ while true; do
     write_status idle "" "Waiting for an update request"
   fi
   if [ -f "$REQUEST_FILE" ] && mkdir "$LOCK_DIR" 2>/dev/null; then
+    # The same lock POST /system/update holds from its "nothing queued" check
+    # until the tag is published. Taking it here makes the handoff atomic, so a
+    # publisher never sees an empty queue while this one is being consumed.
+    exec 9<>"$QUEUE_LOCK"
+    flock -x 9
     requested=$(head -n 1 "$REQUEST_FILE" | tr -d '[:space:]')
-    rm -f "$REQUEST_FILE" "$QUEUE_FILE"
+    rm -f "$REQUEST_FILE"
+    flock -u 9
+    exec 9>&-
     if ! printf '%s' "$requested" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
       write_status error "$requested" "Release tag must be X.Y.Z"
       rmdir "$LOCK_DIR"

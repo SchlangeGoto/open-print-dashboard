@@ -12,6 +12,7 @@ READY_FILE="$STATUS_DIR/ready"
 HEARTBEAT_FILE="$STATUS_DIR/heartbeat"
 REQUEST_DIR="$STATUS_DIR/request"
 REQUEST_FILE="$REQUEST_DIR/request"
+QUEUE_FILE="$REQUEST_DIR/queued"
 LOCK_DIR="$STATUS_DIR/lock"
 API_PREFIX="${API_V1_STR:-/api/v1}"
 HEALTH_URL="${UPDATER_HEALTH_URL:-http://backend:8000${API_PREFIX}/utils/health-check/}"
@@ -35,6 +36,7 @@ chmod 0755 "$STATUS_DIR"
 chown -R "$READ_GID:$READ_GID" "$REQUEST_DIR" 2>/dev/null || true
 chmod 0700 "$REQUEST_DIR"
 rm -rf "$LOCK_DIR"
+rm -f "$QUEUE_FILE"
 rm -rf "$DATA_DIR"/.pre-update-*.sql "$REQUEST_DIR"/.request.*
 # Keep the heartbeat fresh while a pull, dump or health loop blocks the main
 # loop; the backend treats a stale heartbeat as "updater not responding".
@@ -69,8 +71,11 @@ publish_readable() {
 }
 
 read_env() {
+  # Strip one layer of matching quotes, as Compose does: a value wrapped in
+  # single quotes keeps inner double quotes, so the result is the same string
+  # Compose uses for the container.
   sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | head -n1 | \
-    sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//'
+    sed -e 's/^"\([^"]*\)"$/\1/' -e "s/^'\([^']*\)'$/\1/"
 }
 
 journal_get() {
@@ -179,7 +184,11 @@ reconcile_interrupted() {
   phase=$(journal_phase)
 
   if [ "$phase" = "stuck" ]; then
-    write_status error "$requested" \
+    # Nothing may be queued while the operator resolves the stuck update, and
+    # a request that was published before the journal got stuck must not run
+    # later without a fresh confirmation.
+    rm -f "$REQUEST_FILE" "$QUEUE_FILE"
+    write_status blocked "$requested" \
       "Manual intervention required. Restore $backup before downgrading, then remove the journal from the updater_private volume."
     return 1
   fi
@@ -277,10 +286,13 @@ while true; do
       sleep 30
       continue
     fi
+  elif grep -q '^state=blocked$' "$STATE_FILE" 2>/dev/null; then
+    # The operator cleared the stuck journal by hand; accept requests again.
+    write_status idle "" "Waiting for an update request"
   fi
   if [ -f "$REQUEST_FILE" ] && mkdir "$LOCK_DIR" 2>/dev/null; then
     requested=$(head -n 1 "$REQUEST_FILE" | tr -d '[:space:]')
-    rm -f "$REQUEST_FILE"
+    rm -f "$REQUEST_FILE" "$QUEUE_FILE"
     if ! printf '%s' "$requested" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
       write_status error "$requested" "Release tag must be X.Y.Z"
       rmdir "$LOCK_DIR"

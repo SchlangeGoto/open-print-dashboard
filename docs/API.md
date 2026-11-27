@@ -24,7 +24,9 @@ release and the updater sidecar state. `POST /system/update` with
 
 The sidecar pulls the tag, recreates only the backend and frontend containers,
 and waits for the backend and frontend health checks. `state` is one of `idle`,
-`queued`, `running`, `success`, `error`, `stale` or `unavailable`. It takes a
+`queued`, `running`, `success`, `error`, `blocked`, `stale` or `unavailable`. A
+`blocked` updater needs a manual restore: it rejects new requests and drops any
+request that was queued before the journal got stuck. It takes a
 `pg_dump` backup first, one file per attempt. If the new backend already
 migrated the database, it does not roll back automatically; the status points
 at the backup for a manual restore. A sidecar restart during an update restores

@@ -63,8 +63,10 @@ and `.env` snapshot live in the root-only `updater_private` volume, so the
 application container cannot rewrite them.
 
 If the updated stack never becomes healthy, the card retries ten times and then
-asks for manual intervention. To clear the journal without touching the data
-volumes (default project name):
+marks the update as blocked and asks for manual intervention. While the journal
+is stuck the updater rejects new requests, so a queued update cannot start on
+its own once the journal is cleared. To clear the journal without touching the
+data volumes (default project name):
 
 ```bash
 docker run --rm -v openprintdashboard_updater_private:/p alpine \
@@ -88,11 +90,13 @@ fresh database so a failed migration cannot leave objects behind:
   docker run --rm -v openprintdashboard_updater_data:/d alpine \
     sh -c "gunzip -c /d/$BACKUP" > "$RESTORE_SQL"
 
-  # 2. Read and validate the database names from .env.
+  # 2. Read and validate the database names from .env. Strip one layer of
+  # matching quotes only, the way Compose does, so a value such as
+  # POSTGRES_DB='"prod"' is rejected instead of silently becoming "prod".
   DB_USER=$(sed -n 's/^POSTGRES_USER=//p' .env | head -n1 | \
-    sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//')
+    sed -e 's/^"\([^"]*\)"$/\1/' -e "s/^'\([^']*\)'$/\1/")
   DB_NAME=$(sed -n 's/^POSTGRES_DB=//p' .env | head -n1 | \
-    sed -e "s/^'//" -e "s/'$//" -e 's/^"//' -e 's/"$//')
+    sed -e 's/^"\([^"]*\)"$/\1/' -e "s/^'\([^']*\)'$/\1/")
   DB_USER=${DB_USER:-opd}
   DB_NAME=${DB_NAME:-openprintdashboard}
   printf '%s' "$DB_USER" | grep -Eq '^[A-Za-z0-9_]+$' || \

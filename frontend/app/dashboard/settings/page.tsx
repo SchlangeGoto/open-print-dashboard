@@ -319,7 +319,8 @@ export default function SettingsPage() {
                     ? "warning"
                     : update?.state === "success"
                       ? "success"
-                      : update?.state === "error"
+                      : update?.state === "error" ||
+                          update?.state === "blocked"
                         ? "destructive"
                         : "secondary"
                 }
@@ -392,6 +393,7 @@ export default function SettingsPage() {
                   updateBusy ||
                   update.state === "running" ||
                   update.state === "queued" ||
+                  update.state === "blocked" ||
                   !update.latest_version
                 }
                 onClick={() => setConfirmUpdate(true)}

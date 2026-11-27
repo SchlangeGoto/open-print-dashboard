@@ -85,6 +85,17 @@ def _protocol_dir() -> Path:
     return Path(settings.UPDATER_DIR)
 
 
+def _reserve_queue(request_dir: Path) -> None:
+    """Create the queue reservation atomically.
+
+    ``O_EXCL`` makes the create the reservation, so two requests cannot both
+    pass a "nothing queued yet" check and then publish. The worker removes the
+    file once it has consumed the request.
+    """
+    fd = os.open(request_dir / "queued", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(fd)
+
+
 def _read_updater_status() -> dict[str, str]:
     directory = _protocol_dir()
     if not (directory / "ready").exists():
@@ -141,6 +152,13 @@ def request_update(payload: UpdateRequest) -> Any:
             status_code=503,
             detail="The updater sidecar is not installed or not responding",
         )
+    if updater.get("state") == "blocked":
+        # A stuck recovery journal has to be cleared by hand. Queuing now would
+        # start an update as soon as the operator clears it, without asking.
+        raise HTTPException(
+            status_code=409,
+            detail="The updater needs manual intervention before it accepts another update",
+        )
     current_version = _version_tuple(settings.APP_VERSION)
     requested_version = _version_tuple(tag)
     if current_version is not None and requested_version is not None:
@@ -151,11 +169,23 @@ def request_update(payload: UpdateRequest) -> Any:
             )
     request_dir = protocol / "request"
     request_file = request_dir / "request"
-    if request_file.exists() or (protocol / "lock").exists():
+    queue_file = request_dir / "queued"
+    if request_file.exists() or queue_file.exists() or (protocol / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")
+    try:
+        _reserve_queue(request_dir)
+    except FileExistsError as exc:
+        raise HTTPException(
+            status_code=409, detail="An update is already queued"
+        ) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503, detail="Could not queue the update"
+        ) from exc
     try:
         fd, tmp_name = tempfile.mkstemp(dir=request_dir, prefix=".request.")
     except OSError as exc:
+        queue_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=503, detail="Could not queue the update"
         ) from exc
@@ -169,10 +199,12 @@ def request_update(payload: UpdateRequest) -> Any:
         # request already exists, so the worker never reads a partial tag.
         os.link(tmp_path, request_file)
     except FileExistsError as exc:
+        queue_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=409, detail="An update is already queued"
         ) from exc
     except OSError as exc:
+        queue_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=503, detail="Could not queue the update"
         ) from exc

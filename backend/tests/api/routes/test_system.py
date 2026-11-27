@@ -75,6 +75,75 @@ def test_update_request_is_written_once(
     assert duplicate.status_code == 409
 
 
+def test_update_request_reserves_the_queue(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "UPDATER_DIR", tmp_path)
+    monkeypatch.setattr(settings, "APP_VERSION", "1.2.3")
+    monkeypatch.setattr(system, "_latest_release", lambda: ("1.3.0", None))
+    (tmp_path / "request").mkdir()
+    (tmp_path / "ready").touch()
+    (tmp_path / "heartbeat").touch()
+    (tmp_path / "status").write_text("state=idle\n")
+
+    response = client.post(
+        f"{settings.API_V1_STR}/system/update",
+        headers=superuser_token_headers,
+        json={"tag": "1.3.0"},
+    )
+    assert response.status_code == 200, response.text
+    assert (tmp_path / "request" / "queued").exists()
+
+    # The worker consumed the request but is still running: the lock is held.
+    (tmp_path / "request" / "request").unlink()
+    (tmp_path / "lock").mkdir()
+    blocked_by_lock = client.post(
+        f"{settings.API_V1_STR}/system/update",
+        headers=superuser_token_headers,
+        json={"tag": "1.3.0"},
+    )
+    assert blocked_by_lock.status_code == 409
+
+    # Even without the lock, the reservation survives until the worker drops
+    # it, so a request cannot slip in between the publish and the pickup.
+    (tmp_path / "lock").rmdir()
+    blocked_by_reservation = client.post(
+        f"{settings.API_V1_STR}/system/update",
+        headers=superuser_token_headers,
+        json={"tag": "1.3.0"},
+    )
+    assert blocked_by_reservation.status_code == 409
+    assert not (tmp_path / "request" / "request").exists()
+
+
+def test_update_request_rejects_a_blocked_updater(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "UPDATER_DIR", tmp_path)
+    monkeypatch.setattr(settings, "APP_VERSION", "1.2.3")
+    (tmp_path / "request").mkdir()
+    (tmp_path / "ready").touch()
+    (tmp_path / "heartbeat").touch()
+    (tmp_path / "status").write_text(
+        "state=blocked\nmessage=Manual intervention required\n"
+    )
+
+    response = client.post(
+        f"{settings.API_V1_STR}/system/update",
+        headers=superuser_token_headers,
+        json={"tag": "1.3.0"},
+    )
+    assert response.status_code == 409
+    assert not (tmp_path / "request" / "request").exists()
+    assert not (tmp_path / "request" / "queued").exists()
+
+
 def test_update_request_rejects_an_invalid_tag(
     client: TestClient,
     superuser_token_headers: dict[str, str],

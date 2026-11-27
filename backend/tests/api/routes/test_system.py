@@ -1,3 +1,5 @@
+import fcntl
+import os
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -75,7 +77,7 @@ def test_update_request_is_written_once(
     assert duplicate.status_code == 409
 
 
-def test_update_request_reserves_the_queue(
+def test_update_request_reclaims_an_abandoned_reservation(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     monkeypatch,
@@ -97,26 +99,65 @@ def test_update_request_reserves_the_queue(
     assert response.status_code == 200, response.text
     assert (tmp_path / "request" / "queued").exists()
 
-    # The worker consumed the request but is still running: the lock is held.
-    (tmp_path / "request" / "request").unlink()
-    (tmp_path / "lock").mkdir()
-    blocked_by_lock = client.post(
+    # The worker has not consumed the request yet: the marker blocks a second
+    # publish even though the first publisher already released its lock.
+    duplicate = client.post(
         f"{settings.API_V1_STR}/system/update",
         headers=superuser_token_headers,
         json={"tag": "1.3.0"},
     )
-    assert blocked_by_lock.status_code == 409
+    assert duplicate.status_code == 409
 
-    # Even without the lock, the reservation survives until the worker drops
-    # it, so a request cannot slip in between the publish and the pickup.
-    (tmp_path / "lock").rmdir()
-    blocked_by_reservation = client.post(
+    # No request and no lock with an unlocked marker is a publisher that died
+    # before publishing. The next request may reclaim the marker.
+    (tmp_path / "request" / "request").unlink()
+    reclaimed = client.post(
         f"{settings.API_V1_STR}/system/update",
         headers=superuser_token_headers,
         json={"tag": "1.3.0"},
     )
-    assert blocked_by_reservation.status_code == 409
-    assert not (tmp_path / "request" / "request").exists()
+    assert reclaimed.status_code == 200, reclaimed.text
+    assert (tmp_path / "request" / "request").read_text().strip() == "1.3.0"
+
+
+def test_update_request_waits_for_a_live_publisher(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(settings, "UPDATER_DIR", tmp_path)
+    monkeypatch.setattr(settings, "APP_VERSION", "1.2.3")
+    (tmp_path / "request").mkdir()
+    (tmp_path / "ready").touch()
+    (tmp_path / "heartbeat").touch()
+    (tmp_path / "status").write_text("state=idle\n")
+
+    marker = tmp_path / "request" / "queued"
+    fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        # A publisher that is slow but alive holds the lock; its marker must
+        # not be stolen or reclaimed.
+        blocked = client.post(
+            f"{settings.API_V1_STR}/system/update",
+            headers=superuser_token_headers,
+            json={"tag": "1.3.0"},
+        )
+        assert blocked.status_code == 409
+        assert not (tmp_path / "request" / "request").exists()
+    finally:
+        os.close(fd)
+
+    # Once the publisher is gone the kernel released the lock and the marker
+    # can be reclaimed.
+    allowed = client.post(
+        f"{settings.API_V1_STR}/system/update",
+        headers=superuser_token_headers,
+        json={"tag": "1.3.0"},
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert (tmp_path / "request" / "request").read_text().strip() == "1.3.0"
 
 
 def test_update_request_rejects_a_blocked_updater(

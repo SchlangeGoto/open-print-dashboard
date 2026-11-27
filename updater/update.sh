@@ -36,7 +36,6 @@ chmod 0755 "$STATUS_DIR"
 chown -R "$READ_GID:$READ_GID" "$REQUEST_DIR" 2>/dev/null || true
 chmod 0700 "$REQUEST_DIR"
 rm -rf "$LOCK_DIR"
-rm -f "$QUEUE_FILE"
 rm -rf "$DATA_DIR"/.pre-update-*.sql "$REQUEST_DIR"/.request.*
 # Keep the heartbeat fresh while a pull, dump or health loop blocks the main
 # loop; the backend treats a stale heartbeat as "updater not responding".
@@ -289,13 +288,6 @@ while true; do
   elif grep -q '^state=blocked$' "$STATE_FILE" 2>/dev/null; then
     # The operator cleared the stuck journal by hand; accept requests again.
     write_status idle "" "Waiting for an update request"
-  fi
-  # A publisher that died between reserving and publishing leaves a marker
-  # with no request. The publish window is milliseconds, so anything older than
-  # a minute is an orphan and would otherwise block every later request until
-  # the sidecar restarts.
-  if [ ! -f "$REQUEST_FILE" ] && [ ! -d "$LOCK_DIR" ]; then
-    find "$REQUEST_DIR" -maxdepth 1 -name queued -mmin +1 -delete 2>/dev/null || true
   fi
   if [ -f "$REQUEST_FILE" ] && mkdir "$LOCK_DIR" 2>/dev/null; then
     requested=$(head -n 1 "$REQUEST_FILE" | tr -d '[:space:]')

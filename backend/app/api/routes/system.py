@@ -1,3 +1,4 @@
+import fcntl
 import logging
 import os
 import re
@@ -85,15 +86,54 @@ def _protocol_dir() -> Path:
     return Path(settings.UPDATER_DIR)
 
 
-def _reserve_queue(request_dir: Path) -> None:
-    """Create the queue reservation atomically.
+def _reclaimable(path: Path) -> bool:
+    """Return True when a marker has no live publisher.
+
+    The publisher holds ``LOCK_EX`` on the marker from the create until the tag
+    is published. The kernel drops that lock when the process exits, so taking
+    it proves the publisher is gone; a held lock means it is still working and
+    the marker must stay.
+    """
+    try:
+        fd = os.open(path, os.O_WRONLY)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        path.unlink(missing_ok=True)
+        return True
+    finally:
+        os.close(fd)
+
+
+def _claim_queue(request_dir: Path) -> int:
+    """Reserve the queue and return the lock fd the caller owns.
 
     ``O_EXCL`` makes the create the reservation, so two requests cannot both
-    pass a "nothing queued yet" check and then publish. The worker removes the
-    file once it has consumed the request.
+    pass a "nothing queued yet" check and then publish. The returned descriptor
+    holds the liveness lock until the caller closes it, which lets a later
+    request tell a crashed publisher from one that is still writing.
     """
-    fd = os.open(request_dir / "queued", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    os.close(fd)
+    path = request_dir / "queued"
+    for _ in range(2):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            if not _reclaimable(path):
+                raise
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(fd)
+            raise
+        return fd
+    raise FileExistsError(path)
 
 
 def _read_updater_status() -> dict[str, str]:
@@ -170,10 +210,12 @@ def request_update(payload: UpdateRequest) -> Any:
     request_dir = protocol / "request"
     request_file = request_dir / "request"
     queue_file = request_dir / "queued"
-    if request_file.exists() or queue_file.exists() or (protocol / "lock").exists():
+    # A marker alone is not enough to reject: _claim_queue can tell a crashed
+    # publisher from one that is still writing.
+    if request_file.exists() or (protocol / "lock").exists():
         raise HTTPException(status_code=409, detail="An update is already queued")
     try:
-        _reserve_queue(request_dir)
+        queue_fd = _claim_queue(request_dir)
     except FileExistsError as exc:
         raise HTTPException(
             status_code=409, detail="An update is already queued"
@@ -183,33 +225,38 @@ def request_update(payload: UpdateRequest) -> Any:
             status_code=503, detail="Could not queue the update"
         ) from exc
     try:
-        fd, tmp_name = tempfile.mkstemp(dir=request_dir, prefix=".request.")
-    except OSError as exc:
-        queue_file.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=503, detail="Could not queue the update"
-        ) from exc
-    tmp_path = Path(tmp_name)
-    try:
-        with os.fdopen(fd, "w") as tmp:
-            tmp.write(tag + "\n")
-            tmp.flush()
-            os.fsync(tmp.fileno())
-        # A hard link publishes the finished file atomically and fails if a
-        # request already exists, so the worker never reads a partial tag.
-        os.link(tmp_path, request_file)
-    except FileExistsError as exc:
-        queue_file.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=409, detail="An update is already queued"
-        ) from exc
-    except OSError as exc:
-        queue_file.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=503, detail="Could not queue the update"
-        ) from exc
+        try:
+            fd, tmp_name = tempfile.mkstemp(dir=request_dir, prefix=".request.")
+        except OSError as exc:
+            queue_file.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=503, detail="Could not queue the update"
+            ) from exc
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w") as tmp:
+                tmp.write(tag + "\n")
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            # A hard link publishes the finished file atomically and fails if a
+            # request already exists, so the worker never reads a partial tag.
+            os.link(tmp_path, request_file)
+        except FileExistsError as exc:
+            queue_file.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=409, detail="An update is already queued"
+            ) from exc
+        except OSError as exc:
+            queue_file.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=503, detail="Could not queue the update"
+            ) from exc
+        finally:
+            tmp_path.unlink(missing_ok=True)
     finally:
-        tmp_path.unlink(missing_ok=True)
+        # Releasing the lock marks the reservation as no longer owned by a
+        # live publisher; the marker stays until the worker consumes it.
+        os.close(queue_fd)
     logger.warning("Queued OpenPrintDash update to %s", tag)
     status = read_update_status()
     status.state = "queued"
